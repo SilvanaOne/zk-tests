@@ -1,3 +1,5 @@
+import { PallasConstants } from "./constants.js";
+
 export {
   Field,
   Bool,
@@ -15,41 +17,20 @@ export {
   mul,
   sqrt,
   dot,
-  PallasConstants,
 };
 
 type Field = bigint;
 type Bool = boolean;
-//type Group = { x: Field; y: Field };
+type Group = { x: Field; y: Field };
 type PublicKey = { x: Field; isOdd: Bool };
 type Scalar = bigint;
 type Signature = { r: Field; s: Scalar };
-type Group = { x: Field; y: Field };
 const projectiveZero = { x: 1n, y: 1n, z: 0n };
 
 type GroupProjective = { x: bigint; y: bigint; z: bigint };
 type PointAtInfinity = { x: bigint; y: bigint; infinity: true };
 type FinitePoint = { x: bigint; y: bigint; infinity: false };
 type GroupAffine = PointAtInfinity | FinitePoint;
-
-const PallasConstants = {
-  name: "Pallas",
-  modulus:
-    28948022309329048855892746252171976963363056481941560715954676764349967630337n,
-  order:
-    28948022309329048855892746252171976963363056481941647379679742748393362948097n,
-  cofactor: 1n,
-  zero: { x: 1n, y: 1n, z: 0n },
-  one: {
-    x: 1n,
-    y: 12418654782883325593414442427049395787963493412651469444558597405572177144507n,
-    z: 1n,
-  },
-  hasEndomorphism: true,
-  a: 0n,
-  b: 5n,
-  hasCofactor: false,
-};
 
 /**
  * A non-zero point on the Pallas curve in affine form { x, y }
@@ -69,14 +50,7 @@ const Group = {
   },
 };
 
-const p =
-  28948022309329048855892746252171976963363056481941560715954676764349967630337n;
-const twoadicRoot =
-  19814229590243028906643993866117402072516588566294623396325693409366934201135n;
-const twoadicity = 32n;
-const oddFactor =
-  6739986666787659948666753771754907668419893943225396963757154709741n;
-const Pallas_b = 5n;
+const { p, a, b, twoadicRoot, twoadicity, oddFactor } = PallasConstants;
 
 function mod(x: bigint, p: bigint) {
   x = x % p;
@@ -354,7 +328,7 @@ function sqrt(n_: bigint, p: bigint, Q: bigint, c: bigint, M: bigint) {
   // Q is what we call `t` elsewhere - the odd factor in p - 1
   // c is a known primitive root of unity
   // M is the twoadicity = exponent of 2 in factorization of p - 1
-  let n = mod(n_, p);
+  const n = mod(n_, p);
   if (n === 0n) return 0n;
   let t = power(n, (Q - 1n) >> 1n); // n^(Q - 1)/2
   let R = mod(t * n, p); // n^((Q - 1)/2 + 1) = n^((Q + 1)/2)
@@ -386,7 +360,7 @@ function negate(x: bigint) {
 }
 
 function publicKeyToGroup({ x, isOdd }: PublicKey): Group {
-  let ySquared = add(mul(x, mul(x, x)), Pallas_b);
+  const ySquared = add(mul(x, mul(x, x)), b);
   let y = sqrt_internal(ySquared);
   if (y === undefined) {
     throw Error("PublicKey.toGroup: not a valid group element");

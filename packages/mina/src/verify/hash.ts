@@ -27,7 +27,7 @@ function append(input1: HashInput, input2: HashInput): HashInput {
 
 function packToFields({ fields = [], packed = [] }: HashInput) {
   if (packed.length === 0) return fields;
-  let packedBits = [];
+  const packedBits = [];
   let currentPackedField = 0n;
   let currentSize = 0;
   for (let [field, size] of packed) {
@@ -67,7 +67,7 @@ function poseidonUpdate([...state]: bigint[], input: bigint[]) {
     return state;
   }
   // pad input with zeros so its length is a multiple of the rate
-  let n = Math.ceil(input.length / rate) * rate;
+  const n = Math.ceil(input.length / rate) * rate;
   input = input.concat(Array(n - input.length).fill(0n));
   // for every block of length `rate`, add block to the first `rate` elements of the state, and apply the permutation
   for (let blockIndex = 0; blockIndex < n; blockIndex += rate) {
