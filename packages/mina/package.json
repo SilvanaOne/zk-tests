@@ -7,7 +7,10 @@
   "scripts": {
     "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
     "template": "npm run test test/template.test.ts",
-    "signature": "npm run test test/signature.test.ts"
+    "signature": "npm run test test/signature.test.ts",
+    "keys": "npm run test test/keys.test.ts",
+    "faucet:zeko": "CHAIN=zeko npm run test test/faucet.test.ts",
+    "faucet:devnet": "CHAIN=devnet npm run test test/faucet.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
@@ -20,8 +23,10 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@silvana-one/mina-utils": "^0.2.11",
     "blakejs": "^1.2.1",
-    "js-sha256": "^0.11.0"
+    "js-sha256": "^0.11.0",
+    "o1js": "^2.3.0"
   },
   "c8": {
     "extension": [
