@@ -1,0 +1,26 @@
+{
+  "name": "add-client",
+  "version": "0.1.0",
+  "author": "DFST",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
+    "template": "npm run test test/template.test.ts",
+    "sui": "npm run test test/sui.test.ts"
+  },
+  "node": {
+    "version": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/secp256k1": "^4.0.6",
+    "dotenv": "^16.4.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.21.2",
+    "secp256k1": "^5.0.1"
+  }
+}

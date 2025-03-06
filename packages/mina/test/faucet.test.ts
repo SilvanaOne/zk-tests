@@ -1,12 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { PrivateKey, PublicKey } from "o1js";
+import { PrivateKey, PublicKey, Mina, AccountUpdate, UInt64 } from "o1js";
 import { readFile, writeFile } from "node:fs/promises";
 import {
   initBlockchain,
   accountBalanceMina,
+  accountBalance,
   Zeko,
   Devnet,
+  fetchMinaAccount,
 } from "@silvana-one/mina-utils";
 import { sleep } from "../src/sleep.js";
 import { faucet, faucetDevnet } from "../src/faucet.js";
@@ -48,9 +50,10 @@ describe("Topup", async () => {
       const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
       if (balance < MINIMUM_AMOUNT) {
         keysToTopup.push(publicKey);
+        console.log(`${publicKey}: ${balance} MINA`);
       }
     }
-    console.log({ keysToTopup });
+    console.log(`Accounts to topup: ${keysToTopup.length}`);
   });
   it("should topup accounts on zeko", { skip: chain !== "zeko" }, async () => {
     for (const publicKey of keysToTopup) {
@@ -73,20 +76,76 @@ describe("Topup", async () => {
     "should topup accounts on devnet",
     { skip: chain !== "devnet" },
     async () => {
-      for (const publicKey of keysToTopup) {
+      const tanks: { privateKey: string; publicKey: string }[] = [];
+      for (const key of keysToTopup) {
         try {
+          const privateKey = PrivateKey.random();
+          const publicKey = privateKey.toPublicKey();
+          tanks.push({
+            privateKey: privateKey.toBase58(),
+            publicKey: publicKey.toBase58(),
+          });
           const response = await faucetDevnet({
-            publicKey,
+            publicKey: publicKey.toBase58(),
             explorerUrl: Devnet.explorerAccountUrl ?? "",
             network: "devnet",
             faucetUrl: "https://faucet.minaprotocol.com/api/v1/faucet",
           });
-          console.log(`${publicKey}:`, response?.result?.status);
+          console.log(`${publicKey.toBase58()}:`, response?.result?.status);
         } catch (e) {
           console.log(e);
           await sleep(120000);
         }
         await sleep(60000);
+      }
+      for (let i = 0; i < tanks.length; i++) {
+        try {
+          const publicKey = PublicKey.fromBase58(tanks[i].publicKey);
+          let balance = await accountBalance(publicKey);
+          console.log(
+            `${i}: ${publicKey.toBase58()}: ${
+              balance.toBigInt() / 1_000_000_000n
+            } MINA`
+          );
+          while (balance.toBigInt() < 100_000_000_000n) {
+            await sleep(10000);
+            balance = await accountBalance(publicKey);
+          }
+          console.log(
+            `${i}: ${publicKey.toBase58()}: ${
+              balance.toBigInt() / 1_000_000_000n
+            } MINA`
+          );
+          const sender = publicKey;
+          const receiver = PublicKey.fromBase58(keysToTopup[i]);
+          const deployer = PrivateKey.fromBase58(tanks[i].privateKey);
+          const fee = UInt64.from(100_000_000);
+          await fetchMinaAccount({
+            publicKey: receiver,
+            force: false,
+          });
+          const isNew = !Mina.hasAccount(receiver);
+          const amount = balance.sub(
+            fee.add(UInt64.from(isNew ? 1_000_000_000 : 0))
+          );
+          const transaction = await Mina.transaction(
+            { sender, fee },
+            async () => {
+              if (isNew) AccountUpdate.fundNewAccount(sender, 1);
+              const senderUpdate = AccountUpdate.createSigned(sender);
+              senderUpdate.send({
+                to: receiver,
+                amount,
+              });
+            }
+          );
+          const txSent = await transaction.sign([deployer]).send();
+          console.log(`Sent tx${i}: ${receiver.toBase58()}: ${txSent.hash}`);
+          await sleep(5000);
+        } catch (e) {
+          console.log(e);
+          await sleep(120000);
+        }
       }
     }
   );
