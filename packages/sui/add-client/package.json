@@ -7,7 +7,8 @@
   "scripts": {
     "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
     "template": "npm run test test/template.test.ts",
-    "sui": "npm run test test/sui.test.ts"
+    "sui": "npm run test test/sui.test.ts",
+    "walrus": "npm run test test/walrus.test.ts"
   },
   "node": {
     "version": ">=20.0.0"

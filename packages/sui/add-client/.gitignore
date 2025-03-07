@@ -9,6 +9,7 @@ cache/
 cache-mainnet/
 image/
 dist/
+data/
 .yarn/
 .pnp.cjs
 .pnp.loader.mjs
