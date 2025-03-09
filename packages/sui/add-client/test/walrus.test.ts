@@ -62,8 +62,15 @@ const address =
 const SUI_NETWORK = "testnet";
 const SUI_VIEW_TX_URL = `https://suiscan.xyz/${SUI_NETWORK}/tx`;
 const SUI_VIEW_OBJECT_URL = `https://suiscan.xyz/${SUI_NETWORK}/object`;
-const basePublisherUrl = "https://publisher.walrus-testnet.walrus.space";
-const readerUrl = "https://aggregator.walrus-testnet.walrus.space/v1/blobs/";
+const daemon: "local" | "testnet" = "local";
+const basePublisherUrl =
+  daemon === "local"
+    ? "http://127.0.0.1:31415"
+    : "https://publisher.walrus-testnet.walrus.space";
+const readerUrl =
+  daemon === "local"
+    ? "http://127.0.0.1:31415/v1/blobs/"
+    : "https://aggregator.walrus-testnet.walrus.space/v1/blobs/";
 let blobId = "5XJtqFdsUn3jRiPYVR7VA1Uko-46zKja-f95eFajsFw";
 const numEpochs = 1;
 
@@ -77,7 +84,7 @@ describe("Walrus test", async () => {
       {
         method: "PUT",
         body: JSON.stringify({
-          name: "Test 6",
+          name: "Test 11",
           description: "NFT description",
           image: "https://picsum.photos/seed/2345999/540/670",
         }),
@@ -87,7 +94,9 @@ describe("Walrus test", async () => {
     if (response.status === 200) {
       const info = await response.json();
       console.log("info", info);
-      blobId = info?.newlyCreated?.blobObject?.blobId;
+      blobId =
+        info?.newlyCreated?.blobObject?.blobId ??
+        info?.alreadyCertified?.blobId;
       console.log("blobId", blobId);
     } else {
       console.log("response.statusText", {

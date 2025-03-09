@@ -28,12 +28,13 @@ describe("Sui test", async () => {
     // const publicKey = keypair.getPublicKey().toSuiAddress();
     // const secretKey = keypair.getSecretKey();
 
-    // const keypair = new Secp256k1Keypair();
-    // const address = keypair.getPublicKey().toSuiAddress();
-    // const secretKey = keypair.getSecretKey();
+    const keypair = new Secp256k1Keypair();
+    const address = keypair.getPublicKey().toSuiAddress();
+    const secretKey = keypair.getSecretKey();
 
-    // console.log("secretKey", secretKey);
-    // console.log("address", address);
+    console.log("secretKey", secretKey);
+    console.log("address", address);
+    return;
     // // Keypair from an existing secret key (Uint8Array)
     // const keypair2 = Ed25519Keypair.fromSecretKey(secretKey);
     // const address = keypair2.getPublicKey().toSuiAddress();
