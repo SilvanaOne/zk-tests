@@ -15,6 +15,7 @@
     "get": "npm run test test/get.test.ts",
     "publish": "npm run test test/publish.test.ts",
     "deploy": "npm run test test/deploy.test.ts",
+    "events": "npm run test test/events.test.ts",
     "walrus:daemon": "walrus daemon --sub-wallets-dir ../walrus --bind-address 127.0.0.1:31415"
   },
   "node": {

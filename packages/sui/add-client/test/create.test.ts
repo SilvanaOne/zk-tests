@@ -13,7 +13,7 @@ import { Secp256k1Keypair } from "@mysten/sui/keypairs/secp256k1";
 import { Transaction, TransactionArgument } from "@mysten/sui/transactions";
 import crypto from "node:crypto";
 import secp256k1 from "secp256k1";
-import { getKey, formatSuiBalance } from "../src/key.js";
+import { getKey } from "../src/key.js";
 const suiClient = new SuiClient({
   url: getFullnodeUrl("localnet"),
 });

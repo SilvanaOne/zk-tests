@@ -95,10 +95,16 @@ describe("Sui state test", async () => {
       return signedTx;
     }
 
+    const dryRun = false;
     async function executeTx(tx: SignatureWithBytes, i: number) {
-      const executedTx = await suiClient.dryRunTransactionBlock({
-        transactionBlock: tx.bytes,
-      });
+      const executedTx = dryRun
+        ? await suiClient.dryRunTransactionBlock({
+            transactionBlock: tx.bytes,
+          })
+        : await suiClient.executeTransactionBlock({
+            transactionBlock: tx.bytes,
+            signature: tx.signature,
+          });
       return {
         events: (executedTx.events as SuiEvent[])?.[0]?.parsedJson as object,
       };

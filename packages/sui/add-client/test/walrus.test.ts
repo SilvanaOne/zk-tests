@@ -62,7 +62,7 @@ const address =
 const SUI_NETWORK = "testnet";
 const SUI_VIEW_TX_URL = `https://suiscan.xyz/${SUI_NETWORK}/tx`;
 const SUI_VIEW_OBJECT_URL = `https://suiscan.xyz/${SUI_NETWORK}/object`;
-const daemon: "local" | "testnet" = "local";
+const daemon: "local" | "testnet" = "testnet" as "local" | "testnet";
 const basePublisherUrl =
   daemon === "local"
     ? "http://127.0.0.1:31415"
@@ -84,7 +84,7 @@ describe("Walrus test", async () => {
       {
         method: "PUT",
         body: JSON.stringify({
-          name: "Test 11",
+          name: "Test 14",
           description: "NFT description",
           image: "https://picsum.photos/seed/2345999/540/670",
         }),
