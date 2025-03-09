@@ -33,17 +33,24 @@ const keys: string[] = [
 describe("Sui publish package", async () => {
   it("should publish package", async () => {
     const { execSync } = await import("child_process");
-    let bytes: string | undefined = undefined;
+    let bytes:
+      | {
+          modules: string[];
+          dependencies: string[];
+          digest: number[];
+        }
+      | undefined = undefined;
 
     console.log("Running sui client publish command...");
     try {
-      bytes = execSync(
-        "sui client publish --verify-deps --serialize-unsigned-transaction ../dex",
+      const output = execSync(
+        "sui move build --dump-bytecode-as-base64 --ignore-chain --path ../dex",
         {
           encoding: "utf-8",
         }
       );
-      //console.log("Command output:", bytes);
+      bytes = JSON.parse(output);
+      console.log("Command output:", bytes);
     } catch (error) {
       console.error("Error running command:", error);
       throw error;
@@ -57,8 +64,20 @@ describe("Sui publish package", async () => {
       secretKey: keys[0],
     });
 
-    async function buildTx(txBytes: string) {
-      const tx = Transaction.from(txBytes);
+    async function buildTx(modules: string[], dependencies: string[]) {
+      const tx = new Transaction();
+      const publishedTx = tx.publish({
+        modules,
+        dependencies,
+      });
+      tx.transferObjects(
+        [
+          {
+            Result: publishedTx.Result,
+          },
+        ],
+        address
+      );
       const paginatedCoins = await suiClient.getCoins({
         owner: address,
       });
@@ -76,6 +95,7 @@ describe("Sui publish package", async () => {
       tx.setGasPayment(coins);
       //console.log("tx", await tx.toJSON());
       tx.setGasBudget(100_000_000);
+
       console.log("tx", await tx.toJSON());
       console.time("sign");
       const signedTx = await tx.sign({
@@ -83,7 +103,6 @@ describe("Sui publish package", async () => {
         client: suiClient,
       });
       console.timeEnd("sign");
-      //console.log("signedTx", signedTx);
       return signedTx;
     }
 
@@ -122,7 +141,7 @@ describe("Sui publish package", async () => {
       };
     }
     console.time("execute tx");
-    const tx = await buildTx(bytes);
+    const tx = await buildTx(bytes.modules, bytes.dependencies);
     const executedTx = await executeTx(tx);
     console.timeEnd("execute tx");
     console.log("executedTx", executedTx);
