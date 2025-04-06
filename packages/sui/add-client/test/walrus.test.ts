@@ -66,13 +66,14 @@ const daemon: "local" | "testnet" = "testnet" as "local" | "testnet";
 const basePublisherUrl =
   daemon === "local"
     ? "http://127.0.0.1:31415"
-    : "https://publisher.walrus-testnet.walrus.space";
+    : "https://wal-publisher-testnet.staketab.org"; //"https://publisher.walrus-testnet.walrus.space";
 const readerUrl =
   daemon === "local"
     ? "http://127.0.0.1:31415/v1/blobs/"
-    : "https://aggregator.walrus-testnet.walrus.space/v1/blobs/";
+    : "https://wal-aggregator-testnet.staketab.org/v1/blobs/"; //"https://aggregator.walrus-testnet.walrus.space/v1/blobs/";
 let blobId = "5XJtqFdsUn3jRiPYVR7VA1Uko-46zKja-f95eFajsFw";
-const numEpochs = 1;
+const numEpochs = 100;
+let text = "Hello, world!";
 
 describe("Walrus test", async () => {
   it("should test walrus", async () => {
@@ -83,11 +84,7 @@ describe("Walrus test", async () => {
       `${basePublisherUrl}/v1/blobs?epochs=${numEpochs}${sendToParam}`,
       {
         method: "PUT",
-        body: JSON.stringify({
-          name: "Test 14",
-          description: "NFT description",
-          image: "https://picsum.photos/seed/2345999/540/670",
-        }),
+        body: text,
       }
     );
     console.timeEnd("written");

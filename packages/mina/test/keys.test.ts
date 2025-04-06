@@ -7,7 +7,7 @@ const keys: { privateKey: string; publicKey: string }[] = [];
 const NUMBER_OF_KEYS = 25;
 
 describe("Generate keys", async () => {
-  it("should generate keys", async () => {
+  it.skip("should generate keys", async () => {
     for (let i = 0; i < NUMBER_OF_KEYS; i++) {
       const privateKey = PrivateKey.random();
       const publicKey = privateKey.toPublicKey();
@@ -17,5 +17,10 @@ describe("Generate keys", async () => {
       });
     }
     await writeFile("./data/keys.json", JSON.stringify({ keys }, null, 2));
+  });
+  it("should print x and isOdd of empty PublicKey", async () => {
+    const key = PublicKey.empty();
+    console.log("x", key.x.toBigInt());
+    console.log("isOdd", key.isOdd.toBoolean());
   });
 });

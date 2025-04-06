@@ -11,7 +11,8 @@
     "keys": "npm run test test/keys.test.ts",
     "faucet:zeko": "CHAIN=zeko npm run test test/faucet.test.ts",
     "faucet:devnet": "CHAIN=devnet npm run test test/faucet.test.ts",
-    "verify": "npm run test test/verify.test.ts"
+    "verify": "npm run test test/verify.test.ts",
+    "info": "npm run test test/info.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
