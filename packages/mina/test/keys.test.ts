@@ -4,10 +4,10 @@ import { PrivateKey, PublicKey } from "o1js";
 import { writeFile } from "node:fs/promises";
 
 const keys: { privateKey: string; publicKey: string }[] = [];
-const NUMBER_OF_KEYS = 25;
+const NUMBER_OF_KEYS = 5;
 
 describe("Generate keys", async () => {
-  it.skip("should generate keys", async () => {
+  it("should generate keys", async () => {
     for (let i = 0; i < NUMBER_OF_KEYS; i++) {
       const privateKey = PrivateKey.random();
       const publicKey = privateKey.toPublicKey();
