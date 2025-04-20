@@ -16,7 +16,8 @@
     "based": "CHAIN=zeko npm run test test/based.test.ts",
     "vk": "npm run test test/vk.test.ts",
     "poseidon": "npm run test test/poseidon.test.ts",
-    "nonce": "npm run test test/nonce.test.ts"
+    "nonce": "npm run test test/nonce.test.ts",
+    "nonces": "npm run test test/nonces.test.ts"
   },
   "node": {
     "version": ">=20.0.0"

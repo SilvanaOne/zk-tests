@@ -1,4 +1,4 @@
-use mina_hasher::{Fp, Hashable, Hasher, ROInput, create_kimchi};
+use mina_hasher::{create_kimchi, Fp, Hashable, Hasher, ROInput};
 use std::time::Instant;
 #[derive(Debug, Clone)]
 struct PoseidonInput {
@@ -28,7 +28,7 @@ fn main() {
     let mut hasher = create_kimchi::<PoseidonInput>(());
     let time_start = Instant::now();
     let mut i = 0;
-    while i < 10000 {
+    while i < 100000 {
         hasher.hash(&poseidon_input);
         i += 1;
     }
