@@ -17,7 +17,8 @@
     "vk": "npm run test test/vk.test.ts",
     "poseidon": "npm run test test/poseidon.test.ts",
     "nonce": "npm run test test/nonce.test.ts",
-    "nonces": "npm run test test/nonces.test.ts"
+    "nonces": "npm run test test/nonces.test.ts",
+    "jwt": "npm run test test/jwt.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
@@ -34,6 +35,7 @@
     "@silvana-one/api": "^1.0.2",
     "@silvana-one/mina-utils": "^1.0.2",
     "blakejs": "^1.2.1",
+    "jose": "^6.0.10",
     "js-sha256": "^0.11.0",
     "o1js": "^2.4.0",
     "secp256k1": "^5.0.1"
