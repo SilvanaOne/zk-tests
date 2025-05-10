@@ -18,7 +18,10 @@
     "poseidon": "npm run test test/poseidon.test.ts",
     "nonce": "npm run test test/nonce.test.ts",
     "nonces": "npm run test test/nonces.test.ts",
-    "jwt": "npm run test test/jwt.test.ts"
+    "jwt": "npm run test test/jwt.test.ts",
+    "multisig": "npm run test test/multisig.test.ts",
+    "array": "npm run test test/array.test.ts",
+    "if": "npm run test test/if.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
@@ -37,7 +40,7 @@
     "blakejs": "^1.2.1",
     "jose": "^6.0.10",
     "js-sha256": "^0.11.0",
-    "o1js": "^2.4.0",
+    "o1js": "^2.5.0",
     "secp256k1": "^5.0.1"
   },
   "c8": {

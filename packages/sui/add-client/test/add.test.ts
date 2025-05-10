@@ -116,6 +116,12 @@ describe("Sui test", async () => {
         client: suiClient,
       });
       console.timeEnd(`tx sign ${i}`);
+      // const dryRun = await suiClient.devInspectTransactionBlock({
+      //   sender: keypair.toSuiAddress(),
+      //   transactionBlock: signedTx.bytes
+      // });
+      // dryRun.effects.gasUsed.computationCost
+      const gasPrice = await suiClient.getReferenceGasPrice();
       return signedTx;
     }
 
@@ -134,6 +140,7 @@ describe("Sui test", async () => {
 
     async function executeTx(tx: SignatureWithBytes, i: number) {
       console.time(`tx execute ${i}`);
+
       const executedTx = await suiClient.executeTransactionBlock({
         transactionBlock: tx.bytes,
         signature: tx.signature,

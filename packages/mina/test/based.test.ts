@@ -8,6 +8,9 @@ import {
   UInt64,
   Field,
   fetchEvents,
+  Bool,
+  fetchLastBlock,
+  fetchAccount,
 } from "o1js";
 import { readFile, writeFile } from "node:fs/promises";
 import {
@@ -26,7 +29,7 @@ const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;
 
 const chain = process.env.CHAIN;
-const PRIVATE_KEY = process.env.TEST_ACCOUNT_1_PRIVATE_KEY;
+const PRIVATE_KEY = process.env.TEST_ACCOUNT_3_PRIVATE_KEY;
 let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
@@ -80,12 +83,22 @@ describe("Based rollup", async () => {
       events = pushEvent(events, input.map(Field));
       console.timeEnd("calculate");
       console.time("prepared");
+      const account = await fetchAccount({ publicKey: sender });
+      const receiptChainHash = account.account?.receiptChainHash;
+      if (!receiptChainHash) {
+        throw new Error("Receipt chain hash not found");
+      }
+      console.log("receiptChainHash", receiptChainHash.toJSON());
 
       const tx = await Mina.transaction(
-        { sender, fee: 100_000_000, memo: `event ${i}`, nonce: nonce++ },
+        { sender, fee: 100_000_000, memo: `event3_${i}`, nonce: nonce++ },
         async () => {
           const update = AccountUpdate.create(sender);
           update.body.events = events;
+          // update.body.preconditions.account.receiptChainHash.isSome =
+          //   Bool(true);
+          // update.body.preconditions.account.receiptChainHash.value =
+          //   receiptChainHash;
         }
       );
       console.timeEnd("prepared");
@@ -97,6 +110,7 @@ describe("Based rollup", async () => {
       console.time("send");
       let txSent = await tx.safeSend();
       while (txSent.status !== "pending") {
+        console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
         await sleep(5000);
         txSent = await tx.safeSend();
       }
