@@ -158,6 +158,7 @@ name = "controller"
 version = "0.1.0"
 dependencies = [
  "bollard",
+ "bytes",
  "chrono",
  "futures-util",
  "tokio",

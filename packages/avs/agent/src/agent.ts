@@ -2,7 +2,7 @@ async function agent() {
   console.time("Agent runtime");
   console.log("Agent is running");
   console.log("Agent arguments:", process.argv);
-  await sleep(3000);
+  await sleep(60000);
   const result = "some result";
   console.log("Agent work result:", result);
   console.timeEnd("Agent runtime");
