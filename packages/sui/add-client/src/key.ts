@@ -4,7 +4,7 @@ import {
   SuiClient,
   SuiEvent,
 } from "@mysten/sui/client";
-import { getFaucetHost, requestSuiFromFaucetV1 } from "@mysten/sui/faucet";
+import { getFaucetHost, requestSuiFromFaucetV2 } from "@mysten/sui/faucet";
 import { MIST_PER_SUI } from "@mysten/sui/utils";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Secp256k1Keypair } from "@mysten/sui/keypairs/secp256k1";
@@ -46,14 +46,14 @@ export async function getKey(params: {
     suiBalance(balance) < MIN_SUI_BALANCE &&
     (network === "localnet" || network === "devnet" || network === "testnet")
   ) {
-    console.log(
-      `Requesting SUI from faucet, current balance: ${suiBalance(balance)} SUI`
-    );
-    const tx = await requestSuiFromFaucetV1({
+    // console.log(
+    //   `Requesting SUI from faucet, current balance: ${suiBalance(balance)} SUI`
+    // );
+    const tx = await requestSuiFromFaucetV2({
       host: getFaucetHost(network),
       recipient: address,
     });
-    console.log("Faucet tx", tx);
+    console.log("Faucet tx status:", tx.status);
     while (suiBalance(balance) < MIN_SUI_BALANCE) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       balance = await suiClient.getBalance({

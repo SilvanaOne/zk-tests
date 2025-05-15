@@ -1,0 +1,21 @@
+{
+  "name": "agent",
+  "description": "AVS agent test",
+  "version": "0.0.1",
+  "author": "DFST",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "avs:start": "docker compose up start --build",
+    "start": "NODE_NO_WARNINGS=1 node --enable-source-maps dist/src/agent.js"
+  },
+  "packageManager": "npm@11.3.0",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

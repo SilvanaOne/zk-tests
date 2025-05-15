@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  build:
+    image: alpine
+    volumes:
+      - .:/workspace
+      - ./out:/out
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    command: >
+      sh -c "
+        if ! command -v docker &> /dev/null; then
+          apk add --no-cache docker-cli
+        fi &&
+        docker build -t app-image:latest . &&
+        docker save -o /out/app-image.tar app-image:latest &&
+        echo 'Image saved to out/app-image.tar'
+      "
+
+  run:
+    image: alpine
+    volumes:
+      - ./out:/out
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    command: >
+      sh -c "
+        if ! command -v docker &> /dev/null; then
+          apk add --no-cache docker-cli
+        fi &&
+        docker load < /out/app-image.tar &&
+        docker run --rm -p 6000:6000  app-image:latest npm run start
+      "

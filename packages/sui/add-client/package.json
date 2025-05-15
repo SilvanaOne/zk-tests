@@ -18,21 +18,23 @@
     "events": "npm run test test/events.test.ts",
     "ipfs": "npm run test test/ipfs.test.ts",
     "key": "npm run test test/key.test.ts",
+    "table": "npm run test test/table.test.ts",
+    "enclave": "npm run test test/enclave.test.ts",
     "walrus:daemon": "walrus daemon --sub-wallets-dir ../walrus --bind-address 127.0.0.1:31415"
   },
   "node": {
     "version": ">=20.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.13.17",
+    "@types/node": "^22.15.17",
     "@types/secp256k1": "^4.0.6",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.5.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@mysten/sui": "^1.26.0",
-    "pinata": "^2.1.3",
+    "@mysten/sui": "^1.29.1",
+    "pinata": "^2.2.2",
     "secp256k1": "^5.0.1"
   }
 }

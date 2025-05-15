@@ -36,6 +36,8 @@ describe("Sui test", async () => {
       target: `${packageID}::add::add_create_transfer`,
       arguments: [tx.pure.address(packageID)],
     });
+    tx.setSender(address);
+    tx.setGasBudget(10_000_000);
 
     console.timeEnd("tx build");
 

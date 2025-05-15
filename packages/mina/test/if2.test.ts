@@ -33,10 +33,12 @@ function createProgram(count: number) {
         async method(data: UInt32[], idx: UInt32) {
           let nonIdx = UInt32.from(0);
           for (let i = 0; i < count; i++) {
-            nonIdx = nonIdx.add(
+            const nonIdxTemp = nonIdx.add(
               Provable.if(data[i].equals(idx), UInt32.from(0), UInt32.from(1))
-              //UInt32.from(1)
             );
+            const nonIdxTemp2 = Provable.witness(UInt32, () => nonIdxTemp);
+            nonIdxTemp2.assertEquals(nonIdxTemp);
+            nonIdx = nonIdxTemp2;
           }
           return { publicOutput: nonIdx };
         },

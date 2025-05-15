@@ -34,7 +34,8 @@ let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
-const NUMBER_OF_ITERATIONS = 50;
+const NUMBER_OF_ITERATIONS = 100;
+let retries = 0;
 
 function arraysEqual(a: number[], b: number[]) {
   if (a.length !== b.length) return false;
@@ -113,6 +114,7 @@ describe("Based rollup", async () => {
         console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
         await sleep(5000);
         txSent = await tx.safeSend();
+        retries++;
       }
       console.timeEnd("send");
       console.log("txSent", txSent.hash, txSent.status);
@@ -141,6 +143,7 @@ describe("Based rollup", async () => {
       if (attempts > 1) {
         console.log("attempts", attempts);
       }
+      console.log("retries", retries);
     }
   });
 });
