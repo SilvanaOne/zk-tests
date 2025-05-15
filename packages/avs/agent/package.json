@@ -12,7 +12,9 @@
     "start": "NODE_NO_WARNINGS=1 node --enable-source-maps dist/src/agent.js"
   },
   "packageManager": "npm@11.3.0",
-  "dependencies": {},
+  "dependencies": {
+    "@mysten/sui": "^1.29.1"
+  },
   "devDependencies": {
     "@types/node": "^20.12.12",
     "ts-node": "^10.9.2",

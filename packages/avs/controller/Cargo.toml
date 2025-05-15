@@ -11,3 +11,4 @@ tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 chrono = "0.4"
 bytes = "1"
+dotenv = "0.15.0"
