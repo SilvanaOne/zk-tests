@@ -7,8 +7,10 @@ edition = "2024"
 
 [dependencies]
 bollard = "0.15"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.2", features = ["full"] }
 futures-util = "0.3"
 chrono = "0.4"
 bytes = "1"
 dotenv = "0.15.0"
+sui_sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
+anyhow = "1.0"

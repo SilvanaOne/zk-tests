@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc",
     "avs:start": "docker compose up start --build",
-    "start": "NODE_NO_WARNINGS=1 node --enable-source-maps dist/src/agent.js"
+    "start": "NODE_NO_WARNINGS=1 node --enable-source-maps dist/src/agent.js",
+    "task": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps src/task.ts"
   },
   "packageManager": "npm@11.3.0",
   "dependencies": {

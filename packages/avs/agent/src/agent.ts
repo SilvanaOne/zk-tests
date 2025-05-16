@@ -1,4 +1,4 @@
-import { coordinate, fetchAgent } from "./coordinate.js";
+import { coordination, fetchRequest, fetchResponse } from "./coordinate.js";
 
 async function agent() {
   console.time("Agent runtime");
@@ -8,10 +8,17 @@ async function agent() {
   const agent = process.argv[3];
   const action = process.argv[4];
   console.log("Agent arguments:", key.length, agent, action);
-  await coordinate({ key, agent, action });
+  const request = await fetchRequest();
+  await coordination({
+    key,
+    agent,
+    action,
+    data: action + " executed",
+    isRequest: false,
+  });
   await sleep(10000);
-  const agentData = await fetchAgent();
-  console.log("Agent:", agentData);
+  const response = await fetchResponse();
+  console.log("Agent response:", response);
   const config = await fetch("https://dex.silvana.dev/api/v1/config", {
     method: "POST",
     headers: {

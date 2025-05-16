@@ -11,16 +11,20 @@ const suiClient = new SuiClient({
   url: getFullnodeUrl("devnet"),
 });
 const packageID =
-  "0xd455ccf742350b9cbe8e8f3203910959f312794de0bc8ca42476baf1f96860c1";
-const objectID =
-  "0xe8cc661bb9c4475b643916bcd243391ba1330bebb355bce0f21900c445d623d0";
+  "0xd7d00456c2a25de783593317af1ea9955ce98cfde16a36ec6cca785e81d9e90a";
+const requestObjectID =
+  "0x402eb0550a27eaad2911ff5bd898ee61e6406c1eeac9c66a75cf2fe94cab3136";
+const responseObjectID =
+  "0x78eacc190e40775b303f73720d7eca47a3b6c81ac3588402b2d4bd841feb2820";
 
-export async function coordinate(params: {
+export async function coordination(params: {
   key: string;
   agent: string;
   action: string;
+  data: string;
+  isRequest: boolean;
 }) {
-  const { agent, action, key } = params;
+  const { agent, action, key, data, isRequest } = params;
 
   const keypair = Ed25519Keypair.fromSecretKey(key);
   const address = keypair.toSuiAddress();
@@ -29,15 +33,16 @@ export async function coordinate(params: {
   const tx = new Transaction();
 
   const args: TransactionArgument[] = [
-    tx.object(objectID),
+    tx.object(isRequest ? requestObjectID : responseObjectID),
     tx.pure.string(agent),
     tx.pure.string(action),
+    tx.pure.string(data),
   ];
 
   tx.moveCall({
     package: packageID,
     module: "agent",
-    function: "run_agent",
+    function: isRequest ? "agent_request" : "agent_response",
     arguments: args,
   });
 
@@ -70,9 +75,27 @@ export async function coordinate(params: {
   console.log("events", (txWaitResult.events as SuiEvent[])?.[0]?.parsedJson);
 }
 
-export async function fetchAgent() {
+export async function fetchRequest(): Promise<{
+  agent: string;
+  action: string;
+  request: string;
+}> {
   const data = await suiClient.getObject({
-    id: objectID,
+    id: requestObjectID,
+    options: {
+      showContent: true,
+    },
+  });
+  return (data?.data?.content as any)?.fields;
+}
+
+export async function fetchResponse(): Promise<{
+  agent: string;
+  action: string;
+  result: string;
+}> {
+  const data = await suiClient.getObject({
+    id: responseObjectID,
     options: {
       showContent: true,
     },
