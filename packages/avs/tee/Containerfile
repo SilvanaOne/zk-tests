@@ -77,8 +77,9 @@ COPY --from=core-busybox /bin/sh initramfs/sh
 COPY --from=user-jq /bin/jq initramfs
 COPY --from=user-socat /bin/socat . initramfs
 RUN mkdir -p initramfs/etc/containerd
-COPY --from=user-containerd /usr/local/bin/containerd* initramfs/usr/local/bin/
-COPY --from=user-containerd /usr/local/bin/ctr initramfs/usr/local/bin/
+RUN find / -name "containerd*" -o -name "ctr" | sort
+COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
+COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /usr/local/bin/runc initramfs/usr/local/bin/
 RUN echo '{}' > initramfs/etc/containerd/config.toml
 RUN cp /src/nautilus-server/start-containerd.sh initramfs/
