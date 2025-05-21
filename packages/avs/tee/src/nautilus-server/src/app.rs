@@ -11,7 +11,6 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 //use serde_json::Value;
 use std::sync::Arc;
-use sysinfo::{System};
 /// ====
 /// Core Nautilus server logic, replace it with your own
 /// relavant structs and process_data endpoint.
@@ -87,10 +86,10 @@ pub async fn process_data(
 }
 
 pub fn get_worker_stats() -> StartStats {
-    let mut system = System::new_all();
-    system.refresh_memory();  
-    let cpu_cores = system.cpus().len() as u64;
-    let memory = system.total_memory();  // Get total memory in KB
+    let cpu_cores = num_cpus::get() as u64;
+    let memory = sys_info::mem_info()
+        .map(|info| info.total)
+        .unwrap_or(0);
 
     StartStats {
         cpu_cores,

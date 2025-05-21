@@ -30,3 +30,5 @@ futures-util = "0.3"
 chrono = "0.4"
 bytes = "1"
 sui_sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
+num_cpus = "1.16.0"
+sys-info = "0.9.1"

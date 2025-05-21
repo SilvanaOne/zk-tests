@@ -8,3 +8,9 @@ export OTW_NAME=AGENT
 export ENCLAVE_URL=http://54.242.34.226:3000
 
 sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$AGENT_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "agent enclave, updated 2025-05-21"
+
+curl -H 'Content-Type: application/json' -X GET http://54.242.34.226:3000/health_check
+
+curl -H 'Content-Type: application/json' -X GET http://54.242.34.226:3000/get_attestation
+
+curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/process_data
