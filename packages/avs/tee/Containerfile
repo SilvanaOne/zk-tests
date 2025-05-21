@@ -26,6 +26,7 @@ FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
 FROM stagex/user-containerd@sha256:f9a5f51f9a48e348d8c2ecd56cf44659c8c7488a7c28797bacbeaaa1d97fa36b AS user-containerd
 FROM stagex/user-runc@sha256:9cb1b6d16811b59671cee74b402cc1f622fbc1ca60d4a1e47407fd5c50f70893 AS user-runc
+FROM stagex/user-protoc@sha256:34582157791bd87ecf7ef5852f59be4d3c97ea2c31a36ec6cee18ab67492ecbb AS user-protoc
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
@@ -54,6 +55,8 @@ COPY --from=user-runc . /
 COPY --from=user-linux-nitro /bzImage .
 COPY --from=user-linux-nitro /nsm.ko .
 COPY --from=user-linux-nitro /linux.config .
+COPY --from=user-protoc /bin/protoc /bin/protoc
+COPY --from=user-protoc /include /include
 
 
 FROM base as build
