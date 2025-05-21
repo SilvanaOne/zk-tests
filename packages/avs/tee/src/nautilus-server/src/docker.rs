@@ -16,7 +16,7 @@ pub async fn load_container(
     use_local_image: bool,
     image_source: &str,
     image_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if use_local_image {
         println!("Loading Docker image from local tar file: {}", image_source);
         let tar_path = Path::new(image_source);
@@ -54,7 +54,7 @@ pub async fn load_container(
                     println!("{}", status);
                 }
             }
-            Ok::<(), Box<dyn std::error::Error>>(())
+            Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
         }
         .await;
 
@@ -99,7 +99,7 @@ pub async fn run_container(
     agent: &str,
     action: &str,
     timeout_seconds: u64,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let start_time = Instant::now();
 
     // Create and start a container using Bollard with proper port mapping
@@ -172,7 +172,7 @@ pub async fn run_container(
 pub async fn monitor_container(
     docker: &Docker,
     container_id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut status_stream = docker.wait_container::<String>(container_id, None);
 
     if let Some(status) = status_stream.try_next().await? {

@@ -6,16 +6,18 @@ import {
 } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction, TransactionArgument } from "@mysten/sui/transactions";
-
+// console.log("devnet", getFullnodeUrl("devnet"));
+// console.log("testnet", getFullnodeUrl("testnet"));
+// console.log("mainnet", getFullnodeUrl("mainnet"));
 const suiClient = new SuiClient({
-  url: getFullnodeUrl("devnet"),
+  url: getFullnodeUrl("testnet"),
 });
 const packageID =
-  "0xd7d00456c2a25de783593317af1ea9955ce98cfde16a36ec6cca785e81d9e90a";
+  "0x083b05207706164149ba6cc263d799408e7018a77d5c68b3ae1caa6d1b650d93";
 const requestObjectID =
-  "0x402eb0550a27eaad2911ff5bd898ee61e6406c1eeac9c66a75cf2fe94cab3136";
+  "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15";
 const responseObjectID =
-  "0x78eacc190e40775b303f73720d7eca47a3b6c81ac3588402b2d4bd841feb2820";
+  "0x3a1e97787ee327749bffcae1609f797617fb8b6d7eb6e4f86cef51460c14a150";
 
 export async function coordination(params: {
   key: string;

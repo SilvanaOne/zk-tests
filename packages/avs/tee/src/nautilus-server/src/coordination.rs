@@ -1,7 +1,7 @@
 use sui_sdk::rpc_types::{SuiMoveStruct, SuiMoveValue, SuiParsedData};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
-pub async fn get_sui_client() -> Result<SuiClient, Box<dyn std::error::Error>> {
+pub async fn get_sui_client() -> Result<SuiClient, Box<dyn std::error::Error + Send + Sync>> {
     let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
     println!("Sui testnet version: {}", sui_testnet.api_version());
     Ok(sui_testnet)
@@ -20,7 +20,7 @@ const REQUEST_OBJECT_ID: &str =
 
 pub async fn get_request(
     sui_client: &SuiClient,
-) -> Result<RequestData, Box<dyn std::error::Error>> {
+) -> Result<RequestData, Box<dyn std::error::Error + Send + Sync>> {
     let response = sui_client
         .read_api()
         .get_object_with_options(
