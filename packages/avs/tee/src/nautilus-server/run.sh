@@ -29,7 +29,7 @@ echo "127.0.0.67   api.minascan.io" >> /etc/hosts
 echo "127.0.0.68   api.blockberry.one" >> /etc/hosts
 echo "127.0.0.69   dex.silvana.dev" >> /etc/hosts
 echo "127.0.0.70   hub.docker.com" >> /etc/hosts
-echo "127.0.0.71   docker.io" >> /etc/hosts
+echo "127.0.0.71   registry-1.docker.io" >> /etc/hosts
 echo "127.0.0.72   wal-publisher-testnet.staketab.org" >> /etc/hosts
 echo "127.0.0.73   wal-aggregator-testnet.staketab.org" >> /etc/hosts
 

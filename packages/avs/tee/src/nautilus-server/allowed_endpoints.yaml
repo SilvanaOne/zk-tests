@@ -7,6 +7,6 @@ endpoints:
   - api.blockberry.one
   - dex.silvana.dev
   - hub.docker.com
-  - docker.io
+  - registry-1.docker.io
   - wal-publisher-testnet.staketab.org
   - wal-aggregator-testnet.staketab.org
