@@ -1,11 +1,5 @@
-use sui_sdk::rpc_types::{SuiMoveStruct, SuiMoveValue, SuiParsedData};
-use sui_sdk::{SuiClient, SuiClientBuilder};
-
-pub async fn get_sui_client() -> Result<SuiClient, Box<dyn std::error::Error + Send + Sync>> {
-    let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
-    println!("Sui testnet version: {}", sui_testnet.api_version());
-    Ok(sui_testnet)
-}
+use serde_json;
+use reqwest;
 
 #[derive(Debug)]
 pub struct RequestData {
@@ -18,53 +12,67 @@ pub struct RequestData {
 const REQUEST_OBJECT_ID: &str =
     "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15";
 
-pub async fn get_request(
-    sui_client: &SuiClient,
-) -> Result<RequestData, Box<dyn std::error::Error + Send + Sync>> {
-    let response = sui_client
-        .read_api()
-        .get_object_with_options(
-            REQUEST_OBJECT_ID.parse()?,
-            sui_sdk::rpc_types::SuiObjectDataOptions::new().with_content(),
-        )
+pub async fn get_request() -> Result<RequestData, Box<dyn std::error::Error + Send + Sync>> {
+    let url = "https://fullnode.testnet.sui.io";
+    let client = reqwest::Client::new();
+
+    // Create request payload similar to the JavaScript example
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "sui_getObject",
+        "params": [
+            REQUEST_OBJECT_ID,
+            {
+                "showContent": true
+            }
+        ]
+    });
+
+    // Make the POST request
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
         .await?;
 
-    // Extract fields from the response
-    let content = response.data.unwrap().content.unwrap();
-    if let SuiParsedData::MoveObject(move_obj) = content {
-        // Handle SuiMoveStruct properly
-        if let SuiMoveStruct::WithFields(fields_map) = move_obj.fields {
-            // Extract the fields from the map
-            let nonce = match fields_map.get("nonce") {
-                Some(SuiMoveValue::String(s)) => s.clone(),
-                _ => String::default(),
-            };
-
-            let agent = match fields_map.get("name") {
-                Some(SuiMoveValue::String(s)) => s.clone(),
-                _ => String::default(),
-            };
-
-            let action = match fields_map.get("action") {
-                Some(SuiMoveValue::String(s)) => s.clone(),
-                _ => String::default(),
-            };
-
-            let request = match fields_map.get("request") {
-                Some(SuiMoveValue::String(s)) => s.clone(),
-                _ => String::default(),
-            };
-
-            Ok(RequestData {
-                nonce: nonce.parse::<u64>()?,
-                agent,
-                action,
-                request,
-            })
-        } else {
-            Err("Object fields not in expected format".into())
-        }
-    } else {
-        Err("Invalid object format".into())
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch object data: {}", response.status()).into());
     }
+
+    // Parse the response
+    let data: serde_json::Value = response.json().await?;
+    
+    // Extract fields from the response
+    let fields = data["result"]["data"]["content"]["fields"]
+        .as_object()
+        .ok_or("Failed to extract fields from response")?;
+
+    // Extract values
+    let nonce_str = fields["nonce"]
+        .as_str()
+        .ok_or("Missing or invalid nonce field")?;
+    
+    let agent = fields["name"]
+        .as_str()
+        .ok_or("Missing or invalid name field")?
+        .to_string();
+    
+    let action = fields["action"]
+        .as_str()
+        .ok_or("Missing or invalid action field")?
+        .to_string();
+    
+    let request = fields["request"]
+        .as_str()
+        .ok_or("Missing or invalid request field")?
+        .to_string();
+
+    Ok(RequestData {
+        nonce: nonce_str.parse::<u64>()?,
+        agent,
+        action,
+        request,
+    })
 }

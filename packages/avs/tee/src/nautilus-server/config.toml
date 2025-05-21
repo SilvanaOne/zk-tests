@@ -1,4 +1,23 @@
-   [plugins."io.containerd.grpc.v1.cri".registry]
-     [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-       [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-         endpoint = ["https://registry-1.docker.io"]
+version = 2
+
+root  = "/var/lib/containerd"
+state = "/run/containerd"
+
+[grpc]
+  # If you’re forwarding vsock ↔ TCP from the host into the enclave,
+  # point containerd’s gRPC listener at the vsock address; otherwise keep default.
+  # address = "vsock://3:10250"
+  address = "/run/containerd/containerd.sock"
+  uid = 0
+  gid = 0
+
+[debug]
+  level = "info"
+
+# Registry access (Docker Hub mirror + optional proxy)
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+  endpoint = ["https://registry-1.docker.io"]
+
+# Allow `ctr run --net-host` / host-network in the enclave
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+  SystemdCgroup = true

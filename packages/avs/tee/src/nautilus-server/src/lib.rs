@@ -11,8 +11,8 @@ use serde_json::json;
 pub mod agent;
 pub mod app;
 pub mod common;
+pub mod containerd;
 pub mod coordination;
-pub mod docker;
 
 /// App state, at minimum needs to maintain the ephemeral keypair.  
 pub struct AppState {
