@@ -81,7 +81,7 @@ RUN find / -name "containerd*" -o -name "ctr" | sort
 COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
-RUN echo '# Empty containerd config' > initramfs/etc/containerd/config.toml
+RUN cp /src/nautilus-server/config.toml initramfs/etc/containerd/
 RUN cp /src/nautilus-server/start-containerd.sh initramfs/
 RUN chmod +x initramfs/start-containerd.sh
 RUN cp /target/${TARGET}/release/init initramfs
