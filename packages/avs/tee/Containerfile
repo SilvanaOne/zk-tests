@@ -81,7 +81,6 @@ COPY --from=user-containerd /usr/local/bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /usr/local/bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /usr/local/bin/runc initramfs/usr/local/bin/
 RUN echo '{}' > initramfs/etc/containerd/config.toml
-COPY start-containerd.sh initramfs/
 RUN cp /src/nautilus-server/start-containerd.sh initramfs/
 RUN chmod +x initramfs/start-containerd.sh
 RUN cp /target/${TARGET}/release/init initramfs
