@@ -80,7 +80,7 @@ RUN mkdir -p initramfs/etc/containerd
 RUN find / -name "containerd*" -o -name "ctr" | sort
 COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
-COPY --from=user-runc /usr/local/bin/runc initramfs/usr/local/bin/
+COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
 RUN echo '{}' > initramfs/etc/containerd/config.toml
 RUN cp /src/nautilus-server/start-containerd.sh initramfs/
 RUN chmod +x initramfs/start-containerd.sh
