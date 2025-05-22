@@ -11,3 +11,4 @@ endpoints:
   - wal-publisher-testnet.staketab.org
   - wal-aggregator-testnet.staketab.org
   - docker.io
+  - auth.docker.io

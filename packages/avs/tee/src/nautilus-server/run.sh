@@ -33,7 +33,7 @@ echo "127.0.0.71   registry-1.docker.io" >> /etc/hosts
 echo "127.0.0.72   wal-publisher-testnet.staketab.org" >> /etc/hosts
 echo "127.0.0.73   wal-aggregator-testnet.staketab.org" >> /etc/hosts
 echo "127.0.0.74   docker.io" >> /etc/hosts
-
+echo "127.0.0.75   auth.docker.io" >> /etc/hosts
 
 
 # == ATTENTION: code should be generated here that parses allowed_endpoints.yaml and populate domains here ===
@@ -64,7 +64,7 @@ python3 /traffic_forwarder.py 127.0.0.71 443 3 8108 &
 python3 /traffic_forwarder.py 127.0.0.72 443 3 8109 &
 python3 /traffic_forwarder.py 127.0.0.73 443 3 8110 &
 python3 /traffic_forwarder.py 127.0.0.74 443 3 8111 &
-
+python3 /traffic_forwarder.py 127.0.0.75 443 3 8112 &
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 /start-containerd.sh
