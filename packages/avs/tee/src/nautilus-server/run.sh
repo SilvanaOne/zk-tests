@@ -21,19 +21,21 @@ busybox ip addr add 127.0.0.1/32 dev lo
 busybox ip link set dev lo up
 
 # Add a hosts record, pointing target site calls to local loopback
+# - fullnode.devnet.sui.io
+# - fullnode.testnet.sui.io
+# - dex.silvana.dev
+# - hub.docker.com
+# - registry-1.docker.io
+# - auth.docker.io
+# - docker.io
 echo "127.0.0.1   localhost" > /etc/hosts
 echo "127.0.0.64   fullnode.devnet.sui.io" >> /etc/hosts
 echo "127.0.0.65   fullnode.testnet.sui.io" >> /etc/hosts
-echo "127.0.0.66   fullnode.mainnet.sui.io" >> /etc/hosts
-echo "127.0.0.67   api.minascan.io" >> /etc/hosts
-echo "127.0.0.68   api.blockberry.one" >> /etc/hosts
-echo "127.0.0.69   dex.silvana.dev" >> /etc/hosts
-echo "127.0.0.70   hub.docker.com" >> /etc/hosts
-echo "127.0.0.71   registry-1.docker.io" >> /etc/hosts
-echo "127.0.0.72   wal-publisher-testnet.staketab.org" >> /etc/hosts
-echo "127.0.0.73   wal-aggregator-testnet.staketab.org" >> /etc/hosts
-echo "127.0.0.74   docker.io" >> /etc/hosts
-echo "127.0.0.75   auth.docker.io" >> /etc/hosts
+echo "127.0.0.66   dex.silvana.dev" >> /etc/hosts
+echo "127.0.0.67   hub.docker.com" >> /etc/hosts
+echo "127.0.0.68   registry-1.docker.io" >> /etc/hosts
+echo "127.0.0.69   docker.io" >> /etc/hosts
+echo "127.0.0.70   auth.docker.io" >> /etc/hosts
 
 
 # == ATTENTION: code should be generated here that parses allowed_endpoints.yaml and populate domains here ===
@@ -60,11 +62,7 @@ python3 /traffic_forwarder.py 127.0.0.67 443 3 8104 &
 python3 /traffic_forwarder.py 127.0.0.68 443 3 8105 &
 python3 /traffic_forwarder.py 127.0.0.69 443 3 8106 &
 python3 /traffic_forwarder.py 127.0.0.70 443 3 8107 &
-python3 /traffic_forwarder.py 127.0.0.71 443 3 8108 &
-python3 /traffic_forwarder.py 127.0.0.72 443 3 8109 &
-python3 /traffic_forwarder.py 127.0.0.73 443 3 8110 &
-python3 /traffic_forwarder.py 127.0.0.74 443 3 8111 &
-python3 /traffic_forwarder.py 127.0.0.75 443 3 8112 &
+
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 /start-containerd.sh

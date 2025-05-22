@@ -101,10 +101,19 @@ pub async fn load_container(
         };
         
         // Execute the transfer (pull)
-        client
-            .transfer(with_namespace!(request, NAMESPACE))
-            .await
-            .context("Failed to transfer image")?;
+        println!("Attempting to transfer image with reference: {}", formatted_image_source);
+        match client.transfer(with_namespace!(request, NAMESPACE)).await {
+            Ok(_) => {
+                println!("Transfer completed successfully");
+            },
+            Err(e) => {
+                println!("Transfer failed with error: {:?}", e);
+                if let Some(status) = e.downcast_ref::<tonic::Status>() {
+                    println!("Tonic status: {:?}", status);
+                }
+                return Err(e).context("Failed to transfer image");
+            }
+        };
     }
 
     println!("Image loaded successfully in {:?}", start.elapsed());

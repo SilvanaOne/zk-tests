@@ -2,13 +2,8 @@
 endpoints:
   - fullnode.devnet.sui.io
   - fullnode.testnet.sui.io
-  - fullnode.mainnet.sui.io
-  - api.minascan.io
-  - api.blockberry.one
   - dex.silvana.dev
   - hub.docker.com
   - registry-1.docker.io
-  - wal-publisher-testnet.staketab.org
-  - wal-aggregator-testnet.staketab.org
-  - docker.io
   - auth.docker.io
+  - docker.io
