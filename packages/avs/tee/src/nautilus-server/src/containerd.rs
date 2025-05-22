@@ -52,9 +52,18 @@ pub async fn load_container(
         
         let mut client = TransferClient::new(channel.clone());
 
+        // Ensure Docker Hub references have the proper format
+        let formatted_image_source = if !image_source.contains('/') {
+            format!("docker.io/library/{}", image_source)
+        } else if !image_source.contains('.') {
+            format!("docker.io/{}", image_source)
+        } else {
+            image_source.to_string()
+        };
+
         // Create the source (OCIRegistry)
         let source = OciRegistry {
-            reference: image_source.to_string(),
+            reference: formatted_image_source,
             resolver: Default::default(),
         };
 
