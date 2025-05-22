@@ -15,9 +15,12 @@ state = "/run/containerd"
   level = "info"
 
 # Registry access (Docker Hub mirror + optional proxy)
-[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-  endpoint = ["https://registry-1.docker.io"]
+[plugins."io.containerd.grpc.v1.cri"]
+  disable = true
 
-# Allow `ctr run --net-host` / host-network in the enclave
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-  SystemdCgroup = true
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+    endpoint = ["https://registry-1.docker.io"]
+
+  # Allow `ctr run --net-host` / host-network in the enclave
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+    SystemdCgroup = true
