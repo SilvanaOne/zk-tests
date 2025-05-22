@@ -14,3 +14,10 @@ curl -H 'Content-Type: application/json' -X GET http://54.242.34.226:3000/health
 curl -H 'Content-Type: application/json' -X GET http://54.242.34.226:3000/get_attestation
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/process_data
+
+# make sure you have jq installed (`brew install jq`)
+
+docker manifest inspect stagex/core-ca-certificates:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="amd64")
+| .digest'

@@ -3,6 +3,10 @@ version = 2
 root  = "/var/lib/containerd"
 state = "/run/containerd"
 
+[registry]
+  [registry.configs."registry-1.docker.io".tls]
+    insecure_skip_verify = true
+
 [grpc]
   # If you're forwarding vsock ↔ TCP from the host into the enclave,
   # point containerd's gRPC listener at the vsock address; otherwise keep default.
