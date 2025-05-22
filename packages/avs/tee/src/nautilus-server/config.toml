@@ -28,12 +28,16 @@ state = "/run/containerd"
         password = ""
         auth = ""
         identitytoken = ""
+      [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io".tls]
+        insecure_skip_verify = true       
     
   [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
     [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
       endpoint = ["https://registry-1.docker.io"]
+      insecure_skip_verify = true
     [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry-1.docker.io"]
       endpoint = ["https://registry-1.docker.io"]
+      insecure_skip_verify = true
 
   # Allow `ctr run --net-host` / host-network in the enclave
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
