@@ -1,19 +1,19 @@
-use anyhow::{Result, Context};
-use std::time::Instant;
-use std::env::consts;
-use tokio::time::{Duration, timeout};
-use containerd_client as client;
+use anyhow::{Context, Result};
 use client::{
-    services::v1::{transfer_client::TransferClient, TransferOptions, TransferRequest},
+    services::v1::{TransferOptions, TransferRequest, transfer_client::TransferClient},
     to_any,
     types::{
-        transfer::{ImageStore, OciRegistry, UnpackConfiguration},
         Platform,
+        transfer::{ImageStore, OciRegistry, UnpackConfiguration},
     },
     with_namespace,
 };
-use tonic::{transport::Channel, Request};
+use containerd_client as client;
 use std::collections::HashMap;
+use std::env::consts;
+use std::time::Instant;
+use tokio::time::{Duration, timeout};
+use tonic::{Request, transport::Channel};
 use uuid;
 
 const NAMESPACE: &str = "default";
@@ -23,10 +23,7 @@ pub async fn load_container(
     image_source: &str,
     image_name: &str,
 ) -> Result<()> {
-    println!(
-        "Loading container: {} (from {})",
-        image_name, image_source
-    );
+    println!("Loading container: {} (from {})", image_name, image_source);
 
     let start = Instant::now();
 
@@ -37,7 +34,7 @@ pub async fn load_container(
         tokio::time::sleep(Duration::from_millis(500)).await;
     } else {
         println!("Loading image from remote source: {}", image_source);
-        
+
         // Get architecture
         let arch = match consts::ARCH {
             "x86_64" => "amd64",
@@ -49,7 +46,7 @@ pub async fn load_container(
         let channel = client::connect("/run/containerd/containerd.sock")
             .await
             .context("Failed to connect to containerd socket")?;
-        
+
         let mut client = TransferClient::new(channel.clone());
 
         // Ensure Docker Hub references have the proper format
@@ -99,16 +96,19 @@ pub async fn load_container(
                 ..Default::default()
             }),
         };
-        
+
         // Execute the transfer (pull)
-        println!("Attempting to transfer image with reference: {}", formatted_image_source);
+        println!(
+            "Attempting to transfer image with reference: {}",
+            formatted_image_source
+        );
         match client.transfer(with_namespace!(request, NAMESPACE)).await {
             Ok(_) => {
                 println!("Transfer completed successfully");
-            },
+            }
             Err(e) => {
                 println!("Transfer failed with error: {:?}", e);
-                
+
                 return Err(e).context("Failed to transfer image");
             }
         };
@@ -117,7 +117,6 @@ pub async fn load_container(
     println!("Image loaded successfully in {:?}", start.elapsed());
     Ok(())
 }
-
 
 pub async fn run_container(
     image: &str,
@@ -139,7 +138,8 @@ pub async fn run_container(
 
     // Setup client for containerd
     let mut images_client = client::services::v1::images_client::ImagesClient::new(channel.clone());
-    let mut containers_client = client::services::v1::containers_client::ContainersClient::new(channel.clone());
+    let mut containers_client =
+        client::services::v1::containers_client::ContainersClient::new(channel.clone());
     let mut tasks_client = client::services::v1::tasks_client::TasksClient::new(channel.clone());
 
     // Get image information
@@ -156,11 +156,11 @@ pub async fn run_container(
 
     // Create unique container ID
     let container_id = format!("container-{}", uuid::Uuid::new_v4());
-    
+
     // Create container spec with the command arguments
     use client::services::v1::Container;
     use client::services::v1::container;
-    
+
     // Create container
     let create_request = client::with_namespace!(
         client::services::v1::CreateContainerRequest {
@@ -184,7 +184,7 @@ pub async fn run_container(
         },
         NAMESPACE
     );
-    
+
     let container = containers_client
         .create(create_request)
         .await
@@ -210,7 +210,7 @@ pub async fn run_container(
         },
         NAMESPACE
     );
-    
+
     let task = tasks_client
         .create(create_task_request)
         .await
@@ -227,7 +227,7 @@ pub async fn run_container(
         },
         NAMESPACE
     );
-    
+
     tasks_client
         .start(start_request)
         .await
@@ -238,23 +238,23 @@ pub async fn run_container(
     // Wait for container to finish or timeout
     let execution_result = match timeout(
         Duration::from_secs(timeout_sec),
-        wait_for_container(&mut tasks_client, &container.id)
-    ).await {
-        Ok(result) => {
-            match result {
-                Ok(exit_code) => {
-                    println!("Container exited with code {}", exit_code);
-                    Ok(())
-                },
-                Err(e) => {
-                    println!("Error waiting for container: {}", e);
-                    Err(e)
-                }
+        wait_for_container(&mut tasks_client, &container.id),
+    )
+    .await
+    {
+        Ok(result) => match result {
+            Ok(exit_code) => {
+                println!("Container exited with code {}", exit_code);
+                Ok(())
+            }
+            Err(e) => {
+                println!("Error waiting for container: {}", e);
+                Err(e)
             }
         },
         Err(_) => {
             println!("Container timed out after {} seconds", timeout_sec);
-            
+
             // Kill the task
             let kill_request = client::with_namespace!(
                 client::services::v1::KillRequest {
@@ -265,12 +265,12 @@ pub async fn run_container(
                 },
                 NAMESPACE
             );
-            
+
             tasks_client
                 .kill(kill_request)
                 .await
                 .context("Failed to kill task")?;
-                
+
             println!("Task killed");
             Ok(())
         }
@@ -283,12 +283,12 @@ pub async fn run_container(
         },
         NAMESPACE
     );
-    
+
     tasks_client
         .delete(delete_task_request)
         .await
         .context("Failed to delete task")?;
-        
+
     println!("Task deleted");
 
     // Delete the container
@@ -298,12 +298,12 @@ pub async fn run_container(
         },
         NAMESPACE
     );
-    
+
     containers_client
         .delete(delete_container_request)
         .await
         .context("Failed to delete container")?;
-        
+
     println!("Container deleted");
 
     println!("Total execution time: {:?}", start.elapsed());
@@ -313,7 +313,7 @@ pub async fn run_container(
 
 async fn wait_for_container(
     tasks_client: &mut client::services::v1::tasks_client::TasksClient<Channel>,
-    container_id: &str
+    container_id: &str,
 ) -> Result<u32> {
     let wait_request = client::with_namespace!(
         client::services::v1::WaitRequest {
@@ -322,12 +322,12 @@ async fn wait_for_container(
         },
         NAMESPACE
     );
-    
+
     let response = tasks_client
         .wait(wait_request)
         .await
         .context("Failed to wait for task")?
         .into_inner();
-        
+
     Ok(response.exit_status)
 }

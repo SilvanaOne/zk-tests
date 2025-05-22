@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     // This value can be stored with secret-manager. To do that, follow the prompt `sh configure_enclave.sh`
     // Answer `y` to `Do you want to use a secret?` and finish.
     // Then uncomment this code instead to fetch from env var API_KEY, which is fetched from secret manager.
-    let api_key = std::env::var("SUI_KEY").expect("SUI_KEY must be set");
+    let api_key = std::env::var("SUI_KEY_2").expect("SUI_KEY_2 must be set");
     // let api_key = "045a27812dbe456392913223221306".to_string();
 
     let state = Arc::new(AppState { eph_kp, api_key });

@@ -1,11 +1,8 @@
-version = 2
+version = 3
 
 root  = "/var/lib/containerd"
 state = "/run/containerd"
 
-[registry]
-  [registry.configs."registry-1.docker.io".tls]
-    insecure_skip_verify = true
 
 [grpc]
   # If you're forwarding vsock ↔ TCP from the host into the enclave,
@@ -16,33 +13,10 @@ state = "/run/containerd"
   gid = 0
 
 [debug]
-  level = "info"
+  level = "debug"
 
-# Registry access (Docker Hub mirror + optional proxy)
-[plugins."io.containerd.grpc.v1.cri"]
-  disable = true
+[plugins."io.containerd.cri.v1.images"."docker.io"]
+  config_path = "/etc/containerd/certs.d"
 
-  [plugins."io.containerd.grpc.v1.cri".registry]
-    config_path = ""
-    
-  [plugins."io.containerd.grpc.v1.cri".registry.configs]
-    [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io"]
-      [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io".auth]
-        username = ""
-        password = ""
-        auth = ""
-        identitytoken = ""
-      [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io".tls]
-        insecure_skip_verify = true       
-    
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-      endpoint = ["https://registry-1.docker.io"]
-      insecure_skip_verify = true
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry-1.docker.io"]
-      endpoint = ["https://registry-1.docker.io"]
-      insecure_skip_verify = true
-
-  # Allow `ctr run --net-host` / host-network in the enclave
-  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-    SystemdCgroup = true
+[plugins."io.containerd.cri.v1.images"."registry-1.docker.io"]
+  config_path = "/etc/containerd/certs.d"

@@ -390,7 +390,7 @@ sudo systemctl stop nitro-enclaves-allocator.service
 # Adjust the enclave allocator memory (default set to 3072 MiB)
 ALLOCATOR_YAML=/etc/nitro_enclaves/allocator.yaml
 MEM_KEY=memory_mib
-DEFAULT_MEM=3072
+DEFAULT_MEM=8192
 sudo sed -r "s/^(\s*${MEM_KEY}\s*:\s*).*/\1${DEFAULT_MEM}/" -i "${ALLOCATOR_YAML}"
 
 # Restart the allocator with the updated memory configuration
@@ -528,7 +528,7 @@ echo "Launching EC2 instance with Nitro Enclaves enabled..."
 INSTANCE_ID=$(aws ec2 run-instances \
   --region "$REGION" \
   --image-id "$AMI_ID" \
-  --instance-type m5.xlarge \
+  --instance-type m5.2xlarge \
   --key-name "$KEY_PAIR" \
   --user-data file://user-data.sh \
   --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":200}}]' \
