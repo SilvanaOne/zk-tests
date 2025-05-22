@@ -61,13 +61,13 @@ FROM base as build
 COPY . .
 RUN cargo build --workspace --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
-RUN wget -qO /tmp/protoc.zip \
-     https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip \
-  && unzip -d /usr/local -q /tmp/protoc.zip 'bin/protoc' \
-  && chmod +x /usr/local/bin/protoc \
-  && rm /tmp/protoc.zip
+
 
 WORKDIR /src/nautilus-server
+COPY protoc-31.0-linux-x86_64.zip /tmp/protoc.zip
+RUN unzip -d /usr/local -q /tmp/protoc.zip 'bin/protoc' \
+    && chmod +x /usr/local/bin/protoc \
+    && rm /tmp/protoc.zip
 ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
 RUN cargo build --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
