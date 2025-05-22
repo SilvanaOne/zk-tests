@@ -63,7 +63,7 @@ pub async fn load_container(
 
         // Create the source (OCIRegistry)
         let source = OciRegistry {
-            reference: formatted_image_source,
+            reference: formatted_image_source.clone(),
             resolver: Default::default(),
         };
 
@@ -108,9 +108,7 @@ pub async fn load_container(
             },
             Err(e) => {
                 println!("Transfer failed with error: {:?}", e);
-                if let Some(status) = e.downcast_ref::<tonic::Status>() {
-                    println!("Tonic status: {:?}", status);
-                }
+                
                 return Err(e).context("Failed to transfer image");
             }
         };
