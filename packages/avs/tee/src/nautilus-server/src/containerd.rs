@@ -1,6 +1,11 @@
 use anyhow::{Context, Result};
 use client::{
-    services::v1::{TransferOptions, TransferRequest, transfer_client::TransferClient},
+    services::v1::{
+        Container, CreateContainerRequest, CreateTaskRequest, DeleteTaskRequest, StartRequest,
+        TransferOptions, TransferRequest, WaitRequest, container::Runtime,
+        containers_client::ContainersClient, tasks_client::TasksClient,
+        transfer_client::TransferClient,
+    },
     to_any,
     types::{
         Platform,
@@ -60,7 +65,7 @@ pub async fn load_container(
 
         // Create the source (OCIRegistry)
         let source = OciRegistry {
-            reference: formatted_image_source.clone(),
+            reference: formatted_image_source.clone().to_string(),
             resolver: Default::default(),
         };
 
@@ -100,7 +105,7 @@ pub async fn load_container(
         // Execute the transfer (pull)
         println!(
             "Attempting to transfer image with reference: {}",
-            formatted_image_source
+            formatted_image_source.clone()
         );
         match client.transfer(with_namespace!(request, NAMESPACE)).await {
             Ok(_) => {
@@ -112,9 +117,81 @@ pub async fn load_container(
                 return Err(e).context("Failed to transfer image");
             }
         };
+
+        println!("Image loaded successfully in {:?}", start.elapsed());
+        let container_id = format!("container-{}", uuid::Uuid::new_v4());
+
+        let container = Container {
+            id: container_id.to_string(),
+            image: formatted_image_source.clone().to_string(),
+            runtime: Some(Runtime {
+                name: "io.containerd.runc.v2".to_string(),
+                options: None,
+            }),
+            spec: None,
+            ..Default::default()
+        };
+        let req = CreateContainerRequest {
+            container: Some(container),
+        };
+        let req = with_namespace!(req, NAMESPACE);
+
+        let mut client = ContainersClient::new(channel.clone());
+
+        let _resp = client
+            .create(req)
+            .await
+            .expect("Failed to create container");
+
+        println!("Container: {:?} created", container_id.to_string());
+
+        // creat and start task
+        let mut client = TasksClient::new(channel.clone());
+
+        let req = CreateTaskRequest {
+            container_id: container_id.to_string(),
+            stdin: "".to_string(),
+            stdout: "".to_string(),
+            stderr: "".to_string(),
+            ..Default::default()
+        };
+        let req = with_namespace!(req, NAMESPACE);
+        let _resp = client.create(req).await.expect("Failed to create task");
+
+        println!("Task: {:?} created", container_id.to_string());
+        let req = StartRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
+        let req = with_namespace!(req, NAMESPACE);
+
+        let _resp = client.start(req).await.expect("Failed to start task");
+
+        println!("Task: {:?} started", container_id.to_string());
+
+        // wait for container to finish or timeout
+        // wait task
+        let req = WaitRequest {
+            container_id: container_id.to_string(),
+            ..Default::default()
+        };
+        let req = with_namespace!(req, NAMESPACE);
+
+        let _resp = client.wait(req).await.expect("Failed to wait task");
+
+        println!("Task: {:?} stopped", container_id.to_string());
+
+        // delete task
+        let req = DeleteTaskRequest {
+            container_id: container_id.to_string(),
+        };
+        let req = with_namespace!(req, NAMESPACE);
+
+        let _resp = client.delete(req).await.expect("Failed to delete task");
+
+        println!("Task: {:?} deleted", container_id.to_string());
     }
 
-    println!("Image loaded successfully in {:?}", start.elapsed());
     Ok(())
 }
 
@@ -129,7 +206,7 @@ pub async fn run_container(
     println!("Starting container for image {}", image);
     println!("- Agent: {}", agent);
     println!("- Action: {}", action);
-    println!("- Key: {}", key);
+    println!("- Image: {}", image);
 
     // Connect to containerd
     let channel = client::connect("/run/containerd/containerd.sock")

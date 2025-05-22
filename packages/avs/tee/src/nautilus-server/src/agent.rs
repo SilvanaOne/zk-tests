@@ -54,8 +54,8 @@ async fn agent(
     println!("Container loaded in {:?}", duration);
 
     // Run container with 900 second timeout
-    println!("Running container with 900 second timeout...");
-    run_container(&image_name, &key, &request.agent, &request.action, 900).await?;
+    //println!("Running container with 900 second timeout...");
+    //run_container(&image_name, &key, &request.agent, &request.action, 900).await?;
 
     let time_end = Instant::now();
     let duration = time_end.duration_since(time_start);
