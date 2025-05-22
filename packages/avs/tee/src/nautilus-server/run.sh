@@ -32,6 +32,7 @@ echo "127.0.0.70   hub.docker.com" >> /etc/hosts
 echo "127.0.0.71   registry-1.docker.io" >> /etc/hosts
 echo "127.0.0.72   wal-publisher-testnet.staketab.org" >> /etc/hosts
 echo "127.0.0.73   wal-aggregator-testnet.staketab.org" >> /etc/hosts
+echo "127.0.0.74   docker.io" >> /etc/hosts
 
 
 
@@ -62,7 +63,7 @@ python3 /traffic_forwarder.py 127.0.0.70 443 3 8107 &
 python3 /traffic_forwarder.py 127.0.0.71 443 3 8108 &
 python3 /traffic_forwarder.py 127.0.0.72 443 3 8109 &
 python3 /traffic_forwarder.py 127.0.0.73 443 3 8110 &
-
+python3 /traffic_forwarder.py 127.0.0.74 443 3 8111 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &

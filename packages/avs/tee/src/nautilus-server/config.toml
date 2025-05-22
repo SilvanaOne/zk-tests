@@ -4,8 +4,8 @@ root  = "/var/lib/containerd"
 state = "/run/containerd"
 
 [grpc]
-  # If you’re forwarding vsock ↔ TCP from the host into the enclave,
-  # point containerd’s gRPC listener at the vsock address; otherwise keep default.
+  # If you're forwarding vsock ↔ TCP from the host into the enclave,
+  # point containerd's gRPC listener at the vsock address; otherwise keep default.
   # address = "vsock://3:10250"
   address = "/run/containerd/containerd.sock"
   uid = 0
@@ -18,8 +18,14 @@ state = "/run/containerd"
 [plugins."io.containerd.grpc.v1.cri"]
   disable = true
 
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-    endpoint = ["https://registry-1.docker.io"]
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = ""
+    
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+      endpoint = ["https://registry-1.docker.io"]
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."dfstio"]
+      endpoint = ["https://registry-1.docker.io"]
 
   # Allow `ctr run --net-host` / host-network in the enclave
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
