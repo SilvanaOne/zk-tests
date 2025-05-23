@@ -1,5 +1,6 @@
-use crate::containerd::{load_container, run_container};
 use crate::coordination;
+use crate::docker::{load_container, run_container};
+use bollard::Docker;
 use std::time::Instant;
 use tokio::time::{Duration, sleep};
 
@@ -7,8 +8,9 @@ pub async fn start_agent(key: &str) -> Result<(), Box<dyn std::error::Error + Se
     let last_request = coordination::get_request().await?;
 
     let mut last_nonce = last_request.nonce;
+    let docker = Docker::connect_with_local_defaults()?;
     loop {
-        let new_nonce = agent(last_nonce, key).await?;
+        let new_nonce = agent(&docker, last_nonce, key).await?;
         if new_nonce > last_nonce {
             println!("New nonce: {:?}", new_nonce);
             last_nonce = new_nonce;
@@ -18,6 +20,7 @@ pub async fn start_agent(key: &str) -> Result<(), Box<dyn std::error::Error + Se
 }
 
 async fn agent(
+    docker: &Docker,
     last_nonce: u64,
     key: &str,
 ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
@@ -39,6 +42,7 @@ async fn agent(
 
     // Load the container image using containerd
     if let Err(e) = load_container(
+        docker,
         false, // use_local_image parameter set to false (pull from registry)
         &image_source,
         &image_name,
@@ -54,8 +58,20 @@ async fn agent(
     println!("Container loaded in {:?}", duration);
 
     // Run container with 900 second timeout
-    //println!("Running container with 900 second timeout...");
-    //run_container(&image_name, &key, &request.agent, &request.action, 900).await?;
+    println!("Running container with 900 second timeout...");
+    if let Err(e) = run_container(
+        docker,
+        &image_name,
+        key,
+        &request.agent,
+        &request.action,
+        900,
+    )
+    .await
+    {
+        println!("Failed to run container: {}", e);
+        return Ok(request.nonce);
+    }
 
     let time_end = Instant::now();
     let duration = time_end.duration_since(time_start);

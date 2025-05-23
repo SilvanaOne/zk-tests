@@ -60,6 +60,7 @@ python3 /traffic_forwarder.py 127.0.0.70 443 3 8107 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
-/start-containerd.sh 
+echo "Starting dockerd"
+dockerd --bip="none" --iptables=false --ip-masq=false &
 echo "Starting nautilus-server"
 /nautilus-server

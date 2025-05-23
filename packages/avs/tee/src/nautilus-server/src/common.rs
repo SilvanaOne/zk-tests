@@ -3,7 +3,7 @@
 
 use crate::AppState;
 use crate::EnclaveError;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use fastcrypto::traits::Signer;
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use fastcrypto::{encoding::Hex, traits::KeyPair as FcKeyPair};
@@ -20,8 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
 
-use fastcrypto::ed25519::{Ed25519Signature};
-/// ==== COMMON TYPES ====
+use fastcrypto::ed25519::Ed25519Signature;
 
 /// Intent message wrapper struct containing the intent scope and timestamp.
 /// This standardizes the serialized payload for signing.
@@ -83,8 +82,6 @@ pub fn to_signed_response<T: Serialize + Clone>(
         signature: Hex::encode(sig),
     }
 }
-
-/// ==== HEALTHCHECK, GET ATTESTASTION ENDPOINT IMPL ====
 
 /// Response for get attestation.
 #[derive(Debug, Serialize, Deserialize)]

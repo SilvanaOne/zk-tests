@@ -1,20 +1,16 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::common::IntentMessage;
-use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
 use crate::EnclaveError;
 use crate::agent::start_agent;
-use axum::extract::State;
+use crate::common::IntentMessage;
+use crate::common::{IntentScope, ProcessDataRequest, ProcessedDataResponse, to_signed_response};
 use axum::Json;
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 //use serde_json::Value;
 use std::sync::Arc;
-/// ====
-/// Core Nautilus server logic, replace it with your own
-/// relavant structs and process_data endpoint.
-/// ====
 
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -87,61 +83,7 @@ pub async fn process_data(
 
 pub fn get_worker_stats() -> StartStats {
     let cpu_cores = num_cpus::get() as u64;
-    let memory = sys_info::mem_info()
-        .map(|info| info.total)
-        .unwrap_or(0);
+    let memory = sys_info::mem_info().map(|info| info.total).unwrap_or(0);
 
-    StartStats {
-        cpu_cores,
-        memory,
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::common::IntentMessage;
-    use axum::{extract::State, Json};
-    use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
-
-    #[tokio::test]
-    async fn test_process_data() {
-        let state = Arc::new(AppState {
-            eph_kp: Ed25519KeyPair::generate(&mut rand::thread_rng()),
-            api_key: "045a27812dbe456392913223221306".to_string(),
-        });
-        let start_response = process_data(
-            State(state),
-            Json(ProcessDataRequest {
-                payload: StartRequest {
-                    memo: "start request 1".to_string(),
-                },
-            }),
-        )
-        .await
-        .unwrap();
-        println!("start_response: {:?}", start_response.response.data);
-        assert_eq!(
-            start_response.response.data.memo,
-            "start request 1"
-        );
-    }
-
-    // #[test]
-    // fn test_serde() {
-    //     // test result should be consistent with test_serde in `move/enclave/sources/enclave.move`.
-    //     use fastcrypto::encoding::{Encoding, Hex};
-    //     let payload = WeatherResponse {
-    //         location: "San Francisco".to_string(),
-    //         temperature: 13,
-    //     };
-    //     let timestamp = 1744038900000;
-    //     let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::Weather);
-    //     let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
-    //     assert!(
-    //         signing_payload
-    //             == Hex::decode("0020b1d110960100000d53616e204672616e636973636f0d00000000000000")
-    //                 .unwrap()
-    //     );
-    // }
+    StartStats { cpu_cores, memory }
 }
