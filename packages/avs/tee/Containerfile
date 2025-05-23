@@ -85,6 +85,7 @@ COPY --from=core-ca-certificates /etc/ssl/certs initramfs
 COPY --from=core-busybox /bin/sh initramfs/sh
 COPY --from=user-jq /bin/jq initramfs
 COPY --from=user-socat /bin/socat . initramfs
+RUN mkdir initramfs/proc
 RUN mkdir initramfs/run
 RUN mkdir initramfs/run/docker
 RUN mkdir initramfs/var/lib
