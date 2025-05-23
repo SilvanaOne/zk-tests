@@ -60,9 +60,12 @@ python3 /traffic_forwarder.py 127.0.0.70 443 3 8107 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
+echo "Traffic forwarder started"
+sleep 5
 echo "Starting dockerd"
 # mount /run so Docker can create its socket
 mount -t tmpfs tmpfs /run
+mount -t proc proc /proc
 mkdir -p /run/docker /var/lib/docker
 dockerd --host=unix:///run/docker.sock --bip="none" --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &
 sleep 5
