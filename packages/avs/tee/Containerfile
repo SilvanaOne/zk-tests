@@ -86,8 +86,10 @@ COPY --from=core-busybox /bin/sh initramfs/sh
 COPY --from=user-jq /bin/jq initramfs
 COPY --from=user-socat /bin/socat . initramfs
 RUN mkdir initramfs/run
-RUN mkdir initramfs/var/lib/docker
 RUN mkdir initramfs/run/docker
+RUN mkdir initramfs/var
+RUN mkdir initramfs/var/lib
+RUN mkdir initramfs/var/lib/docker
 # RUN mkdir -p initramfs/etc/containerd
 # RUN mkdir -p initramfs/etc/containerd/certs.d
 # RUN mkdir -p initramfs/etc/containerd/certs.d/docker.io
