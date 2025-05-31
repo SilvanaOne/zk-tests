@@ -70,6 +70,7 @@ echo "Starting dockerd"
 export REGISTRY_HTTP_ADDR=127.0.0.71:5000
 mkdir -p /run/containerd
 # mount /run # so Docker can create its socket
+mknod -m 666 /dev/fuse c 10 229
 
 mount -t tmpfs tmpfs /run
 mount -t proc proc /proc
@@ -78,7 +79,7 @@ mount -t cgroup2 none /sys/fs/cgroup
 mkdir -p /run/docker /var/lib/docker
 addgroup -S docker
 dockerd --host=unix:///run/docker.sock \
- --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &
+ --iptables=false --ip-masq=false --bridge=none --exec-root=/run/docker &
 sleep 5
 echo "Starting nautilus-server"
 /nautilus-server

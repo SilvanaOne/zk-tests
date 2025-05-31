@@ -27,6 +27,11 @@ docker manifest inspect stagex/user-docker:latest \
 | select(.platform.architecture=="amd64")
 | .digest'
 
+docker manifest inspect stagex/user-fuse-overlayfs:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="amd64")
+| .digest'
+
 sudo systemctl status nitro-enclaves-vsock-proxy.service
 sudo systemctl status nitro-enclaves-allocator.service
 

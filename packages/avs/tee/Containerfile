@@ -25,6 +25,7 @@ FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da0195
 FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
 FROM stagex/user-libseccomp@sha256:1b3cb1a7faad08a74a756894bf4e3ad24296c5bef5d30c918c64fc3cc74d1648 AS user-libseccomp
+FROM stagex/user-fuse-overlayfs@sha256:6571d1f6adce84a4b096b285b1d37acedf939a57227e5ec2dd8e6489b61032a9 AS user-fuse-overlayfs
 FROM stagex/user-containerd@sha256:f9a5f51f9a48e348d8c2ecd56cf44659c8c7488a7c28797bacbeaaa1d97fa36b AS user-containerd
 FROM stagex/user-runc@sha256:9cb1b6d16811b59671cee74b402cc1f622fbc1ca60d4a1e47407fd5c50f70893 AS user-runc
 FROM stagex/user-docker@sha256:ebf48271bb36851bd4966481685df4026ad575e2283d5d4ac9a2aed94b0a65eb AS user-docker
@@ -52,6 +53,7 @@ COPY --from=core-llvm . /
 COPY --from=core-gcc . /
 COPY --from=user-cpio . /
 COPY --from=user-libseccomp . /
+COPY --from=user-fuse-overlayfs . /
 COPY --from=user-containerd . /
 COPY --from=user-runc . /
 COPY --from=user-docker . /
@@ -107,6 +109,7 @@ RUN cp /src/nautilus-server/daemon.json initramfs/etc/docker/
 COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
+COPY --from=user-fuse-overlayfs /bin/fuse-overlayfs initramfs/usr/local/bin/
 COPY --from=user-libseccomp /lib/libseccomp.so.2 initramfs/lib/
 
 # RUN cp /src/nautilus-server/config.toml initramfs/etc/containerd/
