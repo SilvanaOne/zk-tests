@@ -21,3 +21,16 @@ docker manifest inspect stagex/user-docker:latest \
  | jq -r '.manifests[]
 | select(.platform.architecture=="amd64")
 | .digest'
+
+sudo systemctl status nitro-enclaves-vsock-proxy.service
+sudo systemctl status nitro-enclaves-allocator.service
+
+# Restart vsock-proxy processes for various endpoints.
+
+vsock-proxy 8101 fullnode.devnet.sui.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8102 fullnode.testnet.sui.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8103 dex.silvana.dev 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8104 hub.docker.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8105 registry-1.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8106 auth.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8107 docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &

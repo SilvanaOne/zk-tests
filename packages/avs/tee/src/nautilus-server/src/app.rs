@@ -63,11 +63,11 @@ pub async fn process_data(
     // }
     let start_stats = get_worker_stats();
     let key = state.api_key.clone();
-    // tokio::spawn(async move {
-    //     if let Err(e) = start_agent(&key).await {
-    //         eprintln!("Agent error: {}", e);
-    //     }
-    // });
+    tokio::spawn(async move {
+        if let Err(e) = start_agent(&key).await {
+            eprintln!("Agent error: {}", e);
+        }
+    });
 
     Ok(Json(to_signed_response(
         &state.eph_kp,

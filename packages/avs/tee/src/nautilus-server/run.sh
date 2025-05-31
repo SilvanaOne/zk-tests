@@ -63,15 +63,16 @@ socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 echo "Traffic forwarder started"
 sleep 5
 # echo "Starting containerd"
-# mkdir -p /run/containerd
+
 # /usr/local/bin/containerd --config /etc/containerd/config.toml &
-# echo "Starting dockerd"
-# # mount /run so Docker can create its socket
-# mount -t tmpfs tmpfs /run
-# mount -t proc proc /proc
-# mkdir -p /run/docker /var/lib/docker
-# addgroup -S docker
-# dockerd --containerd /run/containerd/containerd.sock --host=unix:///run/docker.sock --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &
-# sleep 5
+echo "Starting dockerd"
+mkdir -p /run/containerd
+mount /run # so Docker can create its socket
+mount -t tmpfs tmpfs /run
+mount -t proc proc /proc
+mkdir -p /run/docker /var/lib/docker
+addgroup -S docker
+dockerd --host=unix:///run/docker.sock --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &
+sleep 5
 echo "Starting nautilus-server"
 /nautilus-server
