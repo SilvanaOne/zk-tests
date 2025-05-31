@@ -1,5 +1,5 @@
 use bollard::Docker;
-use bollard::container::{Config, CreateContainerOptions, StartContainerOptions};
+use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
 use bollard::image::{CreateImageOptions, ImportImageOptions};
 use bollard::models::{HostConfig, PortBinding};
 use bytes::Bytes;
@@ -153,6 +153,28 @@ pub async fn run_container(
         Ok(result) => {
             result?; // Propagate any error from the monitoring
             println!("Container completed successfully");
+
+            // Get container logs using the correct method
+            let logs_options = Some(LogsOptions::<String> {
+                stdout: true,
+                stderr: true,
+                ..Default::default()
+            });
+
+            let mut logs_stream = docker.logs(&container_id, logs_options);
+            let mut all_logs = String::new();
+
+            while let Some(log_result) = logs_stream.try_next().await? {
+                match log_result {
+                    bollard::container::LogOutput::StdOut { message }
+                    | bollard::container::LogOutput::StdErr { message } => {
+                        all_logs.push_str(&String::from_utf8_lossy(&message));
+                    }
+                    _ => {} // Handle other log output variants if needed
+                }
+            }
+
+            println!("Container logs:\n{}", all_logs);
         }
         Err(_) => {
             println!(
