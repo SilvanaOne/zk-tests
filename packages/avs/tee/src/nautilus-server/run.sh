@@ -67,7 +67,7 @@ sleep 5
 # /usr/local/bin/containerd --config /etc/containerd/config.toml &
 echo "Starting dockerd"
 mkdir -p /run/containerd
-mount /run # so Docker can create its socket
+# mount /run # so Docker can create its socket
 mount -t tmpfs tmpfs /run
 mount -t proc proc /proc
 mkdir -p /run/docker /var/lib/docker
