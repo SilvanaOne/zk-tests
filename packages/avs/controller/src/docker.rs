@@ -35,7 +35,10 @@ pub async fn load_container(
                 println!("{}", status);
             }
         }
+
         println!("Image loaded successfully");
+        let images = docker.list_images::<String>(None).await?;
+        println!("Images: {:?}", images);
     } else {
         println!("Pulling Docker image from registry: {}", image_source);
 
@@ -70,7 +73,6 @@ pub async fn load_container(
             }
             return Err(e);
         }
-
         // Tag the image if needed
         if image_source != image_name {
             println!("Tagging image as: {}", image_name);
