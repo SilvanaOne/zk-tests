@@ -77,7 +77,10 @@ mkdir -p /sys/fs/cgroup
 mount -t cgroup2 none /sys/fs/cgroup
 mkdir -p /run/docker /var/lib/docker
 addgroup -S docker
-dockerd --host=unix:///run/docker.sock --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &
+dockerd --host=unix:///run/docker.sock \
+ --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker \
+ --max-concurrent-downloads=1 \
+ --max-concurrent-uploads=1 &
 sleep 5
 echo "Starting nautilus-server"
 /nautilus-server

@@ -1,4 +1,6 @@
 {
   "registry-mirrors": ["http://127.0.0.71:5000"],
-  "insecure-registries": ["127.0.0.71:5000"]
+  "insecure-registries": ["127.0.0.71:5000"],
+  "max-concurrent-downloads": 1,
+  "max-concurrent-uploads": 1
 }
