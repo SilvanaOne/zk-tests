@@ -70,10 +70,10 @@ echo "Starting dockerd"
 export REGISTRY_HTTP_ADDR=127.0.0.71:5000
 mkdir -p /run/containerd
 # mount /run # so Docker can create its socket
-mknod -m 666 /dev/fuse c 10 229
-sleep 5
-echo "Modprobe fuse"
-modprobe fuse
+# mknod -m 666 /dev/fuse c 10 229
+# sleep 5
+# echo "Modprobe fuse"
+# modprobe fuse
 
 mount -t tmpfs tmpfs /run
 mount -t proc proc /proc
@@ -81,7 +81,7 @@ mkdir -p /sys/fs/cgroup
 mount -t cgroup2 none /sys/fs/cgroup
 mkdir -p /run/docker /var/lib/docker
 addgroup -S docker
-export PATH=/usr/local/bin:$PATH
+# export PATH=/usr/local/bin:$PATH
 dockerd --host=unix:///run/docker.sock \
  --iptables=false --ip-masq=false --bridge=none --exec-root=/run/docker &
 sleep 5
