@@ -95,6 +95,8 @@ RUN mkdir initramfs/run
 RUN mkdir initramfs/run/docker
 RUN mkdir initramfs/var/lib
 RUN mkdir initramfs/var/lib/docker
+RUN mkdir -p initramfs/etc/docker
+RUN cp /src/nautilus-server/daemon.json initramfs/etc/docker/
 # RUN mkdir -p initramfs/etc/containerd
 # RUN mkdir -p initramfs/etc/containerd/certs.d
 # RUN mkdir -p initramfs/etc/containerd/certs.d/docker.io
@@ -106,6 +108,7 @@ COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
 COPY --from=user-libseccomp /lib/libseccomp.so.2 initramfs/lib/
+
 # RUN cp /src/nautilus-server/config.toml initramfs/etc/containerd/
 # RUN cp /src/nautilus-server/hosts.toml initramfs/etc/containerd/certs.d/docker.io/
 # RUN cp /src/nautilus-server/start-containerd.sh initramfs/

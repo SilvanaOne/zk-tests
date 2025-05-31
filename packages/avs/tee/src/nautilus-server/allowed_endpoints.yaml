@@ -7,3 +7,4 @@ endpoints:
   - registry-1.docker.io
   - auth.docker.io
   - docker.io
+  - mirror.local

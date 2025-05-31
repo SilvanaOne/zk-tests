@@ -29,6 +29,7 @@ echo "127.0.0.67   hub.docker.com" >> /etc/hosts
 echo "127.0.0.68   registry-1.docker.io" >> /etc/hosts
 echo "127.0.0.69   auth.docker.io" >> /etc/hosts
 echo "127.0.0.70   docker.io" >> /etc/hosts
+echo "127.0.0.71   mirror.local" >> /etc/hosts   
 
 
 
@@ -56,7 +57,7 @@ python3 /traffic_forwarder.py 127.0.0.67 443 3 8104 &
 python3 /traffic_forwarder.py 127.0.0.68 443 3 8105 &
 python3 /traffic_forwarder.py 127.0.0.69 443 3 8106 &
 python3 /traffic_forwarder.py 127.0.0.70 443 3 8107 &
-
+python3 /traffic_forwarder.py 127.0.0.71 5000 3 8108 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
@@ -66,6 +67,7 @@ sleep 5
 
 # /usr/local/bin/containerd --config /etc/containerd/config.toml &
 echo "Starting dockerd"
+export REGISTRY_HTTP_ADDR=127.0.0.71:5000
 mkdir -p /run/containerd
 # mount /run # so Docker can create its socket
 

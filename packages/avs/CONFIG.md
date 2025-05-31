@@ -39,5 +39,24 @@ vsock-proxy 8104 hub.docker.com 443 --config /etc/nitro_enclaves/vsock-proxy.yam
 vsock-proxy 8105 registry-1.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
 vsock-proxy 8106 auth.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
 vsock-proxy 8107 docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8108 127.0.0.1 5000 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+
+docker run -d --restart=always --name mirror \
+ -p 5000:5000 \
+ -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io \
+ registry:2
 
 rm -rf out && cd ../../.. && git pull origin main && cd packages/avs/tee
+
+# /etc/nitro_enclaves/vsock-proxy.yaml on the **host**
+
+connections:
+
+- acceptor:
+  type: Vsock
+  cid: 3 # enclave CID chosen in build cmd
+  port: 5000
+  connector:
+  type: Tcp
+  host: 127.0.0.1 # parent’s loopback
+  port: 5000 # mirror container port
