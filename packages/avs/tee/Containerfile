@@ -114,7 +114,7 @@ COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
 # COPY --from=user-fuse-overlayfs /bin/fuse-overlayfs initramfs/usr/local/bin/
 COPY --from=user-libseccomp /lib/libseccomp.so.2 initramfs/lib/
-RUN cp /src/nautilus-server/fuse-overlayfs-x86_64 initramfs/usr/local/bin/fuse-overlayfs
+RUN cp /src/nautilus-server/fuse-overlayfs initramfs/usr/local/bin/
 RUN chmod +x initramfs/usr/local/bin/fuse-overlayfs
 
 # RUN cp /src/nautilus-server/config.toml initramfs/etc/containerd/
