@@ -85,6 +85,7 @@ COPY --from=core-busybox . initramfs
 COPY --from=core-python . initramfs
 COPY --from=core-musl . initramfs
 COPY --from=user-libseccomp . initramfs
+COPY --from=user-fuse-overlayfs . initramfs
 COPY --from=user-containerd . initramfs
 COPY --from=user-runc . initramfs
 COPY --from=user-docker . initramfs
