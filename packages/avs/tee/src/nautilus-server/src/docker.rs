@@ -5,8 +5,8 @@ use bollard::models::{HostConfig, PortBinding};
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::{path::Path, time::Instant};
 use tokio::time::{self, Duration};
 
@@ -86,6 +86,9 @@ pub async fn load_container(
         }
 
         println!("Image pulled successfully");
+        if let Err(e) = drop_page_cache() {
+            println!("couldn't drop caches: {}", e);
+        }
     }
 
     Ok(())
@@ -164,6 +167,9 @@ pub async fn run_container(
 
     let container_runtime = start_time.elapsed();
     println!("Container ran for: {:?}", container_runtime);
+    if let Err(e) = drop_page_cache() {
+        println!("couldn't drop caches: {}", e);
+    }
 
     Ok(())
 }
@@ -179,6 +185,26 @@ pub async fn monitor_container(
         println!("Container exited with code: {}", status.status_code);
     }
 
+    Ok(())
+}
+
+
+
+/// Flush filesystem buffers and drop the kernel page-cache, dentries, and inodes.
+///
+/// Requires the process to run as root (needs `CAP_SYS_ADMIN` to write
+/// to `/proc/sys/vm/drop_caches`).
+pub fn drop_page_cache() -> std::io::Result<()> {
+    // 1. sync(2) – flush dirty pages to disk
+    unsafe { libc::sync() };            // single libc call, no return value
+
+    // 2. echo 3 > /proc/sys/vm/drop_caches
+    let mut f = OpenOptions::new()
+        .write(true)
+        .open("/proc/sys/vm/drop_caches")?;
+    // Writing just “3” is enough; a trailing '\n' is optional.
+    f.write_all(b"3")?;
+    // File is closed when `f` goes out of scope
     Ok(())
 }
 
