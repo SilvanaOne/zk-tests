@@ -83,6 +83,8 @@ pub async fn process_data(
 
 pub fn get_worker_stats() -> StartStats {
     let cpu_cores = num_cpus::get() as u64;
+    let mem_info = sys_info::mem_info();
+    println!("mem_info: {:?}", mem_info);
     let memory = sys_info::mem_info().map(|info| info.total).unwrap_or(0);
 
     StartStats { cpu_cores, memory }

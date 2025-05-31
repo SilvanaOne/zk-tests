@@ -9,6 +9,7 @@ pub async fn start_agent(key: &str) -> Result<(), Box<dyn std::error::Error + Se
 
     let mut last_nonce = last_request.nonce;
     let docker = Docker::connect_with_local_defaults()?;
+    println!("Docker connected, starting agent...");
     loop {
         let new_nonce = agent(&docker, last_nonce, key).await?;
         if new_nonce > last_nonce {
@@ -34,6 +35,8 @@ async fn agent(
     println!("Action: {:?}", request.action);
     println!("Request: {:?}", request.request);
     println!("Starting the agent...");
+    let mem_info = sys_info::mem_info();
+    println!("mem_info: {:?}", mem_info);
     let time_start = Instant::now();
 
     // Parameters for container loading
@@ -56,6 +59,8 @@ async fn agent(
     let time_loaded = Instant::now();
     let duration = time_loaded.duration_since(time_start);
     println!("Container loaded in {:?}", duration);
+    let mem_info_loaded = sys_info::mem_info();
+    println!("mem_info_loaded: {:?}", mem_info_loaded);
 
     // Run container with 900 second timeout
     println!("Running container with 900 second timeout...");
