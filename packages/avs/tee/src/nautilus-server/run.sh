@@ -68,8 +68,11 @@ sleep 5
 echo "Starting dockerd"
 mkdir -p /run/containerd
 # mount /run # so Docker can create its socket
+
 mount -t tmpfs tmpfs /run
 mount -t proc proc /proc
+mkdir -p /sys/fs/cgroup
+mount -t cgroup2 none /sys/fs/cgroup
 mkdir -p /run/docker /var/lib/docker
 addgroup -S docker
 dockerd --host=unix:///run/docker.sock --iptables=false --ip-masq=false --storage-driver=vfs --bridge=none --exec-root=/run/docker &

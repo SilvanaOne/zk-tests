@@ -17,6 +17,11 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X
 
 # make sure you have jq installed (`brew install jq`)
 
+docker manifest inspect stagex/user-libseccomp:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="amd64")
+| .digest'
+
 docker manifest inspect stagex/user-docker:latest \
  | jq -r '.manifests[]
 | select(.platform.architecture=="amd64")
