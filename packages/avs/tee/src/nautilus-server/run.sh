@@ -75,15 +75,18 @@ mkdir -p /run/containerd
 # echo "Modprobe fuse"
 # modprobe fuse
 
-mount -t tmpfs tmpfs /run
+mount -t tmpfs -o size=2048M tmpfs  /run
+export DOCKER_RAMDISK=true
 mount -t proc proc /proc
 mkdir -p /sys/fs/cgroup
 mount -t cgroup2 none /sys/fs/cgroup
 mkdir -p /run/docker /var/lib/docker
 addgroup -S docker
-# export PATH=/usr/local/bin:$PATH
+export DOCKER_RAMDISK=true 
 dockerd --host=unix:///run/docker.sock \
- --iptables=false --ip-masq=false --bridge=none --exec-root=/run/docker &
+  --exec-root=/run/docker \
+  --data-root=/var/lib/docker \
+ --iptables=false --ip-masq=false --bridge=none  &
 sleep 5
 echo "Starting nautilus-server"
 /nautilus-server
