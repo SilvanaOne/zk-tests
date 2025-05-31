@@ -22,6 +22,7 @@ import {
   fetchMinaAccount,
   sendTx,
 } from "@silvana-one/mina-utils";
+import { faucet } from "../src/faucet.js";
 import { sleep } from "../src/sleep.js";
 import { pushEvent, emptyEvents } from "../src/events/events.js";
 
@@ -46,7 +47,7 @@ function arraysEqual(a: number[], b: number[]) {
 }
 
 describe("Based rollup", async () => {
-  it("should init blockchain", async () => {
+  it.skip("should init blockchain", async () => {
     console.log({ chain });
     if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {
       throw new Error("Invalid chain");
@@ -64,6 +65,75 @@ describe("Based rollup", async () => {
     };
     sender =
       chain === "local" ? keys[0] : TestPublicKey.fromBase58(PRIVATE_KEY);
+  });
+  it.skip("should topup accounts on zeko", async () => {
+    if (!PRIVATE_KEY) {
+      throw new Error("PRIVATE_KEY is not set");
+    }
+    sender = TestPublicKey.random();
+    console.log("sender", sender.toBase58());
+    const response = await faucet({
+      publicKey: sender.toBase58(),
+      explorerUrl: Zeko.explorerAccountUrl ?? "",
+      network: "devnet",
+      faucetUrl: "https://zeko-faucet-a1ct.onrender.com/",
+    });
+    if (response.result !== "Successfully sent") {
+      console.log("faucet error:", response);
+    } else {
+      console.log("faucet success:", response.result);
+    }
+    const url = "http://m1.zeko.io/graphql";
+
+    const networkInstance = Mina.Network({
+      mina: url,
+      archive: url,
+      networkId: "testnet",
+    });
+    Mina.setActiveInstance(networkInstance);
+    const balance = await accountBalanceMina(sender);
+    console.log(`${sender.toBase58()}: ${balance} MINA`);
+  });
+  it("should init zeko alphanet", async () => {
+    console.log({ chain });
+    if (chain !== "zeko") {
+      throw new Error("Invalid chain, should be zeko");
+    }
+    if (!PRIVATE_KEY) {
+      throw new Error("PRIVATE_KEY is not set");
+    }
+
+    const url = "http://m1.zeko.io/graphql";
+
+    const networkInstance = Mina.Network({
+      mina: url,
+      archive: url,
+      networkId: "testnet",
+    });
+    Mina.setActiveInstance(networkInstance);
+    // const info = await Mina.getNetworkConstants();
+    // console.log(
+    //   "genesisTimestamp",
+    //   new Date(Number(info.genesisTimestamp.toBigInt()))
+    // );
+    // console.log("accountCreationFee", info.accountCreationFee.toBigInt()); // 1 000 000 000n
+
+    sender = TestPublicKey.fromBase58(PRIVATE_KEY);
+    console.log("sender", sender.toBase58());
+    const balance = await accountBalanceMina(sender);
+    console.log(`${sender.toBase58()}: ${balance} MINA`);
+    const kvBalance = await accountBalance(
+      PublicKey.fromBase58(
+        "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
+      )
+    );
+    console.log(`kvBalance: ${kvBalance} MINA`);
+    // const kvAccount = await fetchAccount({
+    //   publicKey: PublicKey.fromBase58(
+    //     "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
+    //   ),
+    // });
+    // console.log("kvAccount", kvAccount);
   });
   it(`should send tx`, async () => {
     if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {
@@ -92,7 +162,7 @@ describe("Based rollup", async () => {
       console.log("receiptChainHash", receiptChainHash.toJSON());
 
       const tx = await Mina.transaction(
-        { sender, fee: 100_000_000, memo: `event3_${i}`, nonce: nonce++ },
+        { sender, fee: 200_000_000, memo: `event3_${i}`, nonce: nonce++ },
         async () => {
           const update = AccountUpdate.create(sender);
           update.body.events = events;
