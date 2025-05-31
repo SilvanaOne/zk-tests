@@ -34,3 +34,5 @@ vsock-proxy 8104 hub.docker.com 443 --config /etc/nitro_enclaves/vsock-proxy.yam
 vsock-proxy 8105 registry-1.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
 vsock-proxy 8106 auth.docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
 vsock-proxy 8107 docker.io 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+
+rm -rf out && cd ../../.. && git pull origin main && cd packages/avs/tee

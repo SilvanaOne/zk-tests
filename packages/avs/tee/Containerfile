@@ -96,9 +96,9 @@ RUN mkdir initramfs/var/lib/docker
 # RUN mkdir -p initramfs/etc/containerd/certs.d
 # RUN mkdir -p initramfs/etc/containerd/certs.d/docker.io
 # RUN find / -name "containerd*" -o -name "ctr" | sort
-COPY --from=containerd /usr/local/bin/containerd /usr/local/bin/
-COPY --from=runc       /usr/local/sbin/runc     /usr/local/sbin/
-COPY --from=docker     /usr/local/bin/ /usr/local/bin/
+# COPY --from=user-containerd /usr/local/bin/containerd /usr/local/bin/
+# COPY --from=user-runc       /usr/local/sbin/runc     /usr/local/sbin/
+# COPY --from=-user-docker     /usr/local/bin/ /usr/local/bin/
 COPY --from=user-containerd /bin/containerd* initramfs/usr/local/bin/
 COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
