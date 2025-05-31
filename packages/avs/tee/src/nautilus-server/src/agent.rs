@@ -84,6 +84,8 @@ async fn agent(
     let time_end = Instant::now();
     let duration = time_end.duration_since(time_start);
     println!("Total time taken: {:?}", duration);
+    let mem_info_executed = sys_info::mem_info();
+    println!("mem_info_executed: {:?}", mem_info_executed);
 
     Ok(request.nonce)
 }

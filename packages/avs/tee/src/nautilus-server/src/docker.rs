@@ -29,7 +29,7 @@ pub async fn load_container(
         let bytes = Bytes::from(buffer);
 
         let mut import_stream =
-            docker.import_image(ImportImageOptions { quiet: false }, bytes.into(), None);
+            docker.import_image(ImportImageOptions { quiet: true }, bytes.into(), None);
         while let Some(progress) = import_stream.try_next().await? {
             if let Some(status) = progress.status {
                 println!("{}", status);
@@ -109,13 +109,9 @@ pub async fn run_container(
     println!("Creating and starting container...");
     let container_name = format!("app-container-{}", chrono::Utc::now().timestamp());
     let host_config = HostConfig {
-        port_bindings: Some(HashMap::from([(
-            "6000/tcp".to_string(),
-            Some(vec![PortBinding {
-                host_ip: Some("0.0.0.0".to_string()),
-                host_port: Some("6000".to_string()),
-            }]),
-        )])),
+        // `--network host` equivalent
+        network_mode: Some("host".to_string()),
+        // no port bindings needed in host‑network mode
         ..Default::default()
     };
     let config = Config {
