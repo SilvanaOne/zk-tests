@@ -101,7 +101,7 @@ RUN mkdir initramfs/var/lib/docker
 RUN mkdir -p initramfs/etc/docker
 RUN cp /src/nautilus-server/daemon.json initramfs/etc/docker/
 RUN cp /src/nautilus-server/fuse-overlayfs-x86_64 initramfs/usr/local/bin/fuse-overlayfs
-RUN chmod +x initramfs/usr/local/bin/fuse-overlayfs
+
 # RUN mkdir -p initramfs/etc/containerd
 # RUN mkdir -p initramfs/etc/containerd/certs.d
 # RUN mkdir -p initramfs/etc/containerd/certs.d/docker.io
@@ -114,6 +114,8 @@ COPY --from=user-containerd /bin/ctr initramfs/usr/local/bin/
 COPY --from=user-runc /bin/runc initramfs/usr/local/bin/
 # COPY --from=user-fuse-overlayfs /bin/fuse-overlayfs initramfs/usr/local/bin/
 COPY --from=user-libseccomp /lib/libseccomp.so.2 initramfs/lib/
+RUN cp /src/nautilus-server/fuse-overlayfs-x86_64 initramfs/usr/local/bin/fuse-overlayfs
+RUN chmod +x initramfs/usr/local/bin/fuse-overlayfs
 
 # RUN cp /src/nautilus-server/config.toml initramfs/etc/containerd/
 # RUN cp /src/nautilus-server/hosts.toml initramfs/etc/containerd/certs.d/docker.io/
