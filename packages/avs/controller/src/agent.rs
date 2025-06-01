@@ -22,11 +22,11 @@ pub async fn agent(
     let time_start = Instant::now();
 
     // Parameters for container loading
-    let use_local_image = true; // Set to false to use Docker Hub
-    let image_source = "../agent/out/testagent2.tar.gz";
-    //let image_source = format!("dfstio/{}:latest", request.agent);
-    //let image_name = format!("{}:latest", request.agent);
-    let image_name = "dfstio/testagent2:latest";
+    let use_local_image = false; // Set to false to use Docker Hub
+    //let image_source = "../agent/out/testagent2.tar.gz";
+    let image_source = format!("dfstio/{}:flat", request.agent);
+    let image_name = format!("{}:flat", request.agent);
+    //let image_name = "dfstio/testagent2:latest";
 
     // Load the container image
     if let Err(e) = load_container(docker, use_local_image, &image_source, &image_name).await {

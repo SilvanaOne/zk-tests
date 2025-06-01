@@ -30,7 +30,7 @@ chrono = "0.4"
 bytes = "1"
 num_cpus = "1.16.0"
 sys-info = "0.9.1"
-bollard = "0.15"
+bollard = "0.19"
 libc = "0.2.172"
 
 

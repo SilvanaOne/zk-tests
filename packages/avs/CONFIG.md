@@ -55,6 +55,23 @@ rm -rf out && cd ../../.. && git pull origin main && cd packages/avs/tee
 
 # /etc/nitro_enclaves/vsock-proxy.yaml on the **host**
 
-id=$(docker create --platform linux/amd64 dfstio/testagent2:latest)
-docker export "$id" | gzip > testagent2.tar.gz
+docker pull --platform=linux/amd64 dfstio/testagent2:latest
+id=$(docker create --platform=linux/amd64 dfstio/testagent2:latest)
+docker export "$id" | gzip > testagent2-rootfs.tar.gz # rootfs = one layer
 docker rm "$id"
+
+docker pull --platform=linux/arm64 dfstio/testagent2:latest
+id=$(docker create --platform=linux/arm64 dfstio/testagent2:latest)
+docker export "$id" | gzip > out/testagent2.tar.gz
+docker rm "$id"
+
+docker pull --platform=linux/amd64 dfstio/testagent2:latest
+docker save --platform=linux/amd64 dfstio/testagent2:latest | gzip > testagent2-image.tar.gz
+
+docker pull --platform=linux/arm64 dfstio/testagent2:latest
+docker save --platform=linux/arm64 dfstio/testagent2:latest | gzip > testagent2.tar.gz
+
+docker import \
+ --change 'CMD ["npm","run","start"]' \
+ --change 'WORKDIR /app' \
+ testagent2.tar.gz dfstio/testagent2:flat

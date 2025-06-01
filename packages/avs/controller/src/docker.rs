@@ -1,7 +1,10 @@
 use bollard::Docker;
-use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
-use bollard::image::{CreateImageOptions, ImportImageOptions};
+use bollard::models::ContainerCreateBody;
 use bollard::models::{HostConfig, PortBinding};
+use bollard::query_parameters::{
+    CreateContainerOptions, CreateImageOptions, ImportImageOptions, ListImagesOptions, LogsOptions,
+    StartContainerOptions, StopContainerOptions, TagImageOptions, WaitContainerOptions,
+};
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
 use std::collections::HashMap;
@@ -28,8 +31,12 @@ pub async fn load_container(
         file.read_to_end(&mut buffer)?;
         let bytes = Bytes::from(buffer);
 
-        let mut import_stream =
-            docker.import_image(ImportImageOptions { quiet: false }, bytes.into(), None);
+        let options = ImportImageOptions {
+            quiet: false,
+            platform: None,
+        };
+
+        let mut import_stream = docker.import_image(options, bollard::body_full(bytes), None);
         while let Some(progress) = import_stream.try_next().await? {
             if let Some(status) = progress.status {
                 println!("{}", status);
@@ -37,15 +44,22 @@ pub async fn load_container(
         }
 
         println!("Image loaded successfully");
-        let images = docker.list_images::<String>(None).await?;
+        let images = docker
+            .list_images(Some(ListImagesOptions::default()))
+            .await?;
         println!("Images: {:?}", images);
     } else {
         println!("Pulling Docker image from registry: {}", image_source);
 
         // Create options for pulling the image
-        let options = CreateImageOptions::<String> {
-            from_image: image_source.to_string(),
-            ..Default::default()
+        let options = CreateImageOptions {
+            from_image: Some(image_source.to_string()),
+            from_src: None,
+            repo: None,
+            tag: None,
+            message: None,
+            changes: vec![],
+            platform: "".to_string(),
         };
 
         // Pull the image
@@ -76,15 +90,17 @@ pub async fn load_container(
         // Tag the image if needed
         if image_source != image_name {
             println!("Tagging image as: {}", image_name);
-            docker
-                .tag_image(
-                    image_source,
-                    Some(bollard::image::TagImageOptions {
-                        repo: image_name.split(':').next().unwrap_or(image_name),
-                        tag: image_name.split(':').nth(1).unwrap_or("latest"),
-                    }),
-                )
-                .await?;
+            let tag_options = TagImageOptions {
+                repo: Some(
+                    image_name
+                        .split(':')
+                        .next()
+                        .unwrap_or(image_name)
+                        .to_string(),
+                ),
+                tag: Some(image_name.split(':').nth(1).unwrap_or("latest").to_string()),
+            };
+            docker.tag_image(image_source, Some(tag_options)).await?;
         }
 
         println!("Image pulled successfully");
@@ -117,19 +133,27 @@ pub async fn run_container(
         )])),
         ..Default::default()
     };
-    let config = Config {
-        image: Some(image_name),
-        cmd: Some(vec!["npm", "run", "start", key, agent, action]),
+    let config = ContainerCreateBody {
+        image: Some(image_name.to_string()),
+        cmd: Some(vec![
+            "npm".to_string(),
+            "run".to_string(),
+            "start".to_string(),
+            key.to_string(),
+            agent.to_string(),
+            action.to_string(),
+        ]),
         host_config: Some(host_config),
         ..Default::default()
     };
     let create_opts = CreateContainerOptions {
-        name: &container_name,
-        platform: None,
+        name: Some(container_name.clone()),
+        platform: "".to_string(),
     };
     let container = docker.create_container(Some(create_opts), config).await?;
+
     docker
-        .start_container(&container.id, None::<StartContainerOptions<String>>)
+        .start_container(&container.id, Some(StartContainerOptions::default()))
         .await?;
     println!("Container started successfully with ID: {}", container.id);
 
@@ -155,13 +179,17 @@ pub async fn run_container(
             println!("Container completed successfully");
 
             // Get container logs using the correct method
-            let logs_options = Some(LogsOptions::<String> {
+            let logs_options = LogsOptions {
                 stdout: true,
                 stderr: true,
-                ..Default::default()
-            });
+                since: 0,
+                until: 0,
+                timestamps: false,
+                follow: false,
+                tail: "".to_string(),
+            };
 
-            let mut logs_stream = docker.logs(&container_id, logs_options);
+            let mut logs_stream = docker.logs(&container_id, Some(logs_options));
             let mut all_logs = String::new();
 
             while let Some(log_result) = logs_stream.try_next().await? {
@@ -181,7 +209,13 @@ pub async fn run_container(
                 "Container took too long (>{} sec), stopping it...",
                 timeout_seconds
             );
-            docker.stop_container(&container_id, None).await?;
+            let stop_options = StopContainerOptions {
+                t: Some(30),
+                signal: None,
+            };
+            docker
+                .stop_container(&container_id, Some(stop_options))
+                .await?;
             println!("Container stopped");
         }
     }
@@ -197,7 +231,10 @@ pub async fn monitor_container(
     docker: &Docker,
     container_id: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut status_stream = docker.wait_container::<String>(container_id, None);
+    let wait_options = WaitContainerOptions {
+        condition: "not-running".to_string(),
+    };
+    let mut status_stream = docker.wait_container(container_id, Some(wait_options));
 
     if let Some(status) = status_stream.try_next().await? {
         println!("Container exited with code: {}", status.status_code);

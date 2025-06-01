@@ -6,7 +6,7 @@ edition = "2024"
 
 
 [dependencies]
-bollard = "0.15"
+bollard = "0.19"
 tokio = { version = "1.2", features = ["full"] }
 futures-util = "0.3"
 chrono = "0.4"

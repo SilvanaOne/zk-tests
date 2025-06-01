@@ -40,16 +40,16 @@ async fn agent(
     let time_start = Instant::now();
 
     // Parameters for container loading
-    // let image_source = format!("dfstio/{}:latest", request.agent);
-    // let image_name = format!("{}:latest", request.agent);
+    let image_source = format!("dfstio/{}:flat", request.agent);
+    let image_name = format!("{}:flat", request.agent);
 
-    let image_source = "./agents/testagent2.tar.gz";
-    let image_name = "dfstio/testagent2:latest";
+    // let image_source = "./agents/testagent2.tar.gz";
+    // let image_name = "dfstio/testagent2:latest";
 
     // Load the container image using containerd
     if let Err(e) = load_container(
         docker,
-        true, // use_local_image parameter set to false (pull from registry)
+        false, // use_local_image parameter set to false (pull from registry)
         &image_source,
         &image_name,
     )

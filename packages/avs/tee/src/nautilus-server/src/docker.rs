@@ -1,14 +1,17 @@
 use bollard::Docker;
-use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
-use bollard::image::{CreateImageOptions, ImportImageOptions};
-use bollard::models::{HostConfig};
+use bollard::models::ContainerCreateBody;
+use bollard::models::HostConfig;
+use bollard::query_parameters::{
+    CreateContainerOptions, CreateImageOptions, ImportImageOptions, ListImagesOptions, LogsOptions,
+    PruneContainersOptionsBuilder, PruneImagesOptionsBuilder, RemoveContainerOptions,
+    StartContainerOptions, StopContainerOptions, TagImageOptions, WaitContainerOptions,
+};
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::{path::Path, time::Instant};
 use tokio::time::{self, Duration};
-
 
 /// Load Docker image from tar file or registry
 pub async fn load_container(
@@ -28,21 +31,35 @@ pub async fn load_container(
         file.read_to_end(&mut buffer)?;
         let bytes = Bytes::from(buffer);
 
-        let mut import_stream =
-            docker.import_image(ImportImageOptions { quiet: false }, bytes.into(), None);
+        let options = ImportImageOptions {
+            quiet: false,
+            platform: None,
+        };
+
+        let mut import_stream = docker.import_image(options, bollard::body_full(bytes), None);
         while let Some(progress) = import_stream.try_next().await? {
             if let Some(status) = progress.status {
                 println!("{}", status);
             }
         }
+
         println!("Image loaded successfully");
+        let images = docker
+            .list_images(Some(ListImagesOptions::default()))
+            .await?;
+        println!("Images: {:?}", images);
     } else {
         println!("Pulling Docker image from registry: {}", image_source);
 
         // Create options for pulling the image
-        let options = CreateImageOptions::<String> {
-            from_image: image_source.to_string(),
-            ..Default::default()
+        let options = CreateImageOptions {
+            from_image: Some(image_source.to_string()),
+            from_src: None,
+            repo: None,
+            tag: None,
+            message: None,
+            changes: vec![],
+            platform: "".to_string(),
         };
 
         // Pull the image
@@ -70,25 +87,23 @@ pub async fn load_container(
             }
             return Err(e);
         }
-
         // Tag the image if needed
         if image_source != image_name {
             println!("Tagging image as: {}", image_name);
-            docker
-                .tag_image(
-                    image_source,
-                    Some(bollard::image::TagImageOptions {
-                        repo: image_name.split(':').next().unwrap_or(image_name),
-                        tag: image_name.split(':').nth(1).unwrap_or("latest"),
-                    }),
-                )
-                .await?;
+            let tag_options = TagImageOptions {
+                repo: Some(
+                    image_name
+                        .split(':')
+                        .next()
+                        .unwrap_or(image_name)
+                        .to_string(),
+                ),
+                tag: Some(image_name.split(':').nth(1).unwrap_or("latest").to_string()),
+            };
+            docker.tag_image(image_source, Some(tag_options)).await?;
         }
 
         println!("Image pulled successfully");
-        if let Err(e) = drop_page_cache() {
-            println!("couldn't drop caches: {}", e);
-        }
     }
 
     Ok(())
@@ -114,19 +129,27 @@ pub async fn run_container(
         // no port bindings needed in host‑network mode
         ..Default::default()
     };
-    let config = Config {
-        image: Some(image_name),
-        cmd: Some(vec!["npm", "run", "start", key, agent, action]),
+    let config = ContainerCreateBody {
+        image: Some(image_name.to_string()),
+        cmd: Some(vec![
+            "npm".to_string(),
+            "run".to_string(),
+            "start".to_string(),
+            key.to_string(),
+            agent.to_string(),
+            action.to_string(),
+        ]),
         host_config: Some(host_config),
         ..Default::default()
     };
     let create_opts = CreateContainerOptions {
-        name: &container_name,
-        platform: None,
+        name: Some(container_name.clone()),
+        platform: "".to_string(),
     };
     let container = docker.create_container(Some(create_opts), config).await?;
+
     docker
-        .start_container(&container.id, None::<StartContainerOptions<String>>)
+        .start_container(&container.id, Some(StartContainerOptions::default()))
         .await?;
     println!("Container started successfully with ID: {}", container.id);
 
@@ -150,14 +173,19 @@ pub async fn run_container(
         Ok(result) => {
             result?; // Propagate any error from the monitoring
             println!("Container completed successfully");
-             
-             let logs_options = Some(LogsOptions::<String> {
+
+            // Get container logs using the correct method
+            let logs_options = LogsOptions {
                 stdout: true,
                 stderr: true,
-                ..Default::default()
-            });
+                since: 0,
+                until: 0,
+                timestamps: false,
+                follow: false,
+                tail: "".to_string(),
+            };
 
-            let mut logs_stream = docker.logs(&container_id, logs_options);
+            let mut logs_stream = docker.logs(&container_id, Some(logs_options));
             let mut all_logs = String::new();
 
             while let Some(log_result) = logs_stream.try_next().await? {
@@ -177,16 +205,28 @@ pub async fn run_container(
                 "Container took too long (>{} sec), stopping it...",
                 timeout_seconds
             );
-            docker.stop_container(&container_id, None).await?;
+            let stop_options = StopContainerOptions {
+                t: Some(30),
+                signal: None,
+            };
+            docker
+                .stop_container(&container_id, Some(stop_options))
+                .await?;
             println!("Container stopped");
         }
     }
 
     let container_runtime = start_time.elapsed();
     println!("Container ran for: {:?}", container_runtime);
-    docker.remove_container(&container_id, None).await?;
-    docker.prune_images::<String>(None).await?;
-    docker.prune_containers::<String>(None).await?;
+    docker
+        .remove_container(&container_id, None::<RemoveContainerOptions>)
+        .await?;
+    docker
+        .prune_images(Some(PruneImagesOptionsBuilder::new().build()))
+        .await?;
+    docker
+        .prune_containers(Some(PruneContainersOptionsBuilder::new().build()))
+        .await?;
     if let Err(e) = drop_page_cache() {
         println!("couldn't drop caches: {}", e);
     }
@@ -199,7 +239,10 @@ pub async fn monitor_container(
     docker: &Docker,
     container_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut status_stream = docker.wait_container::<String>(container_id, None);
+    let wait_options = WaitContainerOptions {
+        condition: "not-running".to_string(),
+    };
+    let mut status_stream = docker.wait_container(container_id, Some(wait_options));
 
     if let Some(status) = status_stream.try_next().await? {
         println!("Container exited with code: {}", status.status_code);
@@ -208,15 +251,9 @@ pub async fn monitor_container(
     Ok(())
 }
 
-
-
-/// Flush filesystem buffers and drop the kernel page-cache, dentries, and inodes.
-///
-/// Requires the process to run as root (needs `CAP_SYS_ADMIN` to write
-/// to `/proc/sys/vm/drop_caches`).
 pub fn drop_page_cache() -> std::io::Result<()> {
     // 1. sync(2) – flush dirty pages to disk
-    unsafe { libc::sync() };            // single libc call, no return value
+    unsafe { libc::sync() }; // single libc call, no return value
 
     // 2. echo 3 > /proc/sys/vm/drop_caches
     let mut f = OpenOptions::new()
@@ -227,32 +264,3 @@ pub fn drop_page_cache() -> std::io::Result<()> {
     // File is closed when `f` goes out of scope
     Ok(())
 }
-
-// use sysinfo::{System, SystemExt};
-
-// // Inside your function:
-// let mut system = System::new_all();
-// system.refresh_memory();  // Refresh memory information
-
-// let total_memory = system.total_memory();  // Get total memory in KB
-// let reserve_for_host = 1_000_000;  // 1GB in KB
-// let container_memory_limit = if total_memory > reserve_for_host {
-//     (total_memory - reserve_for_host) * 1024  // Convert to bytes for Docker API
-// } else {
-//     println!("Warning: System has less than 1GB total memory!");
-//     total_memory / 2 * 1024  // Use half of available memory as fallback
-// };
-
-// // Then use this value in your HostConfig
-// let host_config = HostConfig {
-//     port_bindings: Some(HashMap::from([(
-//         "6000/tcp".to_string(),
-//         Some(vec![PortBinding {
-//             host_ip: Some("0.0.0.0".to_string()),
-//             host_port: Some("6000".to_string()),
-//         }]),
-//     )])),
-//     memory: Some(container_memory_limit),
-//     memory_swap: Some(container_memory_limit),  // Disable swap
-//     ..Default::default()
-// };
