@@ -75,3 +75,16 @@ docker import \
  --change 'CMD ["npm","run","start"]' \
  --change 'WORKDIR /app' \
  testagent2.tar.gz dfstio/testagent2:flat
+docker login
+docker push dfstio/testagent2:flat
+
+docker pull --platform=linux/amd64 dfstio/testagent2:latest
+id=$(docker create --platform=linux/amd64 dfstio/testagent2:latest)
+docker export "$id" | gzip > out/testagent2-amd64.tar.gz
+docker rm "$id"
+docker import \
+ --change 'CMD ["npm","run","start"]' \
+ --change 'WORKDIR /app' \
+ out/testagent2-amd64.tar.gz dfstio/testagent2:flat-amd64
+docker login
+docker push dfstio/testagent2:flat-amd64

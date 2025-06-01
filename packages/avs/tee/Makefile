@@ -24,8 +24,8 @@ out/enclaveos.tar: out \
 run: out/nitro.eif
 	sudo nitro-cli \
 		run-enclave \
-		--cpu-count 2 \
-		--memory 8192M \
+		--cpu-count 4 \
+		--memory 24576M \
 		--eif-path out/nitro.eif
 
 .PHONY: run-debug
