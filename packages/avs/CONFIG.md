@@ -55,13 +55,6 @@ rm -rf out && cd ../../.. && git pull origin main && cd packages/avs/tee
 
 # /etc/nitro_enclaves/vsock-proxy.yaml on the **host**
 
-connections:
-
-- acceptor:
-  type: Vsock
-  cid: 3 # enclave CID chosen in build cmd
-  port: 5000
-  connector:
-  type: Tcp
-  host: 127.0.0.1 # parent’s loopback
-  port: 5000 # mirror container port
+id=$(docker create --platform linux/amd64 dfstio/testagent2:latest)
+docker export "$id" | gzip > testagent2.tar.gz
+docker rm "$id"

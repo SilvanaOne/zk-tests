@@ -29,7 +29,7 @@ pub async fn load_container(
         let bytes = Bytes::from(buffer);
 
         let mut import_stream =
-            docker.import_image(ImportImageOptions { quiet: true }, bytes.into(), None);
+            docker.import_image(ImportImageOptions { quiet: false }, bytes.into(), None);
         while let Some(progress) = import_stream.try_next().await? {
             if let Some(status) = progress.status {
                 println!("{}", status);
