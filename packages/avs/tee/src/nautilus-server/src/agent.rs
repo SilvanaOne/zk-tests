@@ -40,8 +40,8 @@ async fn agent(
     let time_start = Instant::now();
 
     // Parameters for container loading
-    let image_source = format!("dfstio/{}:flat", request.agent);
-    let image_name = format!("{}:flat", request.agent);
+    let image_source = format!("dfstio/{}:flat-amd64", request.agent);
+    let image_name = format!("{}:flat-amd64", request.agent);
 
     // let image_source = "./agents/testagent2.tar.gz";
     // let image_name = "dfstio/testagent2:latest";

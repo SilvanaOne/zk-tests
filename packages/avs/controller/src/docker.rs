@@ -33,7 +33,7 @@ pub async fn load_container(
 
         let options = ImportImageOptions {
             quiet: false,
-            platform: None,
+            platform: Some("linux/amd64".to_string()),
         };
 
         let mut import_stream = docker.import_image(options, bollard::body_full(bytes), None);
@@ -59,7 +59,7 @@ pub async fn load_container(
             tag: None,
             message: None,
             changes: vec![],
-            platform: "".to_string(),
+            platform: "linux/amd64".to_string(),
         };
 
         // Pull the image
@@ -148,7 +148,7 @@ pub async fn run_container(
     };
     let create_opts = CreateContainerOptions {
         name: Some(container_name.clone()),
-        platform: "".to_string(),
+        platform: "linux/amd64".to_string(),
     };
     let container = docker.create_container(Some(create_opts), config).await?;
 
