@@ -8,6 +8,7 @@ use bollard::query_parameters::{
 };
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
+use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::{path::Path, time::Instant};
@@ -242,11 +243,41 @@ pub async fn monitor_container(
     let wait_options = WaitContainerOptions {
         condition: "not-running".to_string(),
     };
+    println!("Waiting for container to exit...");
     let mut status_stream = docker.wait_container(container_id, Some(wait_options));
 
-    if let Some(status) = status_stream.try_next().await? {
-        println!("Container exited with code: {}", status.status_code);
+    match status_stream.try_next().await {
+        Ok(Some(status)) => {
+            println!("Container exited with code: {}", status.status_code);
+            if status.status_code != 0 {
+                println!(
+                    "Container exited with non-zero status code: {}",
+                    status.status_code
+                );
+                if let Some(error) = status.error {
+                    println!("Container error details: {:?}", error);
+                }
+            }
+        }
+        Ok(None) => {
+            println!("Container status stream ended without status");
+        }
+        Err(e) => {
+            println!("Error waiting for container: {}", e);
+            println!("Error details: {:?}", e);
+            println!("Error source chain:");
+            let mut source = e.source();
+            let mut level = 1;
+            while let Some(err) = source {
+                println!("  Level {}: {}", level, err);
+                source = err.source();
+                level += 1;
+            }
+            return Err(format!("Docker container wait error: {}", e).into());
+        }
     }
+
+    println!("Finished waiting for container to exit");
 
     Ok(())
 }
