@@ -247,30 +247,31 @@ pub async fn monitor_container(
     // ---------------------------------------------------------------------
     println!("Polling container status…");
 
-    loop {
-        // Ask Docker for the latest container state.
-        let details = docker
-            .inspect_container(container_id, None::<InspectContainerOptions>)
-            .await?;
+    // loop {
+    //     // Ask Docker for the latest container state.
+    //     let details = docker
+    //         .inspect_container(container_id, None::<InspectContainerOptions>)
+    //         .await?;
 
-        if let Some(state) = details.state {
-            if state.running == Some(false) || state.status.as_ref().map(|s| s.as_ref()) == Some("exited") {
-                let exit_code = state.exit_code.unwrap_or_default();
-                println!("Container exited with code: {exit_code}");
-                if exit_code != 0 {
-                    return Err(format!(
-                        "Container exited with non‑zero status code: {exit_code}"
-                    )
-                    .into());
-                }
-                break;
-            }
-        }
+    //     if let Some(state) = details.state {
+    //         if state.running == Some(false) || state.status.as_ref().map(|s| s.as_ref()) == Some("exited") {
+    //             let exit_code = state.exit_code.unwrap_or_default();
+    //             println!("Container exited with code: {exit_code}");
+    //             if exit_code != 0 {
+    //                 return Err(format!(
+    //                     "Container exited with non‑zero status code: {exit_code}"
+    //                 )
+    //                 .into());
+    //             }
+    //             break;
+    //         }
+    //     }
 
-        // Still running – sleep a bit before the next check.
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    }
+    //     // Still running – sleep a bit before the next check.
+    //     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    // }
 
+    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
     println!("Finished waiting for container to exit");
     Ok(())
 }
