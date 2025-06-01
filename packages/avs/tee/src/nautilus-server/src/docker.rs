@@ -1,14 +1,14 @@
 use bollard::Docker;
 use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
 use bollard::image::{CreateImageOptions, ImportImageOptions};
-use bollard::models::{HostConfig, PortBinding};
+use bollard::models::{HostConfig};
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
-use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::{path::Path, time::Instant};
 use tokio::time::{self, Duration};
+
 
 /// Load Docker image from tar file or registry
 pub async fn load_container(
@@ -184,6 +184,9 @@ pub async fn run_container(
 
     let container_runtime = start_time.elapsed();
     println!("Container ran for: {:?}", container_runtime);
+    docker.remove_container(&container_id, None).await?;
+    docker.prune_images::<String>(None).await?;
+    docker.prune_containers::<String>(None).await?;
     if let Err(e) = drop_page_cache() {
         println!("couldn't drop caches: {}", e);
     }
@@ -219,7 +222,7 @@ pub fn drop_page_cache() -> std::io::Result<()> {
     let mut f = OpenOptions::new()
         .write(true)
         .open("/proc/sys/vm/drop_caches")?;
-    // Writing just “3” is enough; a trailing '\n' is optional.
+    // Writing just "3" is enough; a trailing '\n' is optional.
     f.write_all(b"3")?;
     // File is closed when `f` goes out of scope
     Ok(())
