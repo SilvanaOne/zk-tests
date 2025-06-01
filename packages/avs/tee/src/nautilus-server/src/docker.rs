@@ -1,14 +1,14 @@
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::models::HostConfig;
+use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::{
     CreateContainerOptions, CreateImageOptions, ImportImageOptions, ListImagesOptions, LogsOptions,
     PruneContainersOptionsBuilder, PruneImagesOptionsBuilder, RemoveContainerOptions,
-    StartContainerOptions, StopContainerOptions, TagImageOptions, WaitContainerOptions,
+    StartContainerOptions, StopContainerOptions, TagImageOptions,
 };
 use bytes::Bytes;
 use futures_util::stream::TryStreamExt;
-use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::{path::Path, time::Instant};
@@ -240,45 +240,38 @@ pub async fn monitor_container(
     docker: &Docker,
     container_id: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let wait_options = WaitContainerOptions {
-        condition: "not-running".to_string(),
-    };
-    println!("Waiting for container to exit...");
-    let mut status_stream = docker.wait_container(container_id, Some(wait_options));
+    // ---------------------------------------------------------------------
+    // In Nitro‑Enclave containerd can drop task‑deleted events, which makes
+    // `docker.wait_container` return an empty error.  We fall back to a
+    // polling strategy via `docker.inspect_container`.
+    // ---------------------------------------------------------------------
+    println!("Polling container status…");
 
-    match status_stream.try_next().await {
-        Ok(Some(status)) => {
-            println!("Container exited with code: {}", status.status_code);
-            if status.status_code != 0 {
-                println!(
-                    "Container exited with non-zero status code: {}",
-                    status.status_code
-                );
-                if let Some(error) = status.error {
-                    println!("Container error details: {:?}", error);
+    loop {
+        // Ask Docker for the latest container state.
+        let details = docker
+            .inspect_container(container_id, None::<InspectContainerOptions>)
+            .await?;
+
+        if let Some(state) = details.state {
+            if state.running == Some(false) || state.status.as_ref().map(|s| s.as_ref()) == Some("exited") {
+                let exit_code = state.exit_code.unwrap_or_default();
+                println!("Container exited with code: {exit_code}");
+                if exit_code != 0 {
+                    return Err(format!(
+                        "Container exited with non‑zero status code: {exit_code}"
+                    )
+                    .into());
                 }
+                break;
             }
         }
-        Ok(None) => {
-            println!("Container status stream ended without status");
-        }
-        Err(e) => {
-            println!("Error waiting for container: {}", e);
-            println!("Error details: {:?}", e);
-            println!("Error source chain:");
-            let mut source = e.source();
-            let mut level = 1;
-            while let Some(err) = source {
-                println!("  Level {}: {}", level, err);
-                source = err.source();
-                level += 1;
-            }
-            return Err(format!("Docker container wait error: {}", e).into());
-        }
+
+        // Still running – sleep a bit before the next check.
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 
     println!("Finished waiting for container to exit");
-
     Ok(())
 }
 
