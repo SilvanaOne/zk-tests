@@ -14,7 +14,8 @@
   },
   "packageManager": "npm@11.3.0",
   "dependencies": {
-    "@mysten/sui": "^1.29.1"
+    "@mysten/sui": "^1.29.1",
+    "o1js": "^2.6.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
