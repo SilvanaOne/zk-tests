@@ -88,3 +88,15 @@ docker import \
  out/testagent4-amd64.tar.gz dfstio/testagent4:flat-amd64
 docker login
 docker push dfstio/testagent4:flat-amd64
+
+65.109.109.52:8301
+docker run \
+ --rm \
+ --name mina-snark-worker \
+ --network host \
+ -e RAYON_NUM_THREADS=4 \
+ gcr.io/o1labs-192920/mina-daemon:3.1.2-alpha1-e8b0893-focal-devnet \
+ internal snark-worker \
+ --daemon-address 65.109.109.52:8301 \
+ --proof-level full \
+ --shutdown-on-disconnect true

@@ -24,16 +24,23 @@ pub async fn agent(
     // Parameters for container loading
     let use_local_image = false; // Set to false to use Docker Hub
     //let image_source = "../agent/out/testagent2.tar.gz";
-    let image_source = format!("dfstio/{}:flat", request.agent);
-    let image_name = format!("{}:flat", request.agent);
+    let image_source = format!("dfstio/{}:flat-amd64", request.agent);
+    let image_name = format!("dfstio/{}:flat-amd64", request.agent);
     //let image_name = "dfstio/testagent2:latest";
 
     // Load the container image
-    if let Err(e) = load_container(docker, use_local_image, &image_source, &image_name).await {
-        println!("Failed to load container: {}", e);
-        // Return last_nonce to continue processing next request
-        return Ok(request.nonce);
-    }
+    let digest = match load_container(docker, use_local_image, &image_source, &image_name).await {
+        Ok(digest) => {
+            println!("Container loaded successfully with digest: {}", digest);
+            digest
+        }
+        Err(e) => {
+            println!("Failed to load container: {}", e);
+            // Return last_nonce to continue processing next request
+            return Ok(request.nonce);
+        }
+    };
+    println!("Digest: {}", digest);
     let time_loaded = Instant::now();
     let duration = time_loaded.duration_since(time_start);
     println!("Container loaded in {:?}", duration);
@@ -42,14 +49,14 @@ pub async fn agent(
     let key = std::env::var("SUI_KEY").expect("SUI_KEY must be set in .env file");
 
     // Run container with 30 second timeout
-    println!("Running container with 30 second timeout...");
+    println!("Running container with 900 second timeout...");
     run_container(
         docker,
         &image_name,
         &key,
         &request.agent,
         &request.action,
-        30,
+        900,
     )
     .await?;
 

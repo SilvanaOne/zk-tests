@@ -1,3 +1,4 @@
+use crate::layers::get_image_info;
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::models::{HostConfig, PortBinding};
@@ -19,9 +20,10 @@ pub async fn load_container(
     use_local_image: bool,
     image_source: &str,
     image_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error>> {
     if use_local_image {
         println!("Loading Docker image from local tar file: {}", image_source);
+
         let tar_path = Path::new(image_source);
         if !tar_path.exists() {
             return Err(format!("Image file not found at: {}", tar_path.display()).into());
@@ -50,6 +52,9 @@ pub async fn load_container(
         println!("Images: {:?}", images);
     } else {
         println!("Pulling Docker image from registry: {}", image_source);
+        let (layers_number, digest) = get_image_info(image_source).await?;
+        println!("Registry: Number of layers: {:?}", layers_number);
+        println!("Registry: Digest: {:?}", digest);
 
         // Create options for pulling the image
         let options = CreateImageOptions {
@@ -106,7 +111,32 @@ pub async fn load_container(
         println!("Image pulled successfully");
     }
 
-    Ok(())
+    // Get the digest of the image
+    println!("Getting image digest...");
+    let image_inspect = docker.inspect_image(image_name).await?;
+    println!("Image inspect: {:?}", image_inspect);
+
+    // Extract SHA256 digest from the id
+    let digest = if let Some(id) = image_inspect.id {
+        id
+    } else {
+        return Err("Unable to determine image digest".into());
+    };
+
+    // Calculate number of layers
+    let layers_number = if let Some(root_fs) = &image_inspect.root_fs {
+        if let Some(layers) = &root_fs.layers {
+            layers.len()
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    println!("Image digest: {}", digest);
+    println!("Number of layers: {}", layers_number);
+    Ok(digest)
 }
 
 /// Creates, runs and monitors a container with the specified timeout

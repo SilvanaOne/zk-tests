@@ -1,6 +1,7 @@
 mod agent;
 mod coordination;
 mod docker;
+mod layers;
 use bollard::Docker;
 use dotenv::dotenv;
 use tokio::time::{Duration, sleep};

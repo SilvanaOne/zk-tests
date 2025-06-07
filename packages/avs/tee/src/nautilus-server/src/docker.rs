@@ -20,7 +20,7 @@ pub async fn load_container(
     use_local_image: bool,
     image_source: &str,
     image_name: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     if use_local_image {
         println!("Loading Docker image from local tar file: {}", image_source);
         let tar_path = Path::new(image_source);
@@ -107,7 +107,36 @@ pub async fn load_container(
         println!("Image pulled successfully");
     }
 
-    Ok(())
+    // Get the digest of the image
+    println!("Getting image digest...");
+    let image_inspect = docker.inspect_image(image_name).await?;
+    
+    // Extract SHA256 digest from the RepoDigests
+    let digest = if let Some(repo_digests) = image_inspect.repo_digests {
+        if let Some(first_digest) = repo_digests.first() {
+            // RepoDigests format is typically: "repo@sha256:digest"
+            if let Some(sha_part) = first_digest.split('@').nth(1) {
+                sha_part.to_string()
+            } else {
+                return Err("Unable to extract digest from repo digests".into());
+            }
+        } else {
+            return Err("No repo digests found for the image".into());
+        }
+    } else if let Some(id) = image_inspect.id {
+        // If no repo digests, use the image ID as fallback
+        // Image ID format is typically: "sha256:digest"
+        if let Some(sha_part) = id.split(':').nth(1) {
+            format!("sha256:{}", sha_part)
+        } else {
+            id
+        }
+    } else {
+        return Err("Unable to determine image digest".into());
+    };
+
+    println!("Image digest: {}", digest);
+    Ok(digest)
 }
 
 /// Creates, runs and monitors a container with the specified timeout

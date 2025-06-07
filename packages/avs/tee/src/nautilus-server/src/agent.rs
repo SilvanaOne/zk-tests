@@ -47,7 +47,7 @@ async fn agent(
     // let image_name = "dfstio/testagent2:latest";
 
     // Load the container image using containerd
-    if let Err(e) = load_container(
+    let digest = match load_container(
         docker,
         false, // use_local_image parameter set to false (pull from registry)
         &image_source,
@@ -55,10 +55,16 @@ async fn agent(
     )
     .await
     {
-        println!("Failed to load container: {}", e);
-        // Return last_nonce to continue processing next request
-        return Ok(request.nonce);
-    }
+        Ok(digest) => {
+            println!("Container loaded successfully with digest: {}", digest);
+            digest
+        },
+        Err(e) => {
+            println!("Failed to load container: {}", e);
+            // Return last_nonce to continue processing next request
+            return Ok(request.nonce);
+        }
+    };
     let time_loaded = Instant::now();
     let duration = time_loaded.duration_since(time_start);
     println!("Container loaded in {:?}", duration);
