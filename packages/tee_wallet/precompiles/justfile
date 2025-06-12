@@ -1,0 +1,25 @@
+# export RUSTFLAGS := "--cfg getrandom_backend=\"wasm_js\""
+export CC_wasm32_unknown_unknown := "/opt/homebrew/opt/llvm/bin/clang"
+export AR_wasm32_unknown_unknown := "/opt/homebrew/opt/llvm/bin/llvm-ar"
+
+# Build WebAssembly for production
+wasm:
+    rm -rf ../ui/src/precompiles
+    mkdir -p ../ui/src/precompiles
+    wasm-pack build --release --target web --out-dir ../ui/src/precompiles
+
+# Build WebAssembly for development
+dev:
+    rm -rf ../ui/src/precompiles
+    mkdir -p ../ui/src/precompiles
+    wasm-pack build --dev --target web --out-dir ../ui/src/precompiles
+
+# Clean all build artifacts
+clean:
+    rm -rf ../ui/src/precompiles
+    rm -rf target
+    rm -rf pkg
+
+# List available commands
+default:
+    @just --list 

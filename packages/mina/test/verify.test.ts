@@ -14,6 +14,8 @@ import {
   PrivateKey,
   PublicKey,
   Field,
+  Provable,
+  Struct,
 } from "o1js";
 import crypto from "node:crypto";
 import secp256k1 from "secp256k1";
@@ -89,6 +91,31 @@ const zkProgram = ZkProgram({
   },
 });
 
+class Payload extends Struct({
+  msg: Provable.Array(Field, 3),
+}) {}
+
+const minaProgram = ZkProgram({
+  name: "mina",
+  publicOutput: Bool,
+
+  methods: {
+    verify: {
+      privateInputs: [Payload, Signature, PublicKey],
+      async method(
+        message: Payload,
+        signature: Signature,
+        publicKey: PublicKey
+      ) {
+        const verified = signature.verify(publicKey, message.msg);
+        return {
+          publicOutput: verified,
+        };
+      },
+    },
+  },
+});
+
 describe("Check ECDSA signature", async () => {
   it("should verify signature using secp256k1", async () => {
     const verified = secp256k1.ecdsaVerify(signature, hash, publicKey);
@@ -110,6 +137,34 @@ describe("Check ECDSA signature", async () => {
     const signature2 = Signature.fromJSON({ r: r.toString(), s: s.toString() });
     const verified2 = signature2.verify(publicKey, message);
     console.log("verified2 - o1js", verified2.toBoolean());
+
+    const cache = Cache.FileSystem("./cache");
+    const methods = await minaProgram.analyzeMethods();
+    console.log("rows", methods.verify.rows);
+    console.time("compile");
+    const vk = (
+      await minaProgram.compile({
+        cache,
+      })
+    ).verificationKey;
+    console.timeEnd("compile");
+
+    console.time("prove");
+    const proof = (
+      await minaProgram.verify(
+        new Payload({ msg: message }),
+        signature,
+        publicKey
+      )
+    ).proof;
+    console.log("proof", {
+      publicOutput: proof.publicOutput.toBoolean(),
+    });
+    console.timeEnd("prove");
+    console.time("verify");
+    const verified3 = await verify(proof, vk);
+    console.timeEnd("verify");
+    console.log("verified3 - o1js", verified3);
   });
 
   it("should verify signature using o1js", async () => {
