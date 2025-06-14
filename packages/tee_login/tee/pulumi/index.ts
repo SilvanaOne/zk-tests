@@ -233,7 +233,7 @@ export = async () => {
       ami: amiId,
       instanceType: "m5.xlarge", // minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
       keyName: keyPairName,
-      securityGroups: [securityGroup.id],
+      vpcSecurityGroupIds: [securityGroup.id],
       iamInstanceProfile: instanceProfile.name,
 
       // Enable Nitro Enclaves

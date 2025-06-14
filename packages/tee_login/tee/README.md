@@ -56,3 +56,9 @@ To start from scratch:
 pulumi destroy
 pulumi stack rm
 ```
+
+## Connect with AWS instance
+
+```sh
+ssh -i "TEE.pem" ec2-user@ec2-3-85-252-150.compute-1.amazonaws.com
+```
