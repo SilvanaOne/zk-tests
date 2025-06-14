@@ -286,7 +286,7 @@ export = async () => {
 
     // User data script loaded from user-data.sh file
     userData: fs.readFileSync("./user-data.sh", "utf8"),
-    userDataReplaceOnChange: true,
+    userDataReplaceOnChange: false,
 
     tags: {
       Name: "silvana-tee-login-instance",

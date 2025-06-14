@@ -1,7 +1,7 @@
 #!/bin/bash
 # Update the instance and install Nitro Enclaves tools, Docker and other utilities
 sudo yum update -y
-sudo yum install -y aws-nitro-enclaves-cli-devel aws-nitro-enclaves-cli docker nano socat git make
+sudo yum install -y aws-nitro-enclaves-cli-devel aws-nitro-enclaves-cli awscli docker nano socat git make
 
 # Add the current user to the docker group (so you can run docker without sudo)
 sudo usermod -aG docker ec2-user

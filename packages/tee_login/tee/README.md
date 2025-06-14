@@ -97,3 +97,12 @@ and in other terminal
 ```sh
 sh expose_enclave.sh
 ```
+
+copy image to s3:
+
+```sh
+tar -czvf out.tar.gz out
+aws s3 cp out.tar.gz s3://silvana-tee-images/tee.tar.gz
+aws s3 cp s3://silvana-tee-images/tee.tar.gz tee.tar.gz
+tar -xzvf out.tar.gz
+```
