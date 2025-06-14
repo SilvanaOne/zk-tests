@@ -3,17 +3,14 @@ import { getWallets } from "@mysten/wallet-standard";
 import { useEffect, useState } from "react";
 import { connectPhantom, signPhantomMessage } from "@/lib/phantom";
 import { connectSolflare, signSolflareMessage } from "@/lib/solflare";
-import { login } from "@/lib/login";
+import {
+  login,
+  getMessage,
+  LoginRequest,
+  UnsignedLoginRequest,
+} from "@/lib/login";
 import { rust_add } from "@/lib/precompiles";
-
-let nonce = 0;
-
-function getMessage() {
-  nonce++;
-  return `Silvana TEE login`;
-  // nonce: ${nonce}
-  // ${new Date().toISOString().replace("Z", "")} UTC`;
-}
+import { importWalletByMnemonic } from "@/lib/seed";
 
 export default function Home() {
   const [chain, setChain] = useState<string | undefined>(undefined);
@@ -24,25 +21,39 @@ export default function Home() {
   const [seed, setSeed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loginSuccess, setLoginSuccess] = useState<boolean | null>(null);
+  const [loginProcessing, setLoginProcessing] = useState<boolean>(false);
   const [shares, setShares] = useState<number[] | null | undefined>(null);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [privateKey, setPrivateKey] = useState<string | null>(null);
+  const [loginData, setLoginData] = useState<{
+    request: LoginRequest;
+    privateKey: CryptoKey;
+  } | null>(null);
 
   useEffect(() => {
-    if (chain && wallet && address && signature && message) {
-      login({
-        chain,
-        wallet,
-        address,
-        signature,
-        message,
-      }).then((result) => {
+    if (loginData) {
+      setLoginProcessing(true);
+      (async () => {
+        const result = await login({
+          request: loginData.request,
+          privateKey: loginData.privateKey,
+        });
         console.log("Login result", result);
         setSeed(result.seed);
         setError(result.error);
         setLoginSuccess(result.success);
         setShares(result.indexes);
-      });
+        if (result.seed) {
+          const { privateKey, publicKey, hdIndex } =
+            await importWalletByMnemonic(result.seed);
+          setPrivateKey(privateKey);
+          setPublicKey(publicKey);
+        }
+        setLoginData(null);
+        setLoginProcessing(false);
+      })();
     }
-  }, [chain, wallet, address, signature, message]);
+  }, [loginData]);
 
   function clear() {
     setChain(undefined);
@@ -54,6 +65,10 @@ export default function Home() {
     setError(null);
     setLoginSuccess(null);
     setShares(null);
+    setLoginProcessing(false);
+    setLoginData(null);
+    setPublicKey(null);
+    setPrivateKey(null);
   }
 
   const handlePhantomSuiClick = async () => {
@@ -65,21 +80,46 @@ export default function Home() {
     const address = await connectPhantom("sui");
     console.log("Sui Address", address);
     setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
 
-    const messageText = getMessage();
-    setMessage(messageText);
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "sui",
+      wallet: "Phantom",
+      address,
+    });
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
 
     const signedMessage = await signPhantomMessage({
       chain: "sui",
-      message: messageText,
+      message: msgData.request.message,
       display: "utf8",
     });
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
     console.log("Sui Signed message", signedMessage);
     const publicKey = (signedMessage as any)?.publicKey?.toString();
     console.log("Sui Public key", publicKey);
     const signature = (signedMessage as any)?.signature?.toString("hex");
     console.log("Sui Signature", signature);
     setSignature(signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
   };
 
   const handlePhantomSolanaClick = async () => {
@@ -89,23 +129,48 @@ export default function Home() {
     setWallet("Phantom");
 
     const address = await connectPhantom("solana");
-    console.log("Address", address);
+    console.log("Solana Address", address);
     setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
 
-    const messageText = getMessage();
-    setMessage(messageText);
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "solana",
+      wallet: "Phantom",
+      address,
+    });
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
 
     const signedMessage = await signPhantomMessage({
       chain: "solana",
-      message: messageText,
+      message: msgData.request.message,
       display: "utf8",
     });
-    console.log("Signed message", signedMessage);
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
+    console.log("Solana Signed message", signedMessage);
     const publicKey = (signedMessage as any)?.publicKey?.toString();
-    console.log("Public key", publicKey);
+    console.log("Solana Public key", publicKey);
     const signature = (signedMessage as any)?.signature?.toString("hex");
-    console.log("Signature", signature);
+    console.log("Solana Signature", signature);
     setSignature(signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
   };
 
   const handleSlushClick = async () => {
@@ -125,11 +190,23 @@ export default function Home() {
     const address = connected?.accounts[0]?.address;
     console.log("Slush Address", address);
     setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
 
-    const messageText = "Hello, world!";
-    setMessage(messageText);
-
-    const message = new TextEncoder().encode(messageText);
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "sui",
+      wallet: "Slush",
+      address,
+    });
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
+    const message = new TextEncoder().encode(msgData.request.message);
     console.log("Message bytes", message);
     const signedMessage = await wallet?.features[
       "sui:signPersonalMessage"
@@ -138,8 +215,20 @@ export default function Home() {
       account: connected.accounts[0],
       chain: "sui:mainnet",
     });
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
     console.log("Slush Signed message", signedMessage);
     setSignature(signedMessage?.signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature: signedMessage?.signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
   };
 
   const handleSolflareClick = async () => {
@@ -152,21 +241,45 @@ export default function Home() {
     console.log("Rust add result", result);
 
     const address = await connectSolflare();
-    console.log("Address", address);
+    console.log("Solflare Address", address);
     setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
 
-    const messageText = getMessage();
-    setMessage(messageText);
-
-    const signedMessage = await signSolflareMessage({
-      message: messageText,
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "solana",
+      wallet: "Solflare",
+      address,
     });
-    console.log("Signed message", signedMessage);
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
+    const signedMessage = await signSolflareMessage({
+      message: msgData.request.message,
+    });
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
+    console.log("Solflare Signed message", signedMessage);
     const publicKey = signedMessage?.publicKey;
-    console.log("Public key", publicKey);
+    console.log("Solflare Public key", publicKey);
     const signature = signedMessage?.signature;
-    console.log("Signature", signature);
+    console.log("Solflare Signature", signature);
     setSignature(signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
   };
 
   return (
@@ -210,14 +323,18 @@ export default function Home() {
               <span className="font-semibold">Login Status:</span>{" "}
               <span
                 className={`font-mono px-2 py-1 rounded ${
-                  loginSuccess
+                  loginProcessing
+                    ? "bg-yellow-200 dark:bg-yellow-800"
+                    : loginSuccess
                     ? "bg-green-200 dark:bg-green-800"
                     : error
                     ? "bg-red-200 dark:bg-red-800"
                     : "bg-gray-200 dark:bg-gray-800"
                 }`}
               >
-                {loginSuccess === true
+                {loginProcessing
+                  ? "Processing..."
+                  : loginSuccess === true
                   ? "Success"
                   : error
                   ? `Error: ${error}`
@@ -226,6 +343,16 @@ export default function Home() {
                   : "Not attempted"}
               </span>
             </div>
+            {shares && (
+              <div className="md:col-span-2">
+                <span className="font-semibold">
+                  {`Shamir shares used (${shares.length} of 16):`}
+                </span>{" "}
+                <span className="font-mono bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded break-all text-xs">
+                  {shares.join(", ")}
+                </span>
+              </div>
+            )}
             {loginSuccess && (
               <div className="md:col-span-2">
                 <span className="font-semibold">Seed:</span>{" "}
@@ -234,13 +361,19 @@ export default function Home() {
                 </span>
               </div>
             )}
-            {shares && (
+            {privateKey && (
               <div className="md:col-span-2">
-                <span className="font-semibold">
-                  {`Shamir shares used (${shares.length} of 16):`}
-                </span>{" "}
+                <span className="font-semibold">Mina Private Key:</span>{" "}
                 <span className="font-mono bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded break-all text-xs">
-                  {shares.join(", ")}
+                  {privateKey}
+                </span>
+              </div>
+            )}
+            {publicKey && (
+              <div className="md:col-span-2">
+                <span className="font-semibold">Mina Public Key:</span>{" "}
+                <span className="font-mono bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded break-all text-xs">
+                  {publicKey}
                 </span>
               </div>
             )}

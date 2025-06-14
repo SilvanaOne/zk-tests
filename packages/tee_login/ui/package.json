@@ -10,13 +10,19 @@
   },
   "dependencies": {
     "@mysten/wallet-standard": "^0.16.1",
+    "bip32": "2.0.6",
+    "bip39": "3.0.2",
+    "bs58check": "2.1.2",
+    "mina-signer": "^3.0.7",
     "next": "15.3.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "safe-buffer": "5.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/bs58check": "^2.1.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

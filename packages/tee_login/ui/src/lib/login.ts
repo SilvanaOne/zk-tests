@@ -3,17 +3,22 @@
 import { generateKeyPair, decrypt } from "./encrypt";
 import { rust_recover_mnemonic } from "./precompiles";
 
-interface LoginRequest {
+export interface UnsignedLoginRequest {
+  login_type: "wallet" | "social";
   chain: string;
   wallet: string;
   message: string;
-  signature: string;
   address: string;
-  public_key?: string;
+  public_key: string;
+  nonce: number;
   share_indexes?: number[];
 }
 
-interface LoginResponse {
+export interface LoginRequest extends UnsignedLoginRequest {
+  signature: string;
+}
+
+export interface LoginResponse {
   success: boolean;
   seed: string | null;
   error: string | null;
@@ -43,8 +48,64 @@ function choose_shares_indexes(): number[] {
   return chosen_indexes.sort((a, b) => a - b); // Sort for consistency
 }
 
-export async function login(params: LoginRequest): Promise<LoginResponse> {
-  let { publicKey, privateKey } = await generateKeyPair();
+async function hashToBase64(data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const dataBytes = encoder.encode(data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", dataBytes);
+  const hashArray = new Uint8Array(hashBuffer);
+  return Buffer.from(hashArray).toString("base64");
+}
+
+export async function getMessage(params: {
+  login_type: "wallet" | "social";
+  chain: string;
+  wallet: string;
+  address: string;
+}): Promise<{
+  privateKey: CryptoKey;
+  request: UnsignedLoginRequest;
+} | null> {
+  const { login_type, chain, wallet, address } = params;
+  const nonce = Date.now();
+  const domain = "https://login.silvana.dev";
+  const { publicKey, privateKey } = await generateKeyPair();
+  if (publicKey === null || privateKey === null) {
+    return null;
+  }
+
+  const metadata = JSON.stringify({
+    domain,
+    login_type,
+    chain,
+    wallet,
+    address,
+    publicKey,
+    nonce,
+  });
+  const request = await hashToBase64(metadata);
+  const message = `Silvana TEE login request: ${request}`;
+  const loginRequest: UnsignedLoginRequest = {
+    login_type,
+    chain,
+    wallet,
+    address,
+    message,
+    public_key: publicKey,
+    nonce,
+    share_indexes: choose_shares_indexes(),
+  };
+
+  return {
+    request: loginRequest,
+    privateKey,
+  };
+}
+
+export async function login(params: {
+  request: LoginRequest;
+  privateKey: CryptoKey;
+}): Promise<LoginResponse> {
+  const { request, privateKey } = params;
   if (privateKey === null) {
     return {
       success: false,
@@ -53,20 +114,17 @@ export async function login(params: LoginRequest): Promise<LoginResponse> {
     };
   }
   try {
-    params.public_key = publicKey;
-    params.share_indexes = params.share_indexes || choose_shares_indexes();
     console.time("Login request");
     const response = await fetch("http://127.0.0.1:8000/login/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(params.request),
     });
     console.timeEnd("Login request");
     if (!response.ok) {
       console.error("Login error:", response);
-      privateKey = null;
       return {
         success: false,
         seed: null,
@@ -86,7 +144,7 @@ export async function login(params: LoginRequest): Promise<LoginResponse> {
       for (const share of data.data) {
         const shareDecrypted = await decrypt({
           encrypted: share,
-          privateKey,
+          privateKey: params.privateKey,
         });
         if (shareDecrypted === null) {
           return {
@@ -97,7 +155,6 @@ export async function login(params: LoginRequest): Promise<LoginResponse> {
         }
         shares.push(shareDecrypted);
       }
-      privateKey = null;
 
       const seed = await rust_recover_mnemonic(shares);
       return {
@@ -107,7 +164,6 @@ export async function login(params: LoginRequest): Promise<LoginResponse> {
         indexes: data.indexes,
       };
     } else {
-      privateKey = null;
       return {
         success: false,
         seed: null,
@@ -116,7 +172,6 @@ export async function login(params: LoginRequest): Promise<LoginResponse> {
     }
   } catch (error: any) {
     console.error("Login error:", error);
-    privateKey = null;
     return {
       success: false,
       seed: null,

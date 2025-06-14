@@ -22,6 +22,10 @@ docker manifest inspect stagex/user-libseccomp:latest \
 | select(.platform.architecture=="amd64")
 | .digest'
 
+docker manifest inspect stagex/core-llvm:latest \
+ | jq -r '.manifests[]
+| .digest'
+
 docker manifest inspect stagex/user-docker:latest \
  | jq -r '.manifests[]
 | select(.platform.architecture=="amd64")

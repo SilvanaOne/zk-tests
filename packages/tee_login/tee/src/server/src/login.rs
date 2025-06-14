@@ -1,3 +1,4 @@
+use crate::EnclaveError;
 use crate::db::{Key, Share, Value};
 use crate::dynamodb::DynamoDB;
 use crate::encrypt::encrypt_shares;
@@ -23,7 +24,7 @@ pub struct LoginRequest {
     pub share_indexes: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LoginResponse {
     pub success: bool,
     pub data: Option<Vec<String>>,
@@ -31,27 +32,30 @@ pub struct LoginResponse {
     pub error: Option<String>,
 }
 
-pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginResponse {
+pub async fn process_login(
+    login_request: LoginRequest,
+    db: &DynamoDB,
+) -> Result<LoginResponse, EnclaveError> {
     info!(
         "Processing login request for chain: {}, wallet: {}, address: {}",
         login_request.chain, login_request.wallet, login_request.address
     );
     if login_request.nonce > chrono::Utc::now().timestamp_millis() as u64 {
-        return LoginResponse {
+        return Ok(LoginResponse {
             success: false,
             data: None,
             indexes: None,
             error: Some("Nonce error E101".into()),
-        };
+        });
     }
 
     if !hash_login_request(&login_request) {
-        return LoginResponse {
+        return Ok(LoginResponse {
             success: false,
             data: None,
             indexes: None,
             error: Some("Hash error E103".into()),
-        };
+        });
     }
 
     let (ok, error) = verify(&login_request).await;
@@ -81,12 +85,12 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                     }
                 } else {
                     info!("Nonce is less than the existing nonce, returning error");
-                    return LoginResponse {
+                    return Ok(LoginResponse {
                         success: false,
                         data: None,
                         indexes: None,
                         error: Some("Nonce error E102".into()),
-                    };
+                    });
                 }
                 let filtered_shares: Vec<Share> = value
                     .shares
@@ -103,12 +107,12 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                     Err(e) => {
                         let error_msg = format!("Failed to encrypt seed: {}", e);
                         log_encryption_error(&error_msg);
-                        return LoginResponse {
+                        return Ok(LoginResponse {
                             success: false,
                             data: None,
                             indexes: None,
                             error: Some(error_msg),
-                        };
+                        });
                     }
                 }
             }
@@ -123,12 +127,12 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                     Err(e) => {
                         let error_msg = format!("Failed to split mnemonic: {}", e);
                         log_encryption_error(&error_msg);
-                        return LoginResponse {
+                        return Ok(LoginResponse {
                             success: false,
                             data: None,
                             indexes: None,
                             error: Some(error_msg),
-                        };
+                        });
                     }
                 };
 
@@ -168,45 +172,45 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                         {
                             let error_msg = format!("Failed to store seed in database: {}", e);
                             log_database_error("put_kv", &error_msg);
-                            return LoginResponse {
+                            return Ok(LoginResponse {
                                 success: false,
                                 data: None,
                                 indexes: None,
                                 error: Some(error_msg),
-                            };
+                            });
                         }
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to encrypt seed: {}", e);
                         log_encryption_error(&error_msg);
-                        return LoginResponse {
+                        return Ok(LoginResponse {
                             success: false,
                             data: None,
                             indexes: None,
                             error: Some(error_msg),
-                        };
+                        });
                     }
                 }
             }
             Err(e) => {
                 let error_msg = format!("Database error: {}", e);
                 log_database_error("get_kv", &error_msg);
-                return LoginResponse {
+                return Ok(LoginResponse {
                     success: false,
                     data: None,
                     indexes: None,
                     error: Some(error_msg),
-                };
+                });
             }
         }
     }
 
-    LoginResponse {
-        success: ok,
+    Ok(LoginResponse {
+        success: true,
         data,
         indexes,
         error,
-    }
+    })
 }
 
 async fn verify(request: &LoginRequest) -> (bool, Option<String>) {

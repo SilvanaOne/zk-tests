@@ -1,0 +1,4 @@
+# External endpoints that the enclave is allowed to access. 
+endpoints:
+  - dynamodb.us-east-1.amazonaws.com
+  - kms.us-east-1.amazonaws.com

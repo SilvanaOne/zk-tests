@@ -1,0 +1,56 @@
+import * as bip32 from "bip32";
+import * as bip39 from "bip39";
+import bs58check from "bs58check";
+import { Buffer } from "safe-buffer";
+import Client from "mina-signer";
+
+export function getHDpath(account = 0) {
+  let purpose = 44;
+  let index = 0;
+  let charge = 0;
+  let hdPath =
+    "m/" +
+    purpose +
+    "'/" +
+    12586 +
+    "'/" +
+    account +
+    "'/" +
+    charge +
+    "/" +
+    index;
+  return hdPath;
+}
+
+function reverse(bytes: any) {
+  const reversed = new Buffer(bytes.length);
+  for (let i = bytes.length; i > 0; i--) {
+    (reversed as any)[bytes.length - i] = bytes[i - 1];
+  }
+  return reversed;
+}
+
+export async function importWalletByMnemonic(
+  mnemonic: string,
+  index = 0
+): Promise<{
+  privateKey: string;
+  publicKey: string;
+  hdIndex: number;
+}> {
+  const seed = bip39.mnemonicToSeedSync(mnemonic);
+  const masterNode = bip32.fromSeed(seed);
+  let hdPath = getHDpath(index);
+  const child0 = masterNode.derivePath(hdPath);
+  (child0.privateKey as any)[0] &= 0x3f;
+  const childPrivateKey = reverse(child0.privateKey);
+  const privateKeyHex = `5a01${childPrivateKey.toString("hex")}`;
+  const privateKey = bs58check.encode(Buffer.from(privateKeyHex, "hex") as any);
+  const client = new Client({ network: "mainnet" });
+  const publicKey = client.derivePublicKey(privateKey);
+  return {
+    privateKey,
+    publicKey,
+    hdIndex: index,
+  };
+}
