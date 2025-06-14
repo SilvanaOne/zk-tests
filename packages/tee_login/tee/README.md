@@ -62,3 +62,12 @@ pulumi stack rm
 ```sh
 ssh -i "TEE.pem" ec2-user@ec2-3-85-252-150.compute-1.amazonaws.com
 ```
+
+and in terminal run
+
+```sh
+git clone https://github.com/SilvanaOne/zk-tests
+cd zk-tests/packages/tee_login/tee
+make
+
+```

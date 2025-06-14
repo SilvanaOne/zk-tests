@@ -15,7 +15,7 @@ out/enclaveos.tar: out \
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
-		--platform linux/arm64 \
+		--platform linux/amd64 \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
 		.
