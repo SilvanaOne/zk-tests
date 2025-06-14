@@ -69,5 +69,31 @@ and in terminal run
 git clone https://github.com/SilvanaOne/zk-tests
 cd zk-tests/packages/tee_login/tee
 make
+```
 
+on update
+
+```sh
+cd ../../..
+git pull origin main
+cd packages/tee_login/tee && rm -rf out
+make
+```
+
+after make
+
+```sh
+make run-debug
+```
+
+or, in production
+
+```sh
+make run
+```
+
+and in other terminal
+
+```sh
+sh expose_enclave.sh
 ```

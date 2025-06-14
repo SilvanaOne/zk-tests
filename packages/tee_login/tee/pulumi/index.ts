@@ -3,8 +3,6 @@ import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 import * as fs from "fs";
 
-const deployInstance = true;
-
 export = async () => {
   // Create an AWS resource (S3 Bucket)
   const bucket = new aws.s3.BucketV2("silvana-tee-login");
@@ -176,98 +174,136 @@ export = async () => {
     },
   });
 
-  if (deployInstance) {
-    // Create IAM role for EC2 instance
-    const ec2Role = new aws.iam.Role("silvana-tee-ec2-role", {
-      name: "silvana-tee-ec2-role",
-      assumeRolePolicy: JSON.stringify({
+  // Create IAM role for EC2 instance
+  const ec2Role = new aws.iam.Role("silvana-tee-ec2-role", {
+    name: "silvana-tee-ec2-role",
+    assumeRolePolicy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Action: "sts:AssumeRole",
+          Effect: "Allow",
+          Principal: {
+            Service: "ec2.amazonaws.com",
+          },
+        },
+      ],
+    }),
+  });
+
+  // Attach the same S3 and DynamoDB policies to the EC2 role
+  const ec2S3PolicyAttachment = new aws.iam.RolePolicyAttachment(
+    "ec2-s3-policy-attachment",
+    {
+      role: ec2Role.name,
+      policyArn: s3Policy.arn,
+    }
+  );
+
+  const ec2DynamoPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    "ec2-dynamo-policy-attachment",
+    {
+      role: ec2Role.name,
+      policyArn: dynamoPolicy.arn,
+    }
+  );
+
+  const ec2KmsPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    "ec2-kms-policy-attachment",
+    {
+      role: ec2Role.name,
+      policyArn: kmsPolicy.arn,
+    }
+  );
+
+  const s3images = "silvana-tee-images";
+
+  // Get existing S3 bucket
+  const s3imagesBucket = await aws.s3.getBucket({
+    bucket: s3images,
+  });
+
+  // Create IAM policy for existing S3 bucket access
+  const s3ImagesPolicy = new aws.iam.Policy("silvana-tee-s3-images-policy", {
+    description: "Policy for existing S3 bucket access",
+    policy: pulumi.output(s3imagesBucket).apply((bucket) =>
+      JSON.stringify({
         Version: "2012-10-17",
         Statement: [
           {
-            Action: "sts:AssumeRole",
             Effect: "Allow",
-            Principal: {
-              Service: "ec2.amazonaws.com",
-            },
+            Action: [
+              "s3:GetObject",
+              "s3:PutObject",
+              "s3:DeleteObject",
+              "s3:ListBucket",
+              "s3:GetBucketLocation",
+            ],
+            Resource: [bucket.arn, `${bucket.arn}/*`],
           },
         ],
-      }),
-    });
+      })
+    ),
+  });
 
-    // Attach the same S3 and DynamoDB policies to the EC2 role
-    const ec2S3PolicyAttachment = new aws.iam.RolePolicyAttachment(
-      "ec2-s3-policy-attachment",
-      {
-        role: ec2Role.name,
-        policyArn: s3Policy.arn,
-      }
-    );
+  // Attach S3 images policy to EC2 role
+  const ec2S3ImagesPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    "ec2-s3-images-policy-attachment",
+    {
+      role: ec2Role.name,
+      policyArn: s3ImagesPolicy.arn,
+    }
+  );
 
-    const ec2DynamoPolicyAttachment = new aws.iam.RolePolicyAttachment(
-      "ec2-dynamo-policy-attachment",
-      {
-        role: ec2Role.name,
-        policyArn: dynamoPolicy.arn,
-      }
-    );
+  // Create instance profile for the EC2 instance
+  const instanceProfile = new aws.iam.InstanceProfile(
+    "silvana-tee-instance-profile",
+    {
+      name: "silvana-tee-instance-profile",
+      role: ec2Role.name,
+    }
+  );
 
-    const ec2KmsPolicyAttachment = new aws.iam.RolePolicyAttachment(
-      "ec2-kms-policy-attachment",
-      {
-        role: ec2Role.name,
-        policyArn: kmsPolicy.arn,
-      }
-    );
+  // Create EC2 Instance
+  const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
+    ami: amiId,
+    instanceType: "m5.xlarge", // minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
+    keyName: keyPairName,
+    vpcSecurityGroupIds: [securityGroup.id],
+    iamInstanceProfile: instanceProfile.name,
 
-    // Create instance profile for the EC2 instance
-    const instanceProfile = new aws.iam.InstanceProfile(
-      "silvana-tee-instance-profile",
-      {
-        name: "silvana-tee-instance-profile",
-        role: ec2Role.name,
-      }
-    );
+    // Enable Nitro Enclaves
+    enclaveOptions: {
+      enabled: true,
+    },
 
-    // Create EC2 Instance
-    const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
-      ami: amiId,
-      instanceType: "m5.xlarge", // minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
-      keyName: keyPairName,
-      vpcSecurityGroupIds: [securityGroup.id],
-      iamInstanceProfile: instanceProfile.name,
+    // Configure root volume (200GB)
+    rootBlockDevice: {
+      volumeSize: 30,
+      volumeType: "gp3",
+      deleteOnTermination: true,
+    },
 
-      // Enable Nitro Enclaves
-      enclaveOptions: {
-        enabled: true,
-      },
+    // User data script loaded from user-data.sh file
+    userData: fs.readFileSync("./user-data.sh", "utf8"),
+    userDataReplaceOnChange: true,
 
-      // Configure root volume (200GB)
-      rootBlockDevice: {
-        volumeSize: 30,
-        volumeType: "gp3",
-        deleteOnTermination: true,
-      },
+    tags: {
+      Name: "silvana-tee-login-instance",
+      Project: "silvana-tee-login",
+      "instance-script": "true",
+    },
+  });
 
-      // User data script loaded from user-data.sh file
-      userData: fs.readFileSync("./user-data.sh", "utf8"),
-      userDataReplaceOnChange: true,
+  // Associate Elastic IP with the instance
+  const eipAssociation = new aws.ec2.EipAssociation(
+    "silvana-tee-login-eip-association",
+    {
+      instanceId: instance.id,
+      allocationId: elasticIp.allocationId,
+    }
+  );
 
-      tags: {
-        Name: "silvana-tee-login-instance",
-        Project: "silvana-tee-login",
-        "instance-script": "true",
-      },
-    });
-
-    // Associate Elastic IP with the instance
-    const eipAssociation = new aws.ec2.EipAssociation(
-      "silvana-tee-login-eip-association",
-      {
-        instanceId: instance.id,
-        allocationId: elasticIp.allocationId,
-      }
-    );
-  }
   // Return all outputs
   return {
     bucketName: bucket.id,
@@ -281,10 +317,12 @@ export = async () => {
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
-    //instanceId: instance.id,
-    //instancePublicIp: elasticIp.publicIp,
-    //instancePrivateIp: instance.privateIp,
-    //ec2RoleArn: ec2Role.arn,
-    //instanceProfileArn: instanceProfile.arn,
+    instanceId: instance.id,
+    instancePublicIp: elasticIp.publicIp,
+    instancePrivateIp: instance.privateIp,
+    ec2RoleArn: ec2Role.arn,
+    instanceProfileArn: instanceProfile.arn,
+    s3imagesBucketName: s3imagesBucket.id,
+    s3imagesBucketArn: s3imagesBucket.arn,
   };
 };
