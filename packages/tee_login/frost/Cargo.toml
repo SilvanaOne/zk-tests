@@ -1,0 +1,10 @@
+[package]
+name = "frost"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+frost-ed25519 = "2.1.0"
+frost-secp256k1 = "2.1.0"
+hex = "0.4.3"
+rand = "0.8"

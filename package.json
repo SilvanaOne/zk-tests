@@ -10,5 +10,8 @@
     "packages/mina",
     "packages/ethereum",
     "packages/sui"
-  ]
+  ],
+  "dependencies": {
+    "secp256k1": "^5.0.1"
+  }
 }

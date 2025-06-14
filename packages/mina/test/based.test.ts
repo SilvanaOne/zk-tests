@@ -83,7 +83,7 @@ describe("Based rollup", async () => {
     } else {
       console.log("faucet success:", response.result);
     }
-    const url = "http://m1.zeko.io/graphql";
+    const url = "https://devnet.zeko.io/graphql"; // "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
       mina: url,
@@ -103,7 +103,8 @@ describe("Based rollup", async () => {
       throw new Error("PRIVATE_KEY is not set");
     }
 
-    const url = "http://m1.zeko.io/graphql";
+    const url = "https://devnet.zeko.io/graphql";
+    // const url = "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
       mina: url,
