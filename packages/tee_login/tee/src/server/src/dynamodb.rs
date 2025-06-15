@@ -1,5 +1,5 @@
 use crate::db::{Key, Value};
-use crate::kms::{EncryptedData, KMS};
+//use crate::kms::{EncryptedData, KMS};
 use anyhow::{Result, anyhow};
 use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::{
@@ -18,7 +18,7 @@ pub struct DynamoDB {
 }
 
 impl DynamoDB {
-    pub async fn new(table: impl Into<String>, key_name: impl Into<String>) -> Result<Self> {
+    pub async fn new(table: impl Into<String>, _key_name: impl Into<String>) -> Result<Self> {
         println!("Initializing DynamoDB...");
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
 
@@ -34,7 +34,7 @@ impl DynamoDB {
         Ok(Self {
             client: Arc::new(client),
             table: table.into(),
-            kms: Arc::new(kms),
+            //kms: Arc::new(kms),
         })
     }
 
@@ -148,7 +148,7 @@ impl DynamoDB {
         // let encrypted_data = bincode::deserialize::<EncryptedData>(blob.as_ref())
         //     .map_err(|e| anyhow!("Failed to deserialize encrypted data: {}", e))?;
         // let decrypted_data = self.kms.decrypt(&encrypted_data).await?;
-        let value = bincode::deserialize::<Value>(&blob)
+        let value = bincode::deserialize::<Value>(blob.as_ref())
             .map_err(|e| anyhow!("Failed to deserialize value: {}", e))?;
         Ok(value)
     }
