@@ -1,25 +1,14 @@
 #[macro_use]
 extern crate rocket;
 
-mod db;
-mod dynamodb;
-mod encrypt;
-mod hash;
-mod kms;
-mod logger;
-mod login;
-//mod rocksdb;
-mod seed;
-mod shamir;
-mod solana;
-mod sui;
-
-use logger::{ClientIP, RequestLogger, get_client_ip, log_login_error, log_login_success};
-use login::process_login;
-use login::{LoginRequest, LoginResponse};
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::serde::json::Json;
 use rocket::{Request, Response, State};
+use tee_login::logger::{
+    ClientIP, RequestLogger, get_client_ip, log_login_error, log_login_success,
+};
+use tee_login::login::process_login;
+use tee_login::login::{LoginRequest, LoginResponse};
 //use rocksdb::DBStore;
 use std::fs;
 use tracing::{error, info};
@@ -204,7 +193,7 @@ async fn rocket() -> _ {
     let table = std::env::var("DB").expect("DB environment variable not set");
     let key_name =
         std::env::var("KMS_KEY_NAME").expect("KMS_KEY_NAME environment variable not set");
-    let db_store = match dynamodb::DynamoDB::new(table, key_name).await {
+    let db_store = match tee_login::dynamodb::DynamoDB::new(table, key_name).await {
         Ok(db) => {
             info!("Database initialized successfully");
             db
@@ -231,7 +220,7 @@ async fn rocket() -> _ {
 #[post("/", data = "<login_request>")]
 async fn login_route(
     login_request: Json<LoginRequest>,
-    db: &State<dynamodb::DynamoDB>,
+    db: &State<tee_login::dynamodb::DynamoDB>,
     client_ip: ClientIP,
 ) -> Json<LoginResponse> {
     let login_data = login_request.into_inner();

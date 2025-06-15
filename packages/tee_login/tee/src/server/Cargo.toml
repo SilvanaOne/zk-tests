@@ -20,10 +20,10 @@ reqwest = { version = "0.11", features = ["json"] }
 anyhow = "1.0"
 serde_yaml = "0.9.34"
 tower-http = { version = "0.6.0", features = ["cors"] }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9", features = ["aes"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", features = ["aes","copy_key"] }
+shared_crypto = { git = "https://github.com/mystenlabs/sui", package = "shared-crypto"}
 nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev = "8ec7eac72bbb2097f1058ee32c13e1ff232f13e8", package="aws-nitro-enclaves-nsm-api", optional = false }
 bcs = "0.1.6"
-sysinfo = "0.35.1"
 futures-util = "0.3"
 chrono = { version = "0.4", features = ["clock"] }
 bytes = "1"
@@ -38,7 +38,7 @@ aws-config = "1.8.0"
 aes-gcm = "0.10"
 bincode = "1.3"
 solana-sdk = "2.3"
-sui_sdk = { git = "https://github.com/mystenlabs/sui", package = "sui-sdk"}
+
 base64 = "0.22.1"
 rsa = "0.9.8"
 sha2 = "0.10.9"

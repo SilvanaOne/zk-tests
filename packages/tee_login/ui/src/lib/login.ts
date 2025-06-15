@@ -53,7 +53,10 @@ async function hashToBase64(data: string): Promise<string> {
   const dataBytes = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest("SHA-256", dataBytes);
   const hashArray = new Uint8Array(hashBuffer);
-  return Buffer.from(hashArray).toString("base64");
+  console.log("hashArray", hashArray);
+  const base64 = Buffer.from(hashArray).toString("base64");
+  console.log("base64", base64);
+  return base64;
 }
 
 export async function getMessage(params: {
@@ -82,6 +85,7 @@ export async function getMessage(params: {
     publicKey,
     nonce,
   });
+  console.log("metadata", metadata);
   const request = await hashToBase64(metadata);
   const message = `Silvana TEE login request: ${request}`;
   const loginRequest: UnsignedLoginRequest = {
@@ -113,9 +117,17 @@ export async function login(params: {
       error: "Failed to generate key pair",
     };
   }
+  const endpoint = process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT;
+  if (endpoint === undefined) {
+    return {
+      success: false,
+      seed: null,
+      error: "NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT is not set",
+    };
+  }
   try {
     console.time("Login request");
-    const response = await fetch("http://127.0.0.1:8000/login/", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
