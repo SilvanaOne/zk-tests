@@ -1,5 +1,5 @@
 use crate::login::LoginRequest;
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use sha2::{Digest, Sha256};
 
 pub fn hash_login_request(login_request: &LoginRequest) -> bool {
@@ -26,7 +26,6 @@ pub fn hash_login_request(login_request: &LoginRequest) -> bool {
     let mut hasher = Sha256::new();
     hasher.update(metadata_str.as_bytes());
     let hash_bytes = hasher.finalize();
-    println!("Hash bytes: {:?}", hash_bytes);
 
     // Encode to base64
     let calculated_hash = B64.encode(&hash_bytes);

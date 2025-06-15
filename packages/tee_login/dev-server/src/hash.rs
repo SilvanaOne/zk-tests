@@ -26,7 +26,6 @@ pub fn hash_login_request(login_request: &LoginRequest) -> bool {
     let mut hasher = Sha256::new();
     hasher.update(metadata_str.as_bytes());
     let hash_bytes = hasher.finalize();
-    println!("Hash bytes: {:?}", hash_bytes);
 
     // Encode to base64
     let calculated_hash = B64.encode(&hash_bytes);

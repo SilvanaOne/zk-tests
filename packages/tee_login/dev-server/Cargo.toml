@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-solana-sdk = "2.3"
 hex = "0.4"
 tokio = "1.45.1"
 shared_crypto = { git = "https://github.com/mystenlabs/sui", package = "shared-crypto"}
