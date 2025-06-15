@@ -53,21 +53,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aes-gcm-siv"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d"
-dependencies = [
- "aead",
- "aes",
- "cipher",
- "ctr",
- "polyval",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1586,59 +1571,8 @@ name = "fastcrypto"
 version = "0.1.8"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=69d496c71fb37e3d22fe85e5bbfd4256d61422b9#69d496c71fb37e3d22fe85e5bbfd4256d61422b9"
 dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-secp256r1",
- "ark-serialize",
- "auto_ops",
- "base64ct",
- "bech32",
- "bincode",
- "blake2",
- "blst",
- "bs58 0.4.0",
- "curve25519-dalek-ng",
- "derive_more",
- "digest 0.10.7",
- "ecdsa",
- "ed25519-consensus",
- "elliptic-curve",
- "fastcrypto-derive 0.1.3 (git+https://github.com/MystenLabs/fastcrypto?rev=69d496c71fb37e3d22fe85e5bbfd4256d61422b9)",
- "generic-array",
- "hex",
- "hex-literal",
- "hkdf",
- "lazy_static",
- "num-bigint",
- "once_cell",
- "p256",
- "rand 0.8.5",
- "readonly",
- "rfc6979",
- "rsa 0.8.2",
- "schemars",
- "secp256k1 0.27.0",
- "serde",
- "serde_json",
- "serde_with",
- "sha2 0.10.9",
- "sha3",
- "signature 2.2.0",
- "static_assertions",
- "thiserror",
- "tokio",
- "typenum",
- "zeroize",
-]
-
-[[package]]
-name = "fastcrypto"
-version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto#0acf0ff1a163c60e0dec1e16e4fbad4a4cf853bd"
-dependencies = [
  "aes",
  "aes-gcm",
- "aes-gcm-siv",
  "ark-ec",
  "ark-ff",
  "ark-secp256r1",
@@ -1658,7 +1592,7 @@ dependencies = [
  "ecdsa",
  "ed25519-consensus",
  "elliptic-curve",
- "fastcrypto-derive 0.1.3 (git+https://github.com/MystenLabs/fastcrypto)",
+ "fastcrypto-derive",
  "generic-array",
  "hex",
  "hex-literal",
@@ -1690,15 +1624,6 @@ dependencies = [
 name = "fastcrypto-derive"
 version = "0.1.3"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=69d496c71fb37e3d22fe85e5bbfd4256d61422b9#69d496c71fb37e3d22fe85e5bbfd4256d61422b9"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "fastcrypto-derive"
-version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto#0acf0ff1a163c60e0dec1e16e4fbad4a4cf853bd"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -3650,6 +3575,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "server"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "aws-config",
+ "aws-nitro-enclaves-nsm-api",
+ "aws-sdk-dynamodb",
+ "aws-sdk-kms",
+ "axum",
+ "base64 0.22.1",
+ "bc-rand",
+ "bc-shamir",
+ "bcs",
+ "bincode",
+ "bip39",
+ "bs58 0.5.1",
+ "bytes",
+ "chrono",
+ "ed25519-dalek 1.0.1",
+ "fastcrypto",
+ "futures-util",
+ "hex",
+ "libc",
+ "num_cpus",
+ "rand 0.8.5",
+ "reqwest",
+ "rsa 0.9.8",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_repr",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "shared-crypto",
+ "sys-info",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3690,7 +3658,7 @@ source = "git+https://github.com/mystenlabs/sui#574e17b5ef3b96146aebcd23f3e8b1d2
 dependencies = [
  "bcs",
  "eyre",
- "fastcrypto 0.1.8",
+ "fastcrypto",
  "serde",
  "serde_repr",
 ]
@@ -3724,49 +3692,6 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest 0.10.7",
  "rand_core 0.6.4",
-]
-
-[[package]]
-name = "silvana-tee-server"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "aws-config",
- "aws-nitro-enclaves-nsm-api",
- "aws-sdk-dynamodb",
- "aws-sdk-kms",
- "axum",
- "base64 0.22.1",
- "bc-rand",
- "bc-shamir",
- "bcs",
- "bincode",
- "bip39",
- "bs58 0.5.1",
- "bytes",
- "chrono",
- "ed25519-dalek 1.0.1",
- "fastcrypto 0.1.9",
- "futures-util",
- "hex",
- "libc",
- "num_cpus",
- "rand 0.8.5",
- "reqwest",
- "rsa 0.9.8",
- "serde",
- "serde_bytes",
- "serde_json",
- "serde_repr",
- "serde_yaml",
- "sha2 0.10.9",
- "shared-crypto",
- "sys-info",
- "tokio",
- "tower-http",
- "tracing",
- "zeroize",
 ]
 
 [[package]]

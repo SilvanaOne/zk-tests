@@ -4,11 +4,11 @@
 use anyhow::Result;
 use axum::{Router, routing::get, routing::post};
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
-use silvana_tee_server::AppState;
-use silvana_tee_server::app::login;
-use silvana_tee_server::common::{get_attestation, health_check};
-use silvana_tee_server::dynamodb::DynamoDB;
-use silvana_tee_server::stats::stats;
+use server::AppState;
+use server::app::login;
+use server::common::{get_attestation, health_check};
+use server::dynamodb::DynamoDB;
+use server::stats::stats;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
