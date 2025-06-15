@@ -30,7 +30,7 @@ FROM stagex/core-libffi@sha256:47096e1c82771a075dd43b99e1c4ee0ed45c5a4b311f1e2db
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
-ENV RUSTFLAGS="-C target-feature=+crt-static codegen-units=256"
+ENV RUSTFLAGS="-C target-feature=+crt-static"
 # --release
 ENV CARGOFLAGS="--locked --no-default-features --target ${TARGET}"
 ENV OPENSSL_STATIC=true
