@@ -98,6 +98,12 @@ and in other terminal
 sh expose_enclave.sh
 ```
 
+To stop enclave:
+
+```sh
+sh reset_enclave.sh
+```
+
 copy image to s3 and back:
 
 ```sh
