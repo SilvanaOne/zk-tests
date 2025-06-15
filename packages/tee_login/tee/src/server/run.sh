@@ -53,7 +53,4 @@ python3 /traffic_forwarder.py 127.0.0.65 443 3 8102 &
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 echo "Traffic forwarder started"
 echo "Starting Silvana TEE Login Server"
-ls -lh
-echo "Silvana TEE Login Server files:"
-ls -lh /server
 /server

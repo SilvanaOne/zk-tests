@@ -22,6 +22,15 @@ async fn main() -> Result<()> {
     let table = std::env::var("DB").expect("DB environment variable not set");
     let key_name =
         std::env::var("KMS_KEY_NAME").expect("KMS_KEY_NAME environment variable not set");
+    let aws_region = std::env::var("AWS_REGION").expect("AWS_REGION environment variable not set");
+    println!("AWS Region: {}", aws_region);
+    let aws_access_key_id = std::env::var("AWS_ACCESS_KEY_ID").expect("AWS_ACCESS_KEY_ID environment variable not set");
+    println!("AWS Access Key ID: {}", aws_access_key_id);
+    let aws_secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY environment variable not set");
+    println!("AWS Secret Access Key: {}", aws_secret_access_key.len());
+
+
+
     println!("Initializing database...");
     let db_store = match DynamoDB::new(table, key_name).await {
         Ok(db) => {

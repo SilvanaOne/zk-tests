@@ -40,6 +40,8 @@ pub async fn process_login(
         "Processing login request for chain: {}, wallet: {}, address: {}",
         login_request.chain, login_request.wallet, login_request.address
     );
+    println!("Login request nonce: {}", login_request.nonce);
+    println!("Current timestamp: {}", chrono::Utc::now().timestamp_millis());
     if login_request.nonce > chrono::Utc::now().timestamp_millis() as u64 {
         return Ok(LoginResponse {
             success: false,
@@ -59,6 +61,7 @@ pub async fn process_login(
     }
 
     let (ok, error) = verify(&login_request).await;
+    println!("Verification result: ok={}, error={:?}", ok, error);
     info!("Verification result: ok={}, error={:?}", ok, error);
     let mut data: Option<Vec<String>> = None;
     let mut indexes: Option<Vec<u32>> = None;

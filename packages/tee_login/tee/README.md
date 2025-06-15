@@ -112,3 +112,11 @@ aws s3 cp out.tar.gz s3://silvana-tee-images/tee.tar.gz
 aws s3 cp s3://silvana-tee-images/tee.tar.gz tee.tar.gz
 tar -xzvf out.tar.gz
 ```
+
+curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/health_check
+
+curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/stats
+
+curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/get_attestation
+
+curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/login
