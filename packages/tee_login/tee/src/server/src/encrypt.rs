@@ -2,8 +2,7 @@ use crate::db::Share;
 use crate::logger::log_encryption_error;
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use cms::{content_info::ContentInfo, enveloped_data::EnvelopedData};
-use der::Decode;
+// CMS imports removed since we're using manual parsing for AWS KMS indefinite length encoding
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey, pkcs8::DecodePublicKey, rand_core::OsRng};
 use sha2::{Sha256, Sha512};
 use zeroize::Zeroizing;
