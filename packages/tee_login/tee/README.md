@@ -98,7 +98,7 @@ and in other terminal
 sh expose_enclave.sh
 ```
 
-copy image to s3:
+copy image to s3 and back:
 
 ```sh
 tar -czvf out.tar.gz out

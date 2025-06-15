@@ -25,7 +25,7 @@ FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da0195
 FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
 FROM stagex/user-libseccomp@sha256:1b3cb1a7faad08a74a756894bf4e3ad24296c5bef5d30c918c64fc3cc74d1648 AS user-libseccomp
-
+FROM stagex/core-clang@sha256:2fefd58ff45dcfe742422f6e457971fee4b8223187657fd375a82f240f46bbbd AS core-clang
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
@@ -48,6 +48,7 @@ COPY --from=user-gen_initramfs . /
 COPY --from=user-eif_build . /
 COPY --from=core-llvm . /
 COPY --from=core-gcc . /
+COPY --from=core-clang . /
 COPY --from=user-cpio . /
 COPY --from=user-libseccomp . /
 COPY --from=user-linux-nitro /bzImage .
@@ -65,12 +66,6 @@ RUN cargo build --workspace --locked --no-default-features --release --target x8
 
 WORKDIR /src/server
 ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-RUN find /usr -name "*clang*" 2>/dev/null || true
-RUN find /usr -name "clang" 2>/dev/null || true
-RUN which clang || echo "clang not found"
-RUN ls -la /usr/bin/ | grep clang || echo "no clang in /usr/bin"
-ENV LIBCLANG_PATH=/usr/lib
-ENV CLANG_PATH=/usr/bin/clang
 RUN cargo build --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
 WORKDIR /build_cpio

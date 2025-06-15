@@ -26,6 +26,13 @@ docker manifest inspect stagex/core-llvm:latest \
  | jq -r '.manifests[]
 | .digest'
 
+FROM stagex/core-clang@sha256:2fefd58ff45dcfe742422f6e457971fee4b8223187657fd375a82f240f46bbbd AS core-clang
+
+docker manifest inspect stagex/core-clang:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="amd64")
+| .digest'
+
 docker manifest inspect stagex/user-docker:latest \
  | jq -r '.manifests[]
 | select(.platform.architecture=="amd64")
