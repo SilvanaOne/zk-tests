@@ -127,13 +127,14 @@ export async function login(params: {
   }
   try {
     console.time("Login request");
+    console.log("endpoint", endpoint);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      //body: JSON.stringify(params.request),
-      body: JSON.stringify({ memo: "Hi" }),
+      body: JSON.stringify({ payload: params.request }),
+      //body: JSON.stringify({ payload: { memo: "hi from client" } }),
     });
     console.timeEnd("Login request");
     if (!response.ok) {
@@ -145,7 +146,8 @@ export async function login(params: {
       };
     }
 
-    const data: EncryptedLoginResponse = await response.json();
+    const data: EncryptedLoginResponse = (await response.json())?.response
+      ?.data as EncryptedLoginResponse;
     console.log("Login response:", data);
     if (
       data.success &&
