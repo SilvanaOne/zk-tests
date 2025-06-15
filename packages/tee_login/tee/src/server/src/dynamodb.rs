@@ -25,7 +25,7 @@ impl DynamoDB {
         println!("Creating DynamoDB client...");
         let client = Client::new(&shared_cfg);
 
-        println!("Initializing KMS...");
+        println!("DynamoDB: Initializing KMS...");
         let kms = KMS::new(key_name)
             .await
             .map_err(|e| anyhow!("Failed to initialize KMS: {}", e))?;

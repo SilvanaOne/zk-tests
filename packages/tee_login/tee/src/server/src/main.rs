@@ -20,8 +20,7 @@ async fn main() -> Result<()> {
 
     // Initialize the database
     let table = std::env::var("DB").expect("DB environment variable not set");
-    let key_name =
-        std::env::var("KMS_KEY_NAME").expect("KMS_KEY_NAME environment variable not set");
+    let key_id = std::env::var("KMS_KEY_ID").expect("KMS_KEY_ID environment variable not set");
     let aws_region = std::env::var("AWS_REGION").expect("AWS_REGION environment variable not set");
     println!("AWS Region: {}", aws_region);
     let aws_access_key_id =
@@ -32,7 +31,7 @@ async fn main() -> Result<()> {
     println!("AWS Secret Access Key: {}", aws_secret_access_key);
 
     println!("Initializing database...");
-    let db_store = match DynamoDB::new(table, key_name).await {
+    let db_store = match DynamoDB::new(table, key_id).await {
         Ok(db) => {
             info!("Database initialized successfully");
             db
@@ -48,7 +47,10 @@ async fn main() -> Result<()> {
 
     println!("Setting up CORS...");
     // Define your own restricted CORS policy here if needed.
-    let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any).allow_origin(Any);
+    let cors = CorsLayer::new()
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .allow_origin(Any);
 
     println!("Setting up routes...");
     let app = Router::new()

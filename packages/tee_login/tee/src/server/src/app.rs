@@ -31,14 +31,11 @@ pub async fn login(
     Json(request): Json<ProcessDataRequest<LoginRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<LoginResponse>>>, EnclaveError> {
     println!("Login endpoint called");
-    println!("Login request: {:?}", request.payload);
     let login_response = process_login(request.payload, &state.db_store).await?;
-    println!("Login response: {:?}", login_response);
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
-    println!("Current timestamp: {:?}", current_timestamp);
     Ok(Json(to_signed_response(
         &state.eph_kp,
         login_response,

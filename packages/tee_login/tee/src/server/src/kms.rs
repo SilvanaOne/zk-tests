@@ -30,22 +30,23 @@ impl KMS {
     /// Create a new KMS instance by resolving a key name/alias to its key ID
     /// Accepts key names like "my-seed-key" and converts them to "alias/my-seed-key"
     /// Also accepts full aliases like "alias/my-seed-key" or actual key IDs
-    pub async fn new(key_name: impl Into<String>) -> Result<Self> {
+    pub async fn new(key_id: impl Into<String>) -> Result<Self> {
         println!("Initializing KMS...");
-        let key_name = key_name.into();
-        println!("Creating KMS client...");
+        // let key_name = key_name.into();
+        // println!("Creating KMS client...");
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
         println!("Creating KMS client...");
         let client = Client::new(&shared_cfg);
+        println!("KMS: Client created");
 
-        println!("Resolving key ID...");
-        // Resolve the key name to actual key ID
-        let key_id = Self::resolve_key_id(&client, &key_name).await?;
-        println!("Key ID resolved: {}", key_id);
+        // println!("Resolving key ID...");
+        // // Resolve the key name to actual key ID
+        // let key_id = Self::resolve_key_id(&client, &key_name).await?;
+        // println!("Key ID resolved: {}", key_id);
 
         Ok(Self {
             client: Arc::new(client),
-            key_id,
+            key_id: key_id.into(),
         })
     }
 
@@ -55,42 +56,43 @@ impl KMS {
     /// - "alias/my-key" -> actual key ID  
     /// - "arn:aws:kms:..." -> actual key ID
     /// - actual key ID -> returns as-is (after validation)
-    pub async fn resolve_key_id(client: &Client, key_identifier: &str) -> Result<String> {
-        // If it looks like a plain name (no special prefixes), prepend "alias/"
-        let key_to_describe = if !key_identifier.starts_with("alias/")
-            && !key_identifier.starts_with("arn:")
-            && !key_identifier
-                .chars()
-                .all(|c| c.is_ascii_hexdigit() || c == '-')
-            && key_identifier.len() < 36
-        // UUID-like key IDs are typically 36 chars
-        {
-            format!("alias/{}", key_identifier)
-        } else {
-            key_identifier.to_string()
-        };
+    // pub async fn resolve_key_id(client: &Client, key_identifier: &str) -> Result<String> {
+    //     // If it looks like a plain name (no special prefixes), prepend "alias/"
+    //     let key_to_describe = if !key_identifier.starts_with("alias/")
+    //         && !key_identifier.starts_with("arn:")
+    //         && !key_identifier
+    //             .chars()
+    //             .all(|c| c.is_ascii_hexdigit() || c == '-')
+    //         && key_identifier.len() < 36
+    //     // UUID-like key IDs are typically 36 chars
+    //     {
+    //         format!("alias/{}", key_identifier)
+    //     } else {
+    //         key_identifier.to_string()
+    //     };
 
-        // Use describe_key to get the actual key information
-        let response = client
-            .describe_key()
-            .key_id(&key_to_describe)
-            .send()
-            .await
-            .map_err(|e| anyhow!("Failed to describe KMS key '{}': {}", key_to_describe, e))?;
+    //     // Use describe_key to get the actual key information
+    //     let response = client
+    //         .describe_key()
+    //         .key_id(&key_to_describe)
+    //         .send()
+    //         .await
+    //         .map_err(|e| anyhow!("Failed to describe KMS key '{}': {}", key_to_describe, e))?;
 
-        let key_metadata = response
-            .key_metadata()
-            .ok_or_else(|| anyhow!("No key metadata returned for key '{}'", key_to_describe))?;
+    //     let key_metadata = response
+    //         .key_metadata()
+    //         .ok_or_else(|| anyhow!("No key metadata returned for key '{}'", key_to_describe))?;
 
-        let key_id = key_metadata.key_id();
+    //     let key_id = key_metadata.key_id();
 
-        Ok(key_id.to_string())
-    }
+    //     Ok(key_id.to_string())
+    // }
 
     /// Encrypt data using KMS data key
     /// Uses "kms:GenerateDataKey*" policy
     pub async fn encrypt(&self, data: &[u8]) -> Result<EncryptedData> {
         // Generate a data key from KMS
+        println!("KMS: Generating data key...");
         let data_key_response = self
             .client
             .generate_data_key()
@@ -123,6 +125,8 @@ impl KMS {
             .encrypt(nonce, data)
             .map_err(|e| anyhow!("Failed to encrypt data: {}", e))?;
 
+        println!("KMS: Data encrypted");
+
         Ok(EncryptedData {
             encrypted_data_key: encrypted_data_key.as_ref().to_vec(),
             encrypted_content,
@@ -134,6 +138,7 @@ impl KMS {
     /// Uses "kms:Decrypt" policy
     pub async fn decrypt(&self, encrypted_data: &EncryptedData) -> Result<Vec<u8>> {
         // Decrypt the data key using KMS
+        println!("KMS: Decrypting data key...");
         let decrypt_response = self
             .client
             .decrypt()
@@ -165,6 +170,8 @@ impl KMS {
             .decrypt(nonce, encrypted_data.encrypted_content.as_ref())
             .map_err(|e| anyhow!("Failed to decrypt data: {}", e))?;
 
+        println!("KMS: Data decrypted");
+
         Ok(decrypted_data)
     }
 }
@@ -181,7 +188,7 @@ mod tests {
         if std::env::var("AWS_ACCESS_KEY_ID").is_err() {
             return;
         }
-        if std::env::var("KMS_KEY_NAME").is_err() {
+        if std::env::var("KMS_KEY_ID").is_err() {
             return;
         }
         let key_name = std::env::var("KMS_KEY_NAME").unwrap();
