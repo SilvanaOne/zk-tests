@@ -74,9 +74,7 @@ make
 on update
 
 ```sh
-cd ../../..
-git pull origin main
-cd packages/tee_login/tee && rm -rf out
+cd ../../.. && git pull origin main && cd packages/tee_login/tee && rm -rf out
 make
 ```
 
