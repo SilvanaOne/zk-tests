@@ -86,7 +86,6 @@ COPY --from=user-socat /bin/socat . initramfs
 RUN mkdir initramfs/proc
 RUN mkdir initramfs/run
 
-
 RUN cp /target/${TARGET}/release/init initramfs
 RUN cp /src/server/target/${TARGET}/release/server initramfs
 RUN cp /src/server/traffic_forwarder.py initramfs/
