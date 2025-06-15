@@ -99,15 +99,25 @@ export = async () => {
 
   // Create IAM policy for KMS access
   const kmsPolicy = new aws.iam.Policy("silvana-tee-kms-policy", {
-    description: "Policy for KMS key access",
+    description: "Policy for KMS key access with TEE attestation conditions",
     policy: pulumi.output(kmsKey).apply((key) =>
       JSON.stringify({
         Version: "2012-10-17",
         Statement: [
           {
             Effect: "Allow",
-            Action: ["kms:Decrypt", "kms:GenerateDataKey*", "kms:DescribeKey"],
+            Action: ["kms:Decrypt", "kms:GenerateDataKey*"],
             Resource: key.targetKeyArn,
+            Condition: {
+              StringEqualsIgnoreCase: {
+                "kms:RecipientAttestation:ImageSha384":
+                  "6522d6093479ba18f09bff60f67f0f2e48876c4d757b4bbdeec336edb38a15a8335c3924eeaf923a7dd20a5e064de5f6",
+                // "kms:RecipientAttestation:PCR1":
+                //   "0x6522d6093479ba18f09bff60f67f0f2e48876c4d757b4bbdeec336edb38a15a8335c3924eeaf923a7dd20a5e064de5f6",
+                // "kms:RecipientAttestation:PCR2":
+                //   "0x21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a",
+              },
+            },
           },
         ],
       })

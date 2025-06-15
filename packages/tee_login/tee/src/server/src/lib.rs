@@ -10,6 +10,7 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
 
 pub mod app;
+pub mod attestation;
 pub mod common;
 pub mod db;
 pub mod dynamodb;

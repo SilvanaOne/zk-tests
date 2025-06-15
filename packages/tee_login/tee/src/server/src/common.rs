@@ -88,7 +88,7 @@ pub fn to_signed_response<T: Serialize + Clone>(
 /// Response for get attestation.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetAttestationResponse {
-    /// Attestation document serialized in Hex.
+    /// Attestation document encoded in base64.
     pub attestation: String,
 }
 

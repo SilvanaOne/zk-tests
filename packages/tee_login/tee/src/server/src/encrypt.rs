@@ -2,9 +2,33 @@ use crate::db::Share;
 use crate::logger::log_encryption_error;
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use rsa::{Oaep, RsaPublicKey, pkcs8::DecodePublicKey, rand_core::OsRng};
-use sha2::Sha512;
+use rsa::{Oaep, RsaPrivateKey, RsaPublicKey, pkcs8::DecodePublicKey, rand_core::OsRng};
+use sha2::{Sha256, Sha512};
 use zeroize::Zeroizing;
+
+#[derive(Debug, Clone)]
+pub struct KMSKeyPair {
+    pub public_key: RsaPublicKey,
+    pub private_key: RsaPrivateKey,
+}
+
+pub fn generate_kms_key_pair() -> Result<KMSKeyPair> {
+    let mut rng = OsRng;
+    let private_key = RsaPrivateKey::new(&mut rng, 2048)?;
+    let public_key = RsaPublicKey::from(&private_key);
+    Ok(KMSKeyPair {
+        public_key,
+        private_key,
+    })
+}
+
+pub fn decrypt(data: &[u8], private_key: &RsaPrivateKey) -> Result<Vec<u8>> {
+    let padding = Oaep::new::<Sha256>();
+    let plaintext = private_key
+        .decrypt(padding, data)
+        .context("KMS decryption failed")?;
+    Ok(plaintext)
+}
 
 pub fn encrypt(data: &[u8], public_key: &str) -> Result<String> {
     let der = B64.decode(public_key).context("bad base64")?;

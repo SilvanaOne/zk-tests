@@ -1,10 +1,16 @@
+use crate::attestation::get_kms_attestation;
+use crate::encrypt::{decrypt, generate_kms_key_pair};
 use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow};
 use aws_config::BehaviorVersion;
-use aws_sdk_kms::{Client, primitives::Blob};
+use aws_sdk_kms::{
+    Client,
+    primitives::Blob,
+    types::{KeyEncryptionMechanism, RecipientInfo},
+};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -139,18 +145,43 @@ impl KMS {
     pub async fn decrypt(&self, encrypted_data: &EncryptedData) -> Result<Vec<u8>> {
         // Decrypt the data key using KMS
         println!("KMS: Decrypting data key...");
+        let pair = generate_kms_key_pair()?;
+        let attestation = match get_kms_attestation(&pair.public_key) {
+            Ok(attestation) => attestation,
+            Err(e) => {
+                println!("KMS: Failed to get KMS attestation: {:?}", e);
+                return Err(anyhow!("Failed to get KMS attestation: {:?}", e));
+            }
+        };
+        let recipient = RecipientInfo::builder()
+            .attestation_document(Blob::new(attestation))
+            .key_encryption_algorithm(KeyEncryptionMechanism::RsaesOaepSha256)
+            .build();
         let decrypt_response = self
             .client
             .decrypt()
             .ciphertext_blob(Blob::new(encrypted_data.encrypted_data_key.clone()))
+            .recipient(recipient)
             .send()
             .await
             .map_err(|e| anyhow!("Failed to decrypt KMS data key: {}", e))?;
 
         // Extract the plaintext data key
-        let plaintext_key = decrypt_response
-            .plaintext()
-            .ok_or_else(|| anyhow!("No plaintext key returned from KMS decrypt"))?;
+        let ciphertext_for_recipient = decrypt_response
+            .ciphertext_for_recipient
+            .ok_or_else(|| anyhow!("No ciphertext for recipient returned from KMS decrypt"))?;
+
+        let plaintext_key = match decrypt(ciphertext_for_recipient.as_ref(), &pair.private_key) {
+            Ok(plaintext_key) => plaintext_key,
+            Err(e) => {
+                println!("KMS: Failed to decrypt KMS data key: {:?}", e);
+                return Err(anyhow!("Failed to decrypt KMS data key: {:?}", e));
+            }
+        };
+
+        // let plaintext_key = decrypt_response
+        //     .plaintext()
+        //     .ok_or_else(|| anyhow!("No plaintext key returned from KMS decrypt"))?;
 
         // Use the decrypted key for AES-GCM decryption
         let cipher = Aes256Gcm::new_from_slice(plaintext_key.as_ref())
