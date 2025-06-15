@@ -27,8 +27,16 @@ docker manifest inspect stagex/core-llvm:latest \
 | .digest'
 
 FROM stagex/core-clang@sha256:2fefd58ff45dcfe742422f6e457971fee4b8223187657fd375a82f240f46bbbd AS core-clang
+FROM stagex/core-libffi@sha256:47096e1c82771a075dd43b99e1c4ee0ed45c5a4b311f1e2db7ff3ca29530af54 AS core-libffi
+
+core-libffi
 
 docker manifest inspect stagex/core-clang:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="amd64")
+| .digest'
+
+docker manifest inspect stagex/core-libffi:latest \
  | jq -r '.manifests[]
 | select(.platform.architecture=="amd64")
 | .digest'
