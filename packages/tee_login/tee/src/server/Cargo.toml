@@ -45,4 +45,6 @@ sha2 = "0.10.9"
 bip39 = { version = "2", features = ["zeroize", "rand", "std"] }
 hex = "0.4"
 zeroize = "1.8.1"
+cms = { version = "0.2", default-features = false, features = ["aes", "cbc", "rsa", "sha2"] }
+der = "0.7"
 

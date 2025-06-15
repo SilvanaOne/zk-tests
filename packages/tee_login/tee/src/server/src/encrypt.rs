@@ -2,6 +2,8 @@ use crate::db::Share;
 use crate::logger::log_encryption_error;
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use cms::{content_info::ContentInfo, enveloped_data::EnvelopedData};
+use der::Decode;
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey, pkcs8::DecodePublicKey, rand_core::OsRng};
 use sha2::{Sha256, Sha512};
 use zeroize::Zeroizing;
@@ -69,4 +71,53 @@ pub fn encrypt_shares(shares: &[Share], public_key: &str) -> Result<Vec<String>>
         encrypted_shares.push(encrypt(&plaintext, public_key)?);
     }
     Ok(encrypted_shares)
+}
+
+/// Decrypt PKCS#7 EnvelopedData from AWS KMS CiphertextForRecipient
+/// This is specifically for decrypting the symmetric key from AWS KMS when using Nitro Enclaves
+pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Result<Vec<u8>> {
+    // AWS KMS returns the symmetric key encrypted in PKCS#7 EnvelopedData format
+    // We need to parse this structure and extract the RSA-encrypted symmetric key
+
+    // Try parsing directly as EnvelopedData first (most common case)
+    if let Ok(enveloped_data) = EnvelopedData::from_der(data) {
+        // Get the first recipient info (AWS KMS typically only has one)
+        if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
+            if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
+                // Decrypt the symmetric key using RSA-OAEP with SHA-256
+                let padding = Oaep::new::<Sha256>();
+                match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
+                    Ok(symmetric_key) => return Ok(symmetric_key),
+                    Err(e) => {
+                        log_encryption_error(&format!("RSA decryption failed: {}", e));
+                    }
+                }
+            }
+        }
+        return Err(anyhow::anyhow!(
+            "No valid recipient info found in EnvelopedData"
+        ));
+    }
+
+    // Fallback: try parsing as ContentInfo wrapper
+    if let Ok(content_info) = ContentInfo::from_der(data) {
+        // Extract the content and try to parse as EnvelopedData
+        if let Ok(enveloped_data) = EnvelopedData::from_der(content_info.content.value()) {
+            if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
+                if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
+                    let padding = Oaep::new::<Sha256>();
+                    match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
+                        Ok(symmetric_key) => return Ok(symmetric_key),
+                        Err(e) => {
+                            log_encryption_error(&format!("RSA decryption failed: {}", e));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "Failed to parse AWS KMS ciphertext as PKCS#7 EnvelopedData or ContentInfo"
+    ))
 }

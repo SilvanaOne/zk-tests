@@ -1,5 +1,5 @@
 use crate::attestation::get_kms_attestation;
-use crate::encrypt::{decrypt, generate_kms_key_pair};
+use crate::encrypt::{decrypt_kms_ciphertext, generate_kms_key_pair};
 use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
@@ -186,13 +186,14 @@ impl KMS {
         };
         println!("Ciphertext for recipient: {:?}", ciphertext_for_recipient);
 
-        let plaintext_key = match decrypt(ciphertext_for_recipient.as_ref(), &pair.private_key) {
-            Ok(plaintext_key) => plaintext_key,
-            Err(e) => {
-                println!("KMS: Failed to decrypt KMS data key E303: {:?}", e);
-                return Err(anyhow!("Failed to decrypt KMS data key E303: {:?}", e));
-            }
-        };
+        let plaintext_key =
+            match decrypt_kms_ciphertext(ciphertext_for_recipient.as_ref(), &pair.private_key) {
+                Ok(plaintext_key) => plaintext_key,
+                Err(e) => {
+                    println!("KMS: Failed to decrypt KMS data key E303: {:?}", e);
+                    return Err(anyhow!("Failed to decrypt KMS data key E303: {:?}", e));
+                }
+            };
         println!("Plaintext key: {:?}", plaintext_key);
 
         // let plaintext_key = decrypt_response
