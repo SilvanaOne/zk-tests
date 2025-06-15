@@ -89,7 +89,8 @@ RUN mkdir initramfs/run
 
 
 RUN cp /target/${TARGET}/release/init initramfs
-RUN cp /src/server/target/${TARGET}/release/server initramfs
+# release
+RUN cp /src/server/target/${TARGET}/server initramfs
 RUN cp /src/server/traffic_forwarder.py initramfs/
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
