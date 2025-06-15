@@ -117,7 +117,11 @@ export async function login(params: {
       error: "Failed to generate key pair",
     };
   }
-  const endpoint = process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT;
+  console.log("NEXT_PUBLIC_LOCAL", process.env.NEXT_PUBLIC_LOCAL);
+  const endpoint =
+    process.env.NEXT_PUBLIC_LOCAL === "true"
+      ? process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT_LOCAL
+      : process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT_AWS;
   if (endpoint === undefined) {
     return {
       success: false,
@@ -146,8 +150,10 @@ export async function login(params: {
       };
     }
 
-    const data: EncryptedLoginResponse = (await response.json())?.response
-      ?.data as EncryptedLoginResponse;
+    const data: EncryptedLoginResponse =
+      process.env.NEXT_PUBLIC_LOCAL === "true"
+        ? ((await response.json()) as EncryptedLoginResponse)
+        : ((await response.json())?.response?.data as EncryptedLoginResponse);
     console.log("Login response:", data);
     if (
       data.success &&

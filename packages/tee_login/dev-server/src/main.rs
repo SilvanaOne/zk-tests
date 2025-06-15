@@ -7,8 +7,8 @@ use rocket::{Request, Response, State};
 use tee_login::logger::{
     ClientIP, RequestLogger, get_client_ip, log_login_error, log_login_success,
 };
-use tee_login::login::process_login;
-use tee_login::login::{LoginRequest, LoginResponse};
+use tee_login::login::{LoginRequest, LoginResponse, ProcessDataRequest, process_login};
+
 //use rocksdb::DBStore;
 use std::fs;
 use tracing::{error, info};
@@ -219,11 +219,11 @@ async fn rocket() -> _ {
 
 #[post("/", data = "<login_request>")]
 async fn login_route(
-    login_request: Json<LoginRequest>,
+    login_request: Json<ProcessDataRequest<LoginRequest>>,
     db: &State<tee_login::dynamodb::DynamoDB>,
     client_ip: ClientIP,
 ) -> Json<LoginResponse> {
-    let login_data = login_request.into_inner();
+    let login_data = login_request.into_inner().payload;
 
     info!(
         event = "login_attempt",

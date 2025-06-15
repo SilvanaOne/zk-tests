@@ -23,6 +23,12 @@ pub struct LoginRequest {
     pub share_indexes: Vec<u32>,
 }
 
+/// Wrapper struct containing the request payload.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProcessDataRequest<T> {
+    pub payload: T,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoginResponse {
     pub success: bool,

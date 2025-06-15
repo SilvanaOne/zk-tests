@@ -29,7 +29,7 @@ run: out/nitro.eif
 		--eif-path out/nitro.eif
 
 .PHONY: run-tiny
-run: out/nitro.eif
+run-tiny: out/nitro.eif
 	sudo nitro-cli \
 		run-enclave \
 		--cpu-count 1 \
