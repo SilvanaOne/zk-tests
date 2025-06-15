@@ -30,7 +30,8 @@ pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<LoginRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<LoginResponse>>>, EnclaveError> {
-    println!("Login request: {:?}", request);
+    println!("Login endpoint called");
+    println!("Login request: {:?}", request.payload);
     let login_response = process_login(request.payload, &state.db_store).await?;
     println!("Login response: {:?}", login_response);
     let current_timestamp = std::time::SystemTime::now()
@@ -43,6 +44,41 @@ pub async fn login(
         login_response,
         current_timestamp,
         IntentScope::Login,
+    )))
+}
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PingRequest {
+    pub memo: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PingResponse {
+    pub memo: String,
+    pub timestamp: u64,
+}
+
+pub async fn ping(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ProcessDataRequest<PingRequest>>,
+) -> Result<Json<ProcessedDataResponse<IntentMessage<PingResponse>>>, EnclaveError> {
+    println!("Ping endpoint called");
+    println!("Ping request: {:?}", request.payload.memo);
+    let current_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
+        .as_millis() as u64;
+    println!("Current timestamp: {:?}", current_timestamp);
+    let ping_response = PingResponse {
+        memo: "pong".to_string(),
+        timestamp: current_timestamp,
+    };
+    println!("Ping response: {:?}", ping_response);
+
+    Ok(Json(to_signed_response(
+        &state.eph_kp,
+        ping_response,
+        current_timestamp,
+        IntentScope::Ping,
     )))
 }
 

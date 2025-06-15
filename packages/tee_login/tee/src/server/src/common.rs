@@ -38,6 +38,7 @@ pub struct IntentMessage<T: Serialize> {
 pub enum IntentScope {
     Login = 0,
     Stats = 1,
+    Ping = 2,
 }
 
 impl<T: Serialize + Debug> IntentMessage<T> {

@@ -23,11 +23,14 @@ pub struct Stats {
 pub async fn stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<Stats>>>, EnclaveError> {
+    println!("Getting worker stats");
     let stats = get_worker_stats()?;
+    println!("Stats: {:?}", stats);
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
+    println!("Current timestamp: {}", current_timestamp);
     Ok(Json(to_signed_response(
         &state.eph_kp,
         stats,

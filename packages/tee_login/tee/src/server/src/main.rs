@@ -5,7 +5,7 @@ use anyhow::Result;
 use axum::{Router, routing::get, routing::post};
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use server::AppState;
-use server::app::login;
+use server::app::{login, ping};
 use server::common::{get_attestation, health_check};
 use server::dynamodb::DynamoDB;
 use server::stats::stats;
@@ -52,9 +52,10 @@ async fn main() -> Result<()> {
 
     println!("Setting up routes...");
     let app = Router::new()
-        .route("/", get(ping))
+        .route("/", get(hello))
         .route("/get_attestation", get(get_attestation))
         .route("/login", post(login))
+        .route("/ping", post(ping))
         .route("/health_check", get(health_check))
         .route("/stats", get(stats))
         .with_state(state)
@@ -69,6 +70,6 @@ async fn main() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Server error: {}", e))
 }
 
-async fn ping() -> &'static str {
-    "Pong!"
+async fn hello() -> &'static str {
+    "Hello!"
 }
