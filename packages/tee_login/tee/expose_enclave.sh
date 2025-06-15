@@ -7,5 +7,5 @@
 ENCLAVE_ID=$(nitro-cli describe-enclaves | jq -r ".[0].EnclaveID")
 ENCLAVE_CID=$(nitro-cli describe-enclaves | jq -r ".[0].EnclaveCID")
 
-cat env.json | socat - VSOCK-CONNECT:$ENCLAVE_CID:7777
+cat db.json | socat - VSOCK-CONNECT:$ENCLAVE_CID:7777
 socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:$ENCLAVE_CID:3000 &

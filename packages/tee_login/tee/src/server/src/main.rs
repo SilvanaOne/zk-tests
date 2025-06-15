@@ -15,14 +15,14 @@ use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("Starting Silvana TEE Login server...");
     let eph_kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
-
-    info!("Starting Silvana TEE Login server...");
 
     // Initialize the database
     let table = std::env::var("DB").expect("DB environment variable not set");
     let key_name =
         std::env::var("KMS_KEY_NAME").expect("KMS_KEY_NAME environment variable not set");
+    println!("Initializing database...");
     let db_store = match DynamoDB::new(table, key_name).await {
         Ok(db) => {
             info!("Database initialized successfully");
@@ -34,11 +34,14 @@ async fn main() -> Result<()> {
         }
     };
 
+    println!("Creating app state...");
     let state = Arc::new(AppState { eph_kp, db_store });
 
+    println!("Setting up CORS...");
     // Define your own restricted CORS policy here if needed.
     let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any);
 
+    println!("Setting up routes...");
     let app = Router::new()
         .route("/", get(ping))
         .route("/get_attestation", get(get_attestation))
@@ -48,7 +51,9 @@ async fn main() -> Result<()> {
         .with_state(state)
         .layer(cors);
 
+    println!("Binding to port 3000...");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    println!("Listening on {}", listener.local_addr().unwrap());
     info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service())
         .await

@@ -267,7 +267,7 @@ export = async () => {
   // Create EC2 Instance
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
-    instanceType: "m5.xlarge", // minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
+    instanceType: "c7i.4xlarge", //"m5.xlarge",  minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,

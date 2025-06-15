@@ -30,7 +30,10 @@ echo "127.0.0.65   kms.us-east-1.amazonaws.com" >> /etc/hosts
 cat /etc/hosts
 
 # Get a json blob with key/value pair for secrets
+echo "Getting Configuration"
 JSON_RESPONSE=$(socat - VSOCK-LISTEN:7777,reuseaddr)
+echo "Configuration received:"
+echo "$JSON_RESPONSE"
 # Sets all key value pairs as env variables that will be referred by the server
 # This is shown as a example below. For production usecases, it's best to set the
 # keys explicitly rather than dynamically.
@@ -50,4 +53,7 @@ python3 /traffic_forwarder.py 127.0.0.65 443 3 8102 &
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 echo "Traffic forwarder started"
 echo "Starting Silvana TEE Login Server"
+ls -lh
+echo "Silvana TEE Login Server files:"
+ls -lh /server
 /server

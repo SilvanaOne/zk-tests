@@ -3654,7 +3654,7 @@ dependencies = [
 [[package]]
 name = "shared-crypto"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/sui#574e17b5ef3b96146aebcd23f3e8b1d20b14e6ae"
+source = "git+https://github.com/mystenlabs/sui?rev=574e17b5ef3b96146aebcd23f3e8b1d20b14e6ae#574e17b5ef3b96146aebcd23f3e8b1d20b14e6ae"
 dependencies = [
  "bcs",
  "eyre",
