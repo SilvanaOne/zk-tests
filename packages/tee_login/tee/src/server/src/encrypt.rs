@@ -77,9 +77,23 @@ pub fn encrypt_shares(shares: &[Share], public_key: &str) -> Result<Vec<String>>
 /// This is specifically for decrypting the symmetric key from AWS KMS when using Nitro Enclaves
 pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Result<Vec<u8>> {
     // AWS KMS returns the symmetric key encrypted in PKCS#7 EnvelopedData format
-    // We need to parse this structure and extract the RSA-encrypted symmetric key
+    // We need to parse this structure and extract the RSA-encrypted synthetic key
+
+    // Debug: log first few bytes to understand the structure
+    let first_bytes: Vec<String> = data.iter().take(20).map(|b| format!("{:02x}", b)).collect();
+    println!("KMS ciphertext first 20 bytes: {}", first_bytes.join(" "));
+    println!("KMS ciphertext total length: {}", data.len());
 
     // Try parsing directly as EnvelopedData first (most common case)
+    match EnvelopedData::from_der(data) {
+        Ok(enveloped_data) => {
+            println!("✓ Successfully parsed as EnvelopedData directly");
+        }
+        Err(e) => {
+            println!("✗ Failed to parse as EnvelopedData directly: {}", e);
+        }
+    }
+
     if let Ok(enveloped_data) = EnvelopedData::from_der(data) {
         // Get the first recipient info (AWS KMS typically only has one)
         if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
@@ -100,6 +114,24 @@ pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Resul
     }
 
     // Fallback: try parsing as ContentInfo wrapper
+    match ContentInfo::from_der(data) {
+        Ok(content_info) => {
+            println!("✓ Successfully parsed as ContentInfo");
+            // Extract the content and try to parse as EnvelopedData
+            match EnvelopedData::from_der(content_info.content.value()) {
+                Ok(enveloped_data) => {
+                    println!("✓ Successfully extracted EnvelopedData from ContentInfo");
+                }
+                Err(e) => {
+                    println!("✗ Failed to parse EnvelopedData from ContentInfo: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("✗ Failed to parse as ContentInfo: {}", e);
+        }
+    }
+
     if let Ok(content_info) = ContentInfo::from_der(data) {
         // Extract the content and try to parse as EnvelopedData
         if let Ok(enveloped_data) = EnvelopedData::from_der(content_info.content.value()) {
@@ -117,7 +149,81 @@ pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Resul
         }
     }
 
+    // Final fallback: try a more manual approach for indefinite length encoding
+    println!("Trying manual parsing approach for indefinite length encoding...");
+
+    // The data starts with SEQUENCE (0x30) with indefinite length (0x80)
+    // This is a known issue with some PKCS#7 parsers
+    if data.len() > 10 && data[0] == 0x30 && data[1] == 0x80 {
+        // Convert indefinite length to definite length by finding the end-of-contents octets
+        let mut definite_length_data = Vec::new();
+        let mut i = 0;
+        let mut found_eoc = false;
+
+        while i < data.len() - 1 {
+            if data[i] == 0x00 && data[i + 1] == 0x00 {
+                // Found end-of-contents octets, calculate the actual length
+                let content_length = i - 2; // Subtract 2 for the SEQUENCE tag and length byte
+                definite_length_data.push(0x30); // SEQUENCE tag
+
+                // Encode the definite length
+                if content_length < 0x80 {
+                    definite_length_data.push(content_length as u8);
+                } else if content_length < 0x100 {
+                    definite_length_data.push(0x81);
+                    definite_length_data.push(content_length as u8);
+                } else if content_length < 0x10000 {
+                    definite_length_data.push(0x82);
+                    definite_length_data.push((content_length >> 8) as u8);
+                    definite_length_data.push((content_length & 0xFF) as u8);
+                } else {
+                    definite_length_data.push(0x83);
+                    definite_length_data.push((content_length >> 16) as u8);
+                    definite_length_data.push((content_length >> 8) as u8);
+                    definite_length_data.push((content_length & 0xFF) as u8);
+                }
+
+                // Add the content (skip the original indefinite length byte)
+                definite_length_data.extend_from_slice(&data[2..i]);
+                found_eoc = true;
+                break;
+            }
+            i += 1;
+        }
+
+        if found_eoc {
+            println!("Converted indefinite length to definite length, trying to parse again...");
+
+            // Try parsing the converted data as ContentInfo
+            if let Ok(content_info) = ContentInfo::from_der(&definite_length_data) {
+                println!("✓ Successfully parsed converted data as ContentInfo");
+                if let Ok(enveloped_data) = EnvelopedData::from_der(content_info.content.value()) {
+                    println!("✓ Successfully extracted EnvelopedData from converted ContentInfo");
+                    if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
+                        if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
+                            let padding = Oaep::new::<Sha256>();
+                            match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
+                                Ok(symmetric_key) => {
+                                    println!(
+                                        "✓ Successfully decrypted symmetric key using converted data"
+                                    );
+                                    return Ok(symmetric_key);
+                                }
+                                Err(e) => {
+                                    log_encryption_error(&format!(
+                                        "RSA decryption failed on converted data: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Err(anyhow::anyhow!(
-        "Failed to parse AWS KMS ciphertext as PKCS#7 EnvelopedData or ContentInfo"
+        "Failed to parse AWS KMS ciphertext as PKCS#7 EnvelopedData or ContentInfo (tried indefinite length conversion)"
     ))
 }
