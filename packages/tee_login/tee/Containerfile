@@ -31,8 +31,7 @@ FROM stagex/core-libffi@sha256:47096e1c82771a075dd43b99e1c4ee0ed45c5a4b311f1e2db
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static"
-# --release
-ENV CARGOFLAGS="--locked --no-default-features --target ${TARGET}"
+ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
 ENV OPENSSL_STATIC=true
 
 COPY --from=core-busybox . /
@@ -62,16 +61,14 @@ COPY --from=user-linux-nitro /linux.config .
 
 FROM base as build
 COPY . .
-# --release
-RUN cargo build --workspace --locked --no-default-features  --target x86_64-unknown-linux-musl
+RUN cargo build --workspace --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
 
 
 WORKDIR /src/server
 ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
 ENV LIBCLANG_PATH=/usr/lib
-# --release
-RUN cargo build --locked --no-default-features  --target x86_64-unknown-linux-musl
+RUN cargo build --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
 WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
@@ -90,10 +87,8 @@ RUN mkdir initramfs/proc
 RUN mkdir initramfs/run
 
 
-# --release
-RUN cp /target/${TARGET}/init initramfs
-# --release
-RUN cp /src/server/target/${TARGET}/server initramfs
+RUN cp /target/${TARGET}/release/init initramfs
+RUN cp /src/server/target/${TARGET}/release/server initramfs
 RUN cp /src/server/traffic_forwarder.py initramfs/
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
