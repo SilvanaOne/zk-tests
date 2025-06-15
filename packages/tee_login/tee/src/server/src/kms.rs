@@ -94,55 +94,31 @@ impl KMS {
     //     Ok(key_id.to_string())
     // }
 
-    /// Encrypt data using KMS data key with Nitro Enclaves
-    /// Uses "kms:GenerateDataKey*" policy with attestation
+    /// Encrypt data using standard KMS data key
+    /// Uses "kms:GenerateDataKey*" policy (standard, not Nitro Enclaves)
     pub async fn encrypt(&self, data: &[u8]) -> Result<EncryptedData> {
-        // Generate a data key from KMS using Nitro Enclaves attestation
-        println!("KMS: Generating data key with Nitro Enclaves attestation...");
-        let pair = generate_kms_key_pair()?;
-        let attestation = match get_kms_attestation(&pair.public_key) {
-            Ok(attestation) => attestation,
-            Err(e) => {
-                println!("KMS: Failed to get KMS attestation for encryption: {:?}", e);
-                return Err(anyhow!(
-                    "Failed to get KMS attestation for encryption: {:?}",
-                    e
-                ));
-            }
-        };
-
-        let recipient = RecipientInfo::builder()
-            .attestation_document(Blob::new(attestation))
-            .key_encryption_algorithm(KeyEncryptionMechanism::RsaesOaepSha256)
-            .build();
-
+        // Generate a data key from KMS using standard flow
+        println!("KMS: Generating data key (standard)...");
         let data_key_response = self
             .client
             .generate_data_key()
             .key_id(&self.key_id)
             .key_spec(aws_sdk_kms::types::DataKeySpec::Aes256)
-            .recipient(recipient)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to generate KMS data key with attestation: {}", e))?;
+            .map_err(|e| anyhow!("Failed to generate KMS data key: {}", e))?;
 
-        // Extract the encrypted data key (for storage)
+        // Extract the plaintext and encrypted data key (standard KMS flow)
+        let plaintext_key = data_key_response
+            .plaintext()
+            .ok_or_else(|| anyhow!("No plaintext key returned from KMS"))?;
+
         let encrypted_data_key = data_key_response
             .ciphertext_blob()
             .ok_or_else(|| anyhow!("No encrypted data key returned from KMS"))?;
 
-        // Extract the plaintext key encrypted for our enclave
-        let ciphertext_for_recipient = data_key_response
-            .ciphertext_for_recipient()
-            .ok_or_else(|| anyhow!("No ciphertext for recipient returned from KMS"))?;
-
-        // Decrypt the symmetric key from the PKCS#7 structure
-        let plaintext_key =
-            decrypt_kms_ciphertext(ciphertext_for_recipient.as_ref(), &pair.private_key)
-                .map_err(|e| anyhow!("Failed to decrypt data key during encryption: {}", e))?;
-
         // Debug: log the plaintext key for verification
-        println!("Encryption - Plaintext key: {:?}", plaintext_key);
+        println!("Encryption - Plaintext key: {:?}", plaintext_key.as_ref());
 
         // Use the plaintext key for AES-GCM encryption
         let cipher = Aes256Gcm::new_from_slice(plaintext_key.as_ref())
