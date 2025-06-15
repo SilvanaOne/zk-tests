@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
 
     println!("Setting up CORS...");
     // Define your own restricted CORS policy here if needed.
-    let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any);
+    let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any).allow_origin(Any);
 
     println!("Setting up routes...");
     let app = Router::new()

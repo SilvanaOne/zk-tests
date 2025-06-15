@@ -132,7 +132,8 @@ export async function login(params: {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(params.request),
+      //body: JSON.stringify(params.request),
+      body: JSON.stringify({ memo: "Hi" }),
     });
     console.timeEnd("Login request");
     if (!response.ok) {

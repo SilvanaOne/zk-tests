@@ -120,3 +120,5 @@ curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/stats
 curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/get_attestation
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/login
+
+curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "hi"}}' -X POST http://23.21.249.129:3000/ping
