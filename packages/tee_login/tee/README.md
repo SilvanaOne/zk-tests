@@ -60,7 +60,7 @@ pulumi stack rm
 ## Connect with AWS instance
 
 ```sh
-ssh -i "TEE.pem" ec2-user@ec2-3-85-252-150.compute-1.amazonaws.com
+ssh -i "TEE.pem" ec2-user@ec2-23-21-249-129.compute-1.amazonaws.com
 ```
 
 and in terminal run

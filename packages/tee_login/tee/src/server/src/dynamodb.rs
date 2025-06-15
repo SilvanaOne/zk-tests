@@ -19,14 +19,18 @@ pub struct DynamoDB {
 
 impl DynamoDB {
     pub async fn new(table: impl Into<String>, key_name: impl Into<String>) -> Result<Self> {
+        println!("Initializing DynamoDB...");
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
 
+        println!("Creating DynamoDB client...");
         let client = Client::new(&shared_cfg);
 
+        println!("Initializing KMS...");
         let kms = KMS::new(key_name)
             .await
             .map_err(|e| anyhow!("Failed to initialize KMS: {}", e))?;
 
+        println!("Creating DynamoDB instance...");
         Ok(Self {
             client: Arc::new(client),
             table: table.into(),

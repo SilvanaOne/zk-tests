@@ -24,16 +24,24 @@ out/enclaveos.tar: out \
 run: out/nitro.eif
 	sudo nitro-cli \
 		run-enclave \
-		--cpu-count 2 \
-		--memory 2048M \
+		--cpu-count 8 \
+		--memory 8192M \
+		--eif-path out/nitro.eif
+
+.PHONY: run-tiny
+run: out/nitro.eif
+	sudo nitro-cli \
+		run-enclave \
+		--cpu-count 1 \
+		--memory 384M \
 		--eif-path out/nitro.eif
 
 .PHONY: run-debug
 run-debug: out/nitro.eif
 	sudo nitro-cli \
 		run-enclave \
-		--cpu-count 2 \
-		--memory 2048M \
+		--cpu-count 8 \
+		--memory 8192M \
 		--eif-path out/nitro.eif \
 		--debug-mode \
 		--attach-console

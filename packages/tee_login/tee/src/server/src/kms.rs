@@ -31,12 +31,17 @@ impl KMS {
     /// Accepts key names like "my-seed-key" and converts them to "alias/my-seed-key"
     /// Also accepts full aliases like "alias/my-seed-key" or actual key IDs
     pub async fn new(key_name: impl Into<String>) -> Result<Self> {
+        println!("Initializing KMS...");
         let key_name = key_name.into();
+        println!("Creating KMS client...");
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
+        println!("Creating KMS client...");
         let client = Client::new(&shared_cfg);
 
+        println!("Resolving key ID...");
         // Resolve the key name to actual key ID
         let key_id = Self::resolve_key_id(&client, &key_name).await?;
+        println!("Key ID resolved: {}", key_id);
 
         Ok(Self {
             client: Arc::new(client),
