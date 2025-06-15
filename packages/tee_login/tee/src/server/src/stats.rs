@@ -17,6 +17,8 @@ use std::sync::Arc;
 pub struct Stats {
     pub cpu_cores: u64,
     pub memory: u64,
+    pub available_memory: u64,
+    pub free_memory: u64,
     pub timestamp: String,
 }
 
@@ -44,6 +46,8 @@ pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
     let mem_info = sys_info::mem_info();
     println!("mem_info: {:?}", mem_info);
     let memory = sys_info::mem_info().map(|info| info.total).unwrap_or(0);
+    let available_memory = sys_info::mem_info().map(|info| info.avail).unwrap_or(0);
+    let free_memory = sys_info::mem_info().map(|info| info.free).unwrap_or(0);
 
     let now = Utc::now();
     // format as RFC3339 (ISO-8601) with exactly 3 fractional digits (milliseconds)
@@ -52,6 +56,8 @@ pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
     Ok(Stats {
         cpu_cores,
         memory,
+        available_memory,
+        free_memory,
         timestamp,
     })
 }
