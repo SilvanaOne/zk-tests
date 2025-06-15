@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub struct DynamoDB {
     client: Arc<Client>,
     table: String,
-    kms: Arc<KMS>,
+    //kms: Arc<KMS>,
 }
 
 impl DynamoDB {
@@ -25,10 +25,10 @@ impl DynamoDB {
         println!("Creating DynamoDB client...");
         let client = Client::new(&shared_cfg);
 
-        println!("Initializing KMS...");
-        let kms = KMS::new(key_name)
-            .await
-            .map_err(|e| anyhow!("Failed to initialize KMS: {}", e))?;
+        // println!("Initializing KMS...");
+        // let kms = KMS::new(key_name)
+        //     .await
+        //     .map_err(|e| anyhow!("Failed to initialize KMS: {}", e))?;
 
         println!("Creating DynamoDB instance...");
         Ok(Self {
@@ -135,20 +135,20 @@ impl DynamoDB {
     async fn value_to_blob(&self, value: &Value) -> Result<Blob> {
         let serialized =
             bincode::serialize(value).map_err(|e| anyhow!("Failed to serialize value: {}", e))?;
-        let encrypted_data = self.kms.encrypt(&serialized).await?;
-        let serialized_encrypted_data = bincode::serialize(&encrypted_data)
-            .map_err(|e| anyhow!("Failed to serialize encrypted data: {}", e))?;
-        Ok(Blob::new(serialized_encrypted_data))
+        // let encrypted_data = self.kms.encrypt(&serialized).await?;
+        // let serialized_encrypted_data = bincode::serialize(&encrypted_data)
+        //     .map_err(|e| anyhow!("Failed to serialize encrypted data: {}", e))?;
+        Ok(Blob::new(serialized))
     }
 
     async fn blob_to_value(&self, av: &AttributeValue) -> Result<Value> {
         let blob = av
             .as_b()
             .map_err(|_| anyhow!("Expected binary attribute for value"))?;
-        let encrypted_data = bincode::deserialize::<EncryptedData>(blob.as_ref())
-            .map_err(|e| anyhow!("Failed to deserialize encrypted data: {}", e))?;
-        let decrypted_data = self.kms.decrypt(&encrypted_data).await?;
-        let value = bincode::deserialize::<Value>(&decrypted_data)
+        // let encrypted_data = bincode::deserialize::<EncryptedData>(blob.as_ref())
+        //     .map_err(|e| anyhow!("Failed to deserialize encrypted data: {}", e))?;
+        // let decrypted_data = self.kms.decrypt(&encrypted_data).await?;
+        let value = bincode::deserialize::<Value>(&blob)
             .map_err(|e| anyhow!("Failed to deserialize value: {}", e))?;
         Ok(value)
     }
