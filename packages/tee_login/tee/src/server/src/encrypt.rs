@@ -77,71 +77,96 @@ pub fn encrypt_shares(shares: &[Share], public_key: &str) -> Result<Vec<String>>
 /// This is specifically for decrypting the symmetric key from AWS KMS when using Nitro Enclaves
 pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Result<Vec<u8>> {
     // AWS KMS returns the symmetric key encrypted in PKCS#7 EnvelopedData format
-    // We need to parse this structure and extract the RSA-encrypted synthetic key
+    // However, it uses indefinite length encoding which the cms crate doesn't support
+    // We'll manually extract the RSA-encrypted key from the known structure
 
     // Debug: log first few bytes to understand the structure
     let first_bytes: Vec<String> = data.iter().take(20).map(|b| format!("{:02x}", b)).collect();
     println!("KMS ciphertext first 20 bytes: {}", first_bytes.join(" "));
     println!("KMS ciphertext total length: {}", data.len());
 
-    // Try parsing directly as EnvelopedData first (most common case)
-    match EnvelopedData::from_der(data) {
-        Ok(enveloped_data) => {
-            println!("✓ Successfully parsed as EnvelopedData directly");
-        }
-        Err(e) => {
-            println!("✗ Failed to parse as EnvelopedData directly: {}", e);
-        }
-    }
+    // AWS KMS PKCS#7 structure (with indefinite length):
+    // 30 80 - ContentInfo SEQUENCE (indefinite)
+    // 06 09 2a 86 48 86 f7 0d 01 07 03 - envelopedData OID
+    // a0 80 - context specific 0 (indefinite) - content
+    // 30 80 - EnvelopedData SEQUENCE (indefinite)
+    // 02 01 02 - version
+    // 31 ... - recipientInfos SET
+    // 30 ... - KeyTransRecipientInfo SEQUENCE
+    // ... 04 82 01 00 - OCTET STRING with the RSA-encrypted key (256 bytes for 2048-bit RSA)
 
-    if let Ok(enveloped_data) = EnvelopedData::from_der(data) {
-        // Get the first recipient info (AWS KMS typically only has one)
-        if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
-            if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
-                // Decrypt the symmetric key using RSA-OAEP with SHA-256
+    // Look for the pattern: 04 82 01 00 (OCTET STRING, definite length, 256 bytes)
+    // This is where the RSA-encrypted symmetric key is stored
+    for i in 0..data.len().saturating_sub(4) {
+        if data[i] == 0x04 && data[i + 1] == 0x82 && data[i + 2] == 0x01 && data[i + 3] == 0x00 {
+            // Found the OCTET STRING with 256 bytes (0x0100)
+            let key_start = i + 4;
+            let key_end = key_start + 256;
+
+            if key_end <= data.len() {
+                let encrypted_key = &data[key_start..key_end];
+                println!(
+                    "Found RSA-encrypted key at position {}, length: {}",
+                    key_start,
+                    encrypted_key.len()
+                );
+
+                // Try to decrypt the symmetric key using RSA-OAEP with SHA-256
                 let padding = Oaep::new::<Sha256>();
-                match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
-                    Ok(symmetric_key) => return Ok(symmetric_key),
+                match private_key.decrypt(padding, encrypted_key) {
+                    Ok(symmetric_key) => {
+                        println!(
+                            "✓ Successfully decrypted symmetric key (length: {})",
+                            symmetric_key.len()
+                        );
+                        return Ok(symmetric_key);
+                    }
                     Err(e) => {
-                        log_encryption_error(&format!("RSA decryption failed: {}", e));
+                        log_encryption_error(&format!(
+                            "RSA decryption failed for key at position {}: {}",
+                            key_start, e
+                        ));
+                        // Continue searching for other potential keys
+                        continue;
                     }
                 }
             }
         }
-        return Err(anyhow::anyhow!(
-            "No valid recipient info found in EnvelopedData"
-        ));
     }
 
-    // Fallback: try parsing as ContentInfo wrapper
-    match ContentInfo::from_der(data) {
-        Ok(content_info) => {
-            println!("✓ Successfully parsed as ContentInfo");
-            // Extract the content and try to parse as EnvelopedData
-            match EnvelopedData::from_der(content_info.content.value()) {
-                Ok(enveloped_data) => {
-                    println!("✓ Successfully extracted EnvelopedData from ContentInfo");
-                }
-                Err(e) => {
-                    println!("✗ Failed to parse EnvelopedData from ContentInfo: {}", e);
-                }
-            }
-        }
-        Err(e) => {
-            println!("✗ Failed to parse as ContentInfo: {}", e);
-        }
-    }
+    // Alternative: look for 04 81 patterns (OCTET STRING with length < 256)
+    // Some keys might be shorter
+    for i in 0..data.len().saturating_sub(3) {
+        if data[i] == 0x04 && data[i + 1] == 0x81 {
+            let key_length = data[i + 2] as usize;
+            if key_length >= 200 && key_length <= 256 {
+                // Reasonable range for RSA-2048 encrypted data
+                let key_start = i + 3;
+                let key_end = key_start + key_length;
 
-    if let Ok(content_info) = ContentInfo::from_der(data) {
-        // Extract the content and try to parse as EnvelopedData
-        if let Ok(enveloped_data) = EnvelopedData::from_der(content_info.content.value()) {
-            if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
-                if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
+                if key_end <= data.len() {
+                    let encrypted_key = &data[key_start..key_end];
+                    println!(
+                        "Found alternative RSA-encrypted key at position {}, length: {}",
+                        key_start,
+                        encrypted_key.len()
+                    );
+
                     let padding = Oaep::new::<Sha256>();
-                    match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
-                        Ok(symmetric_key) => return Ok(symmetric_key),
+                    match private_key.decrypt(padding, encrypted_key) {
+                        Ok(symmetric_key) => {
+                            println!(
+                                "✓ Successfully decrypted alternative symmetric key (length: {})",
+                                symmetric_key.len()
+                            );
+                            return Ok(symmetric_key);
+                        }
                         Err(e) => {
-                            log_encryption_error(&format!("RSA decryption failed: {}", e));
+                            log_encryption_error(&format!(
+                                "RSA decryption failed for alternative key at position {}: {}",
+                                key_start, e
+                            ));
+                            continue;
                         }
                     }
                 }
@@ -149,72 +174,48 @@ pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Resul
         }
     }
 
-    // Final fallback: try a more manual approach for indefinite length encoding
-    println!("Trying manual parsing approach for indefinite length encoding...");
+    // Final fallback: look for any OCTET STRING that might contain the key
+    // This is more aggressive and tries various length encodings
+    for i in 0..data.len().saturating_sub(200) {
+        if data[i] == 0x04 {
+            let mut key_start = i + 1;
+            let mut key_length = 0usize;
 
-    // The data starts with SEQUENCE (0x30) with indefinite length (0x80)
-    // This is a known issue with some PKCS#7 parsers
-    if data.len() > 10 && data[0] == 0x30 && data[1] == 0x80 {
-        // Convert indefinite length to definite length by finding the end-of-contents octets
-        let mut definite_length_data = Vec::new();
-        let mut i = 0;
-        let mut found_eoc = false;
-
-        while i < data.len() - 1 {
-            if data[i] == 0x00 && data[i + 1] == 0x00 {
-                // Found end-of-contents octets, calculate the actual length
-                let content_length = i - 2; // Subtract 2 for the SEQUENCE tag and length byte
-                definite_length_data.push(0x30); // SEQUENCE tag
-
-                // Encode the definite length
-                if content_length < 0x80 {
-                    definite_length_data.push(content_length as u8);
-                } else if content_length < 0x100 {
-                    definite_length_data.push(0x81);
-                    definite_length_data.push(content_length as u8);
-                } else if content_length < 0x10000 {
-                    definite_length_data.push(0x82);
-                    definite_length_data.push((content_length >> 8) as u8);
-                    definite_length_data.push((content_length & 0xFF) as u8);
-                } else {
-                    definite_length_data.push(0x83);
-                    definite_length_data.push((content_length >> 16) as u8);
-                    definite_length_data.push((content_length >> 8) as u8);
-                    definite_length_data.push((content_length & 0xFF) as u8);
+            // Parse length encoding
+            if i + 1 < data.len() {
+                if data[i + 1] & 0x80 == 0 {
+                    // Single byte length
+                    key_length = data[i + 1] as usize;
+                    key_start = i + 2;
+                } else if data[i + 1] == 0x82 && i + 3 < data.len() {
+                    // Two byte length
+                    key_length = ((data[i + 2] as usize) << 8) | (data[i + 3] as usize);
+                    key_start = i + 4;
+                } else if data[i + 1] == 0x81 && i + 2 < data.len() {
+                    // One byte length
+                    key_length = data[i + 2] as usize;
+                    key_start = i + 3;
                 }
 
-                // Add the content (skip the original indefinite length byte)
-                definite_length_data.extend_from_slice(&data[2..i]);
-                found_eoc = true;
-                break;
-            }
-            i += 1;
-        }
+                // Only try if length seems reasonable for RSA-encrypted data
+                if key_length >= 200 && key_length <= 512 {
+                    let key_end = key_start + key_length;
+                    if key_end <= data.len() {
+                        let encrypted_key = &data[key_start..key_end];
 
-        if found_eoc {
-            println!("Converted indefinite length to definite length, trying to parse again...");
-
-            // Try parsing the converted data as ContentInfo
-            if let Ok(content_info) = ContentInfo::from_der(&definite_length_data) {
-                println!("✓ Successfully parsed converted data as ContentInfo");
-                if let Ok(enveloped_data) = EnvelopedData::from_der(content_info.content.value()) {
-                    println!("✓ Successfully extracted EnvelopedData from converted ContentInfo");
-                    if let Some(recipient_info) = enveloped_data.recip_infos.0.get(0) {
-                        if let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient_info {
-                            let padding = Oaep::new::<Sha256>();
-                            match private_key.decrypt(padding, ktri.enc_key.as_bytes()) {
-                                Ok(symmetric_key) => {
-                                    println!(
-                                        "✓ Successfully decrypted symmetric key using converted data"
-                                    );
-                                    return Ok(symmetric_key);
-                                }
-                                Err(e) => {
-                                    log_encryption_error(&format!(
-                                        "RSA decryption failed on converted data: {}",
-                                        e
-                                    ));
-                                }
+                        let padding = Oaep::new::<Sha256>();
+                        match private_key.decrypt(padding, encrypted_key) {
+                            Ok(symmetric_key) => {
+                                println!(
+                                    "✓ Successfully decrypted fallback symmetric key at position {} (length: {})",
+                                    key_start,
+                                    symmetric_key.len()
+                                );
+                                return Ok(symmetric_key);
+                            }
+                            Err(_) => {
+                                // Silently continue for fallback attempts
+                                continue;
                             }
                         }
                     }
@@ -224,6 +225,6 @@ pub fn decrypt_kms_ciphertext(data: &[u8], private_key: &RsaPrivateKey) -> Resul
     }
 
     Err(anyhow::anyhow!(
-        "Failed to parse AWS KMS ciphertext as PKCS#7 EnvelopedData or ContentInfo (tried indefinite length conversion)"
+        "Failed to extract and decrypt RSA-encrypted symmetric key from AWS KMS PKCS#7 ciphertext"
     ))
 }
