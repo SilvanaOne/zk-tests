@@ -59,11 +59,6 @@ COPY --from=user-linux-nitro /linux.config .
 
 FROM base as build
 COPY . .
-RUN find /usr -name "*libclang*" 2>/dev/null || true
-RUN find /usr -name "libclang.so*" 2>/dev/null || true
-RUN find /lib -name "*libclang*" 2>/dev/null || true
-RUN ls -la /usr/lib/ | grep clang || echo "no clang libs in /usr/lib"
-RUN which clang && clang --version || echo "clang not working"
 RUN cargo build --workspace --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
 
