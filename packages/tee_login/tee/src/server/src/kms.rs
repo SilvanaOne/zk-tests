@@ -148,9 +148,9 @@ impl KMS {
     }
 
     /// Decrypt data using KMS
-    /// Uses "kms:Decrypt" policy
+    /// Uses "kms:Decrypt" policy with Nitro Enclaves attestation
     pub async fn decrypt(&self, encrypted_data: &EncryptedData) -> Result<Vec<u8>> {
-        // Decrypt the data key using KMS
+        // Decrypt the data key using KMS with Nitro Enclaves attestation
         println!("KMS: Decrypting data key...");
         let pair = match generate_kms_key_pair() {
             Ok(pair) => pair,
@@ -170,7 +170,7 @@ impl KMS {
             .attestation_document(Blob::new(attestation))
             .key_encryption_algorithm(KeyEncryptionMechanism::RsaesOaepSha256)
             .build();
-        //println!("Recipient: {:?}", recipient);
+
         let decrypt_response = match self
             .client
             .decrypt()
@@ -187,7 +187,7 @@ impl KMS {
         };
         println!("Decrypt response: {:?}", decrypt_response);
 
-        // Extract the plaintext data key
+        // Extract the ciphertext for recipient and decrypt it manually
         let ciphertext_for_recipient = match decrypt_response.ciphertext_for_recipient {
             Some(ciphertext_for_recipient) => ciphertext_for_recipient,
             None => {
@@ -207,6 +207,12 @@ impl KMS {
                     return Err(anyhow!("Failed to decrypt KMS data key E303: {:?}", e));
                 }
             };
+
+        self.complete_decryption(encrypted_data, plaintext_key).await
+    }
+
+    /// Helper method to complete the decryption process with the AES key
+    async fn complete_decryption(&self, encrypted_data: &EncryptedData, plaintext_key: Vec<u8>) -> Result<Vec<u8>> {
         println!(
             "Decryption - Decrypted data key: {:?}",
             hex::encode(&plaintext_key)
@@ -242,10 +248,6 @@ impl KMS {
                 "Key verification failed: KMS decrypted AES key does not match stored plaintext data key"
             ));
         }
-
-        // let plaintext_key = decrypt_response
-        //     .plaintext()
-        //     .ok_or_else(|| anyhow!("No plaintext key returned from KMS decrypt"))?;
 
         // Use the decrypted key for AES-GCM decryption
         let cipher = match Aes256Gcm::new_from_slice(plaintext_key.as_ref())
