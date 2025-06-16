@@ -3653,6 +3653,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "aes-gcm",
  "anyhow",
  "aws-config",
@@ -3668,6 +3669,7 @@ dependencies = [
  "bip39",
  "bs58 0.5.1",
  "bytes",
+ "cbc",
  "chrono",
  "cms",
  "der 0.7.10",

@@ -48,4 +48,6 @@ hex = "0.4"
 zeroize = "1.8.1"
 cms = { version = "0.2", default-features = false, features = ["aes", "cbc", "rsa", "sha2"] }
 der = "0.7"
+aes = "0.8"
+cbc = "0.1"
 
