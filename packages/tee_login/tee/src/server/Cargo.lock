@@ -3677,6 +3677,7 @@ dependencies = [
  "hex",
  "libc",
  "num_cpus",
+ "pkcs1 0.7.5",
  "rand 0.8.5",
  "reqwest",
  "rsa 0.9.8",

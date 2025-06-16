@@ -1,8 +1,8 @@
 use crate::EnclaveError;
 use nsm_api::api::{Request as NsmRequest, Response as NsmResponse};
 use nsm_api::driver;
+use pkcs1::EncodeRsaPublicKey;
 use rsa::RsaPublicKey;
-use rsa::pkcs8::EncodePublicKey;
 use serde_bytes::ByteBuf;
 use tracing::info;
 
@@ -11,8 +11,12 @@ pub fn get_kms_attestation(public_key: &RsaPublicKey) -> Result<Vec<u8>, Enclave
 
     let fd = driver::nsm_init();
     // Send attestation request to NSM driver with public key set.
-    let public_key_der = public_key.to_public_key_der().map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to encode KMS public key: {}", e))
+    // AWS KMS expects the RSA public key in PKCS#1 DER format, not SPKI format
+    let public_key_der = public_key.to_pkcs1_der().map_err(|e| {
+        EnclaveError::GenericError(format!(
+            "Failed to encode KMS public key to PKCS#1 DER: {}",
+            e
+        ))
     })?;
 
     let request = NsmRequest::Attestation {

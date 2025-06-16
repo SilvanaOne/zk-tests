@@ -3,7 +3,7 @@
 jobs = 16                 # match vCPU count
 rustflags = [
   "-Ctarget-cpu=native",
-  "-Ccodegen-units=256",
+  "-Ccodegen-units=16",
   "-Ctarget-feature=+crt-static",
   "-Crelocation-model=static"
 ]
