@@ -67,8 +67,9 @@ fn verify_secure(
     }
 
     let scheme_byte = decoded[0];
-    println!("scheme_byte: {:?}", scheme_byte);
+
     if scheme_byte != 0 {
+        println!("scheme_byte: {:?}", scheme_byte);
         return Err("Only Ed25519 signatures supported".into());
     }
 
