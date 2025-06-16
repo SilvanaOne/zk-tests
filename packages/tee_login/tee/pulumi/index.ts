@@ -289,7 +289,7 @@ export = async () => {
 
     // Configure root volume (200GB)
     rootBlockDevice: {
-      volumeSize: 30,
+      volumeSize: 30, // TODO: increase to 200GB
       volumeType: "gp3",
       deleteOnTermination: true,
     },

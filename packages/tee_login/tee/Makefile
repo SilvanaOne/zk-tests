@@ -19,6 +19,9 @@ out/enclaveos.tar: out \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
 		.
+	@echo "Pruning Docker artifacts..."
+	docker image prune -f
+	docker container prune -f
 
 .PHONY: run
 run: out/nitro.eif

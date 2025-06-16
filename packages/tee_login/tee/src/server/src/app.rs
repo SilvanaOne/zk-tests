@@ -11,6 +11,7 @@ use axum::extract::State;
 use serde::{Deserialize, Serialize};
 //use serde_json::Value;
 use std::sync::Arc;
+use tracing::info;
 
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,7 +31,7 @@ pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<LoginRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<LoginResponse>>>, EnclaveError> {
-    println!("Login endpoint called");
+    info!("Login endpoint called");
     let login_response = process_login(request.payload, &state.db_store).await?;
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -58,18 +59,18 @@ pub async fn ping(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<PingRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<PingResponse>>>, EnclaveError> {
-    println!("Ping endpoint called");
-    println!("Ping request: {:?}", request.payload.memo);
+    info!("Ping endpoint called");
+    info!("Ping request: {:?}", request.payload.memo);
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
-    println!("Current timestamp: {:?}", current_timestamp);
+    info!("Current timestamp: {:?}", current_timestamp);
     let ping_response = PingResponse {
         memo: "pong".to_string(),
         timestamp: current_timestamp,
     };
-    println!("Ping response: {:?}", ping_response);
+    info!("Ping response: {:?}", ping_response);
 
     Ok(Json(to_signed_response(
         &state.eph_kp,
@@ -82,7 +83,7 @@ pub async fn ping(
 pub fn get_worker_stats() -> StartStats {
     let cpu_cores = num_cpus::get() as u64;
     let mem_info = sys_info::mem_info();
-    println!("mem_info: {:?}", mem_info);
+    info!("mem_info: {:?}", mem_info);
     let memory = sys_info::mem_info().map(|info| info.total).unwrap_or(0);
 
     StartStats { cpu_cores, memory }

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::info;
+use tracing::{error, info};
 
 use fastcrypto::ed25519::Ed25519Signature;
 
@@ -210,7 +210,7 @@ pub async fn health_check(
             }
         }
         Err(e) => {
-            info!("Failed to read allowed_endpoints.yaml: {}", e);
+            error!("Failed to read allowed_endpoints.yaml: {}", e);
             HashMap::new()
         }
     };

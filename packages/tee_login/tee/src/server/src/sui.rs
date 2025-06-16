@@ -4,6 +4,7 @@ use fastcrypto::hash::{Blake2b256, HashFunction};
 use fastcrypto::traits::ToFromBytes;
 use fastcrypto::traits::VerifyingKey;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use tracing::{error, info};
 
 // pub struct Ed25519SuiSignature(
 //     #[schemars(with = "Base64")]
@@ -19,7 +20,7 @@ pub async fn verify_signature(
     signature_base64: &str,
     message: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    println!(
+    info!(
         "Sui verify signature: {:?}",
         (address, signature_base64, message)
     );
@@ -31,7 +32,7 @@ pub async fn verify_signature(
     let ok = verify_personal_message_signature(signature_base64, bytes, address)
         .await
         .is_ok();
-    println!("Sui verify signature result: {:?}", ok);
+    info!("Sui verify signature result: {:?}", ok);
     Ok(ok)
 }
 
@@ -69,7 +70,7 @@ fn verify_secure(
     let scheme_byte = decoded[0];
 
     if scheme_byte != 0 {
-        println!("scheme_byte: {:?}", scheme_byte);
+        error!("scheme_byte: {:?}", scheme_byte);
         return Err("Only Ed25519 signatures supported".into());
     }
 
@@ -82,8 +83,8 @@ fn verify_secure(
     let recovered_address = get_address(&pk);
 
     if recovered_address != address {
-        println!("recovered_address: {:?}", recovered_address);
-        println!("address: {:?}", address);
+        error!("recovered_address: {:?}", recovered_address);
+        error!("address: {:?}", address);
         return Ok(false);
     }
 

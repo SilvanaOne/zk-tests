@@ -11,6 +11,7 @@ use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 //use serde_json::Value;
 use std::sync::Arc;
+use tracing::info;
 
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -26,14 +27,14 @@ pub struct Stats {
 pub async fn stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<Stats>>>, EnclaveError> {
-    println!("Getting worker stats");
+    info!("Getting worker stats");
     let stats = get_worker_stats()?;
-    println!("Stats: {:?}", stats);
+    info!("Stats: {:?}", stats);
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
-    println!("Current timestamp: {}", current_timestamp);
+    info!("Current timestamp: {}", current_timestamp);
     Ok(Json(to_signed_response(
         &state.eph_kp,
         stats,
@@ -45,7 +46,7 @@ pub async fn stats(
 pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
     let cpu_cores = num_cpus::get() as u64;
     let mem_info = sys_info::mem_info();
-    println!("mem_info: {:?}", mem_info);
+    info!("mem_info: {:?}", mem_info);
     let memory = sys_info::mem_info().map(|info| info.total).unwrap_or(0);
     let available_memory = sys_info::mem_info().map(|info| info.avail).unwrap_or(0);
     let free_memory = sys_info::mem_info().map(|info| info.free).unwrap_or(0);

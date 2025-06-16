@@ -9,7 +9,7 @@ use crate::shamir::split_mnemonic;
 use crate::solana;
 use crate::sui;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LoginRequest {
@@ -40,8 +40,11 @@ pub async fn process_login(
         "Processing login request for chain: {}, wallet: {}, address: {}",
         login_request.chain, login_request.wallet, login_request.address
     );
-    println!("Login request nonce: {}", login_request.nonce);
-    println!("Current timestamp: {}", chrono::Utc::now().timestamp_millis());
+    info!("Login request nonce: {}", login_request.nonce);
+    info!(
+        "Current timestamp: {}",
+        chrono::Utc::now().timestamp_millis()
+    );
     if login_request.nonce > chrono::Utc::now().timestamp_millis() as u64 {
         return Ok(LoginResponse {
             success: false,
@@ -61,7 +64,7 @@ pub async fn process_login(
     }
 
     let (ok, error) = verify(&login_request).await;
-    println!("Verification result: ok={}, error={:?}", ok, error);
+    info!("Verification result: ok={}, error={:?}", ok, error);
     info!("Verification result: ok={}, error={:?}", ok, error);
     let mut data: Option<Vec<String>> = None;
     let mut indexes: Option<Vec<u32>> = None;
@@ -87,7 +90,7 @@ pub async fn process_login(
                         log_database_error("update", &error_msg);
                     }
                 } else {
-                    info!("Nonce is less than the existing nonce, returning error");
+                    error!("Nonce is less than the existing nonce, returning error");
                     return Ok(LoginResponse {
                         success: false,
                         data: None,

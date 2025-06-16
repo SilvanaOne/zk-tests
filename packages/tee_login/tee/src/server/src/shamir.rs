@@ -51,7 +51,7 @@ mod tests {
         // Recover the mnemonic from the threshold shares
         let recovered_string =
             recover_mnemonic(&subset_shares).expect("Failed to recover mnemonic");
-        println!("recovered_string: {}", recovered_string);
+
         // Verify the recovered mnemonic matches the original
         assert_eq!(original_string, recovered_string);
     }

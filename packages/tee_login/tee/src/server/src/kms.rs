@@ -14,13 +14,11 @@ use aws_sdk_kms::{
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 /// Encrypted data container that includes both the encrypted data key and the encrypted content
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedData {
-    /// The plaintext data key from KMS (AES-256 symmetric key, stored for verification)
-    pub plaintext_data_key: Vec<u8>,
     /// The encrypted data key from KMS (ciphertext blob for storage/later decryption)
     pub encrypted_data_key: Vec<u8>,
     /// The actual data encrypted with the plaintext data key
@@ -37,16 +35,16 @@ pub struct KMS {
 
 impl KMS {
     pub async fn new(key_id: impl Into<String>) -> Result<Self> {
-        println!("Initializing KMS...");
+        info!("Initializing KMS...");
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
-        println!("Creating KMS client...");
+        info!("Creating KMS client...");
         let client = Client::new(&shared_cfg);
-        println!("KMS: Client created");
+        info!("KMS: Client created");
 
-        // println!("Resolving key ID...");
+        // info!("Resolving key ID...");
         // // Resolve the key name to actual key ID
         // let key_id = Self::resolve_key_id(&client, &key_name).await?;
-        // println!("Key ID resolved: {}", key_id);
+        // info!("Key ID resolved: {}", key_id);
 
         Ok(Self {
             client: Arc::new(client),
@@ -92,11 +90,8 @@ impl KMS {
     //     Ok(key_id.to_string())
     // }
 
-    /// Encrypt data using standard KMS data key
-    /// Uses "kms:GenerateDataKey*" policy (standard, not Nitro Enclaves)
     pub async fn encrypt(&self, data: &[u8]) -> Result<EncryptedData> {
-        // Generate a data key from KMS using standard flow
-        println!("KMS: Generating data key (standard)...");
+        info!("KMS: Generating data key...");
         let data_key_response = self
             .client
             .generate_data_key()
@@ -106,7 +101,6 @@ impl KMS {
             .await
             .map_err(|e| anyhow!("Failed to generate KMS data key: {}", e))?;
 
-        // Extract the plaintext and encrypted data key (standard KMS flow)
         let plaintext_key = data_key_response
             .plaintext()
             .ok_or_else(|| anyhow!("No plaintext key returned from KMS"))?;
@@ -115,32 +109,30 @@ impl KMS {
             .ciphertext_blob()
             .ok_or_else(|| anyhow!("No encrypted data key returned from KMS"))?;
 
-        // Debug: log the plaintext key for verification
-        println!("Encryption - Plaintext key: {:?}", plaintext_key.as_ref());
-
         // Use the plaintext key for AES-GCM encryption
-        let cipher = Aes256Gcm::new_from_slice(plaintext_key.as_ref())
-            .map_err(|e| anyhow!("Failed to create AES cipher: {}", e))?;
+        let cipher = match Aes256Gcm::new_from_slice(plaintext_key.as_ref()) {
+            Ok(cipher) => cipher,
+            Err(e) => {
+                error!("KMS: Failed to create AES cipher: {:?}", e);
+                return Err(anyhow!("Failed to create AES cipher: {:?}", e));
+            }
+        };
 
         // Generate a random nonce
         let mut nonce_bytes = [0u8; 12]; // 96-bit nonce for GCM
         rand::thread_rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        println!("Encryption - Nonce: {:?}", nonce_bytes);
-
         // Encrypt the data
-        let encrypted_content = cipher
-            .encrypt(nonce, data)
-            .map_err(|e| anyhow!("Failed to encrypt data: {}", e))?;
-
-        println!(
-            "KMS: Data encrypted with key: {:?}",
-            hex::encode(plaintext_key.as_ref())
-        );
+        let encrypted_content = match cipher.encrypt(nonce, data) {
+            Ok(encrypted_content) => encrypted_content,
+            Err(e) => {
+                error!("KMS: Failed to encrypt data: {:?}", e);
+                return Err(anyhow!("Failed to encrypt data: {:?}", e));
+            }
+        };
 
         Ok(EncryptedData {
-            plaintext_data_key: plaintext_key.as_ref().to_vec(),
             encrypted_data_key: encrypted_data_key.as_ref().to_vec(),
             encrypted_content,
             nonce: nonce_bytes.to_vec(),
@@ -151,18 +143,18 @@ impl KMS {
     /// Uses "kms:Decrypt" policy with Nitro Enclaves attestation
     pub async fn decrypt(&self, encrypted_data: &EncryptedData) -> Result<Vec<u8>> {
         // Decrypt the data key using KMS with Nitro Enclaves attestation
-        println!("KMS: Decrypting data key...");
+        info!("KMS: Decrypting data key...");
         let pair = match generate_kms_key_pair() {
             Ok(pair) => pair,
             Err(e) => {
-                println!("KMS: Failed to generate KMS key pair: {:?}", e);
+                error!("KMS: Failed to generate KMS key pair: {:?}", e);
                 return Err(anyhow!("Failed to generate KMS key pair: {:?}", e));
             }
         };
         let attestation = match get_kms_attestation(&pair.public_key) {
             Ok(attestation) => attestation,
             Err(e) => {
-                println!("KMS: Failed to get KMS attestation: {:?}", e);
+                error!("KMS: Failed to get KMS attestation: {:?}", e);
                 return Err(anyhow!("Failed to get KMS attestation: {:?}", e));
             }
         };
@@ -181,81 +173,46 @@ impl KMS {
         {
             Ok(decrypt_response) => decrypt_response,
             Err(e) => {
-                println!("KMS: Failed to decrypt KMS data key E302: {:?}", e);
+                error!("KMS: Failed to decrypt KMS data key E302: {:?}", e);
                 return Err(anyhow!("Failed to decrypt KMS data key E302: {:?}", e));
             }
         };
-        println!("Decrypt response: {:?}", decrypt_response);
 
-        // Extract the ciphertext for recipient and decrypt it manually
         let ciphertext_for_recipient = match decrypt_response.ciphertext_for_recipient {
             Some(ciphertext_for_recipient) => ciphertext_for_recipient,
             None => {
-                println!("KMS: No ciphertext for recipient returned from KMS decrypt");
+                error!("KMS: No ciphertext for recipient returned from KMS decrypt");
                 return Err(anyhow!(
                     "No ciphertext for recipient returned from KMS decrypt"
                 ));
             }
         };
-        println!("Ciphertext for recipient: {:?}", ciphertext_for_recipient);
 
         let plaintext_key =
             match decrypt_kms_ciphertext(ciphertext_for_recipient.as_ref(), &pair.private_key) {
                 Ok(plaintext_key) => plaintext_key,
                 Err(e) => {
-                    println!("KMS: Failed to decrypt KMS data key E303: {:?}", e);
+                    error!("KMS: Failed to decrypt KMS data key E303: {:?}", e);
                     return Err(anyhow!("Failed to decrypt KMS data key E303: {:?}", e));
                 }
             };
 
-        self.complete_decryption(encrypted_data, plaintext_key).await
+        self.complete_decryption(encrypted_data, plaintext_key)
+            .await
     }
 
     /// Helper method to complete the decryption process with the AES key
-    async fn complete_decryption(&self, encrypted_data: &EncryptedData, plaintext_key: Vec<u8>) -> Result<Vec<u8>> {
-        println!(
-            "Decryption - Decrypted data key: {:?}",
-            hex::encode(&plaintext_key)
-        );
-        println!(
-            "Decryption - Stored plaintext data key: {:?}",
-            hex::encode(&encrypted_data.plaintext_data_key)
-        );
-
-        // Verify that the decrypted key matches the plaintext data key from original encryption
-        if plaintext_key == encrypted_data.plaintext_data_key {
-            info!(
-                "✓ Key verification successful: KMS decrypted key matches stored plaintext data key"
-            );
-            debug!(
-                "Key match - Stored plaintext: {}, KMS decrypted: {}",
-                hex::encode(&encrypted_data.plaintext_data_key),
-                hex::encode(&plaintext_key)
-            );
-        } else {
-            error!(
-                "✗ Key verification FAILED: KMS decrypted key does not match stored plaintext data key"
-            );
-            error!(
-                "  Expected (stored plaintext): {}",
-                hex::encode(&encrypted_data.plaintext_data_key)
-            );
-            error!(
-                "  Got (KMS decrypted):         {}",
-                hex::encode(&plaintext_key)
-            );
-            return Err(anyhow!(
-                "Key verification failed: KMS decrypted AES key does not match stored plaintext data key"
-            ));
-        }
-
-        // Use the decrypted key for AES-GCM decryption
+    async fn complete_decryption(
+        &self,
+        encrypted_data: &EncryptedData,
+        plaintext_key: Vec<u8>,
+    ) -> Result<Vec<u8>> {
         let cipher = match Aes256Gcm::new_from_slice(plaintext_key.as_ref())
             .map_err(|e| anyhow!("Failed to create AES cipher: {}", e))
         {
             Ok(cipher) => cipher,
             Err(e) => {
-                println!("KMS: Failed to create AES cipher: {:?}", e);
+                error!("KMS: Failed to create AES cipher: {:?}", e);
                 return Err(anyhow!("Failed to create AES cipher: {:?}", e));
             }
         };
@@ -269,23 +226,17 @@ impl KMS {
         }
         let nonce = Nonce::from_slice(&encrypted_data.nonce);
 
-        println!("Decryption - Nonce: {:?}", encrypted_data.nonce);
-        println!(
-            "Decryption - Encrypted content length: {}",
-            encrypted_data.encrypted_content.len()
-        );
-
         // Decrypt the data
         let decrypted_data = match cipher.decrypt(nonce, encrypted_data.encrypted_content.as_ref())
         {
             Ok(decrypted_data) => decrypted_data,
             Err(e) => {
-                println!("KMS: Failed to decrypt data: {:?}", e);
+                error!("KMS: Failed to decrypt data: {:?}", e);
                 return Err(anyhow!("Failed to decrypt data: {:?}", e));
             }
         };
 
-        println!("KMS: Data decrypted");
+        info!("KMS: Data decrypted");
 
         Ok(decrypted_data)
     }
