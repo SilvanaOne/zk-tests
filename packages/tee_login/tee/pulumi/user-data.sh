@@ -12,6 +12,8 @@ sudo systemctl start docker && sudo systemctl enable docker
 sudo systemctl enable nitro-enclaves-vsock-proxy.service
 echo "- {address: dynamodb.us-east-1.amazonaws.com, port: 443}" | sudo tee -a /etc/nitro_enclaves/vsock-proxy.yaml
 echo "- {address: kms.us-east-1.amazonaws.com, port: 443}" | sudo tee -a /etc/nitro_enclaves/vsock-proxy.yaml
+echo "- {address: www.googleapis.com, port: 443}" | sudo tee -a /etc/nitro_enclaves/vsock-proxy.yaml
+echo "- {address: api.github.com, port: 443}" | sudo tee -a /etc/nitro_enclaves/vsock-proxy.yaml
 
 # Stop the allocator so we can modify its configuration
 sudo systemctl stop nitro-enclaves-allocator.service
@@ -31,4 +33,8 @@ sudo systemctl start nitro-enclaves-allocator.service && sudo systemctl enable n
 # Restart vsock-proxy processes for various endpoints.
 vsock-proxy 8101 dynamodb.us-east-1.amazonaws.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
 vsock-proxy 8102 kms.us-east-1.amazonaws.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8103 www.googleapis.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+vsock-proxy 8104 api.github.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
+
+
 

@@ -99,13 +99,29 @@ pub async fn get_attestation(
 ) -> Result<Json<GetAttestationResponse>, EnclaveError> {
     info!("get attestation called");
 
-    let pk = state.eph_kp.public();
+    let pk = state.keys.sui_keypair.public();
     let fd = driver::nsm_init();
+    let addresses = match bincode::serialize(&state.keys.to_addresses()) {
+        Ok(addresses) => addresses,
+        Err(e) => {
+            error!("Failed to serialize addresses: {}", e);
+            return Err(EnclaveError::GenericError(format!(
+                "Failed to serialize addresses: {}",
+                e
+            )));
+        }
+    };
 
     // Send attestation request to NSM driver with public key set.
     let request = NsmRequest::Attestation {
-        user_data: None,
-        nonce: None,
+        user_data: Some(ByteBuf::from(addresses)),
+        nonce: Some(ByteBuf::from(
+            chrono::Utc::now()
+                .timestamp_millis()
+                .to_string()
+                .as_bytes()
+                .to_vec(),
+        )),
         public_key: Some(ByteBuf::from(pk.as_bytes().to_vec())),
     };
 
@@ -140,7 +156,7 @@ pub struct HealthCheckResponse {
 pub async fn health_check(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<HealthCheckResponse>, EnclaveError> {
-    let pk = state.eph_kp.public();
+    let pk = state.keys.sui_keypair.public();
 
     // Create HTTP client with timeout
     let client = Client::builder()

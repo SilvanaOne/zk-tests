@@ -12,11 +12,11 @@
 
 use anyhow::Result;
 use axum::{Router, routing::get, routing::post};
-use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use server::AppState;
 use server::app::{login, ping};
 use server::common::{get_attestation, health_check};
 use server::dynamodb::DynamoDB;
+use server::keys::Keys;
 use server::stats::stats;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
@@ -42,8 +42,11 @@ async fn main() -> Result<()> {
 
     info!("Starting Silvana TEE Login server...");
     debug!("Tracing initialized with all log levels: error, warn, info, debug, trace");
-    let eph_kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
-    debug!("Generated ephemeral key pair for session");
+    let keys = Keys::new();
+    info!(
+        "Generated ephemeral key pair for session: {:?}",
+        keys.to_addresses()
+    );
 
     // Initialize the database
     info!("Loading environment configuration...");
@@ -72,7 +75,7 @@ async fn main() -> Result<()> {
     };
 
     info!("Creating app state...");
-    let state = Arc::new(AppState { eph_kp, db_store });
+    let state = Arc::new(AppState { keys, db_store });
 
     info!("Setting up CORS...");
     // Define your own restricted CORS policy here if needed.

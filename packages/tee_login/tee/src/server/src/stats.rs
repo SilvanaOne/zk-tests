@@ -36,7 +36,7 @@ pub async fn stats(
         .as_millis() as u64;
     info!("Current timestamp: {}", current_timestamp);
     Ok(Json(to_signed_response(
-        &state.eph_kp,
+        &state.keys.sui_keypair,
         stats,
         current_timestamp,
         IntentScope::Stats,
