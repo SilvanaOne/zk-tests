@@ -3,14 +3,18 @@ import { getWallets } from "@mysten/wallet-standard";
 import { useEffect, useState } from "react";
 import { connectPhantom, signPhantomMessage } from "@/lib/phantom";
 import { connectSolflare, signSolflareMessage } from "@/lib/solflare";
+import { connectMetaMask, signMetaMaskMessage } from "@/lib/metamask";
 import {
   login,
   getMessage,
   LoginRequest,
   UnsignedLoginRequest,
+  LoginResponse,
 } from "@/lib/login";
 import { rust_add } from "@/lib/precompiles";
 import { importWalletByMnemonic } from "@/lib/seed";
+import { AuthComponent, SocialLoginFunction } from "@/components/auth/auth";
+import { useSession } from "next-auth/react";
 
 export default function Home() {
   const [chain, setChain] = useState<string | undefined>(undefined);
@@ -29,6 +33,16 @@ export default function Home() {
     request: LoginRequest;
     privateKey: CryptoKey;
   } | null>(null);
+  const [user, setUser] = useState<any | null>(null);
+
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (session) {
+      console.log("Session", session);
+      setUser(session);
+    }
+  }, [session]);
 
   useEffect(() => {
     if (loginData) {
@@ -70,6 +84,28 @@ export default function Home() {
     setPublicKey(null);
     setPrivateKey(null);
   }
+
+  const socialLogin: SocialLoginFunction = async (params) => {
+    const { address, seed, result, provider } = params;
+    clear();
+    setChain("Social login");
+    setWallet(provider === "google" ? "Google" : "GitHub");
+    setAddress(address);
+    console.log(`${provider} login result:`, result);
+    setSeed(result.seed);
+    setError(result.error);
+    setLoginSuccess(result.success);
+    setShares(result.indexes);
+    if (result.seed) {
+      const { privateKey, publicKey, hdIndex } = await importWalletByMnemonic(
+        result.seed
+      );
+      setPrivateKey(privateKey);
+      setPublicKey(publicKey);
+    }
+    setLoginData(null);
+    setLoginProcessing(false);
+  };
 
   const handlePhantomSuiClick = async () => {
     clear();
@@ -162,6 +198,107 @@ export default function Home() {
     console.log("Solana Public key", publicKey);
     const signature = (signedMessage as any)?.signature?.toString("hex");
     console.log("Solana Signature", signature);
+    setSignature(signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
+  };
+
+  const handlePhantomEthereumClick = async () => {
+    clear();
+    console.log("Phantom Ethereum button clicked");
+    setChain("ethereum");
+    setWallet("Phantom");
+
+    const address = await connectPhantom("ethereum");
+    console.log("Ethereum Address", address);
+    setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
+
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "ethereum",
+      wallet: "Phantom",
+      address,
+    });
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
+
+    const signedMessage = await signPhantomMessage({
+      chain: "ethereum",
+      message: msgData.request.message,
+      display: "utf8",
+    });
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
+    console.log("Ethereum Signed message", signedMessage);
+    const publicKey = (signedMessage as any)?.publicKey?.toString();
+    console.log("Ethereum address", address);
+    const signature = signedMessage;
+    console.log("Ethereum Signature", signature);
+    setSignature(signature);
+    const request: LoginRequest = {
+      ...msgData.request,
+      signature,
+    };
+    setLoginData({
+      request,
+      privateKey: msgData.privateKey,
+    });
+  };
+
+  const handleMetaMaskClick = async () => {
+    clear();
+    console.log("MetaMask button clicked");
+    setChain("ethereum");
+    setWallet("MetaMask");
+
+    const address = await connectMetaMask();
+    console.log("Ethereum Address", address);
+    setAddress(address);
+    if (!address) {
+      setError("No address");
+      return;
+    }
+
+    const msgData = await getMessage({
+      login_type: "wallet",
+      chain: "ethereum",
+      wallet: "MetaMask",
+      address,
+    });
+    if (!msgData) {
+      setError("No request");
+      return;
+    }
+    setMessage(msgData.request.message);
+
+    const signedMessage = await signMetaMaskMessage({
+      message: msgData.request.message,
+      display: "utf8",
+    });
+    if (!signedMessage) {
+      setError("User rejected message");
+      return;
+    }
+    console.log("Ethereum MetaMask Signed message", signedMessage);
+    const publicKey = address;
+    console.log("Ethereum MetaMask address", publicKey);
+    const signature = signedMessage;
+    console.log("Ethereum MetaMask Signature", signature);
     setSignature(signature);
     const request: LoginRequest = {
       ...msgData.request,
@@ -415,6 +552,24 @@ export default function Home() {
             </button>
           </div>
         </div>
+        <div className="flex flex-col gap-4">
+          <h2 className="text-lg font-semibold mb-2">Ethereum Wallets</h2>
+          <div className="flex gap-4 items-center flex-col sm:flex-row">
+            <button
+              onClick={handlePhantomEthereumClick}
+              className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
+            >
+              Phantom
+            </button>
+            <button
+              onClick={handleMetaMaskClick}
+              className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
+            >
+              MetaMask
+            </button>
+          </div>
+        </div>
+        <AuthComponent socialLogin={socialLogin} />
       </main>
     </div>
   );

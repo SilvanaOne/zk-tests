@@ -130,7 +130,7 @@ export async function login(params: {
     };
   }
   try {
-    console.time("Login request");
+    console.log("Login request", params.request);
     console.log("endpoint", endpoint);
     const response = await fetch(endpoint, {
       method: "POST",

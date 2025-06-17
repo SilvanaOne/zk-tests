@@ -111,7 +111,7 @@ export = async () => {
             // Condition: {
             //   StringEqualsIgnoreCase: {
             //     "kms:RecipientAttestation:ImageSha384":
-            //       "6522d6093479ba18f09bff60f67f0f2e48876c4d757b4bbdeec336edb38a15a8335c3924eeaf923a7dd20a5e064de5f6",
+            //       "0ddb90f647b8735da8f9bee096ad7589b2de2f69f5b5a530c1c1c6aee1018eb09db706d6df8bc910b62f07c79db196a1",
             //     // "kms:RecipientAttestation:PCR1":
             //     //   "0x6522d6093479ba18f09bff60f67f0f2e48876c4d757b4bbdeec336edb38a15a8335c3924eeaf923a7dd20a5e064de5f6",
             //     // "kms:RecipientAttestation:PCR2":

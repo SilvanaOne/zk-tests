@@ -1,3 +1,4 @@
+use crate::auth::{ethereum, github, google, solana, sui};
 use crate::db::{Key, Share, Value};
 use crate::dynamodb::DynamoDB;
 use crate::encrypt::encrypt_shares;
@@ -5,10 +6,8 @@ use crate::hash::hash_login_request;
 use crate::logger::{log_database_error, log_encryption_error, log_verification_error};
 use crate::seed::generate_seed;
 use crate::shamir::split_mnemonic;
-use crate::solana;
-use crate::sui;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LoginRequest {
@@ -56,42 +55,65 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
             success: false,
             data: None,
             indexes: None,
-            error: Some("Hash error E103".into()),
+            error: Some("Hash error E102".into()),
         };
     }
 
-    let (ok, error) = verify(&login_request).await;
-    info!("Verification result: ok={}, error={:?}", ok, error);
+    let verification_result = verify(&login_request).await;
+    info!(
+        "Verification result: ok={}, error={:?}",
+        verification_result.is_valid, verification_result.error
+    );
+    let address = if verification_result.address.is_some() {
+        verification_result.address.unwrap()
+    } else {
+        login_request.address.clone()
+    };
+    let request_nonce = if verification_result.nonce.is_some() {
+        verification_result.nonce.unwrap()
+    } else {
+        login_request.nonce
+    };
+
+    if verification_result.nonce.is_some()
+        && verification_result.nonce.unwrap() > chrono::Utc::now().timestamp_millis() as u64
+    {
+        return LoginResponse {
+            success: false,
+            data: None,
+            indexes: None,
+            error: Some("Nonce error E103".into()),
+        };
+    }
+
     let mut data: Option<Vec<String>> = None;
     let mut indexes: Option<Vec<u32>> = None;
-    if ok {
+    if verification_result.is_valid {
         // Create a key from the login request
         let key = Key {
+            login_type: login_request.login_type.clone(),
             chain: login_request.chain.clone(),
             wallet: login_request.wallet.clone(),
-            address: login_request.address.clone(),
+            address: address.clone(),
         };
 
         // Try to get existing data from the database
         match db.read(&key).await {
             Ok(Some((value, nonce))) => {
-                info!(
-                    "Found existing data in database for address: {}",
-                    login_request.address
-                );
-                if login_request.nonce > nonce {
+                info!("Found existing data in database for address: {}", &address);
+                if request_nonce > nonce {
                     info!("Nonce is greater than the existing nonce, updating the database");
-                    if let Err(e) = db.update(&key, login_request.nonce).await {
+                    if let Err(e) = db.update(&key, request_nonce).await {
                         let error_msg = format!("Failed to update database: {}", e);
                         log_database_error("update", &error_msg);
                     }
                 } else {
-                    info!("Nonce is less than the existing nonce, returning error");
+                    error!("Nonce is less than the existing nonce, returning error");
                     return LoginResponse {
                         success: false,
                         data: None,
                         indexes: None,
-                        error: Some("Nonce error E102".into()),
+                        error: Some("Nonce error E104".into()),
                     };
                 }
                 let filtered_shares: Vec<Share> = value
@@ -208,34 +230,72 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
     }
 
     LoginResponse {
-        success: ok,
+        success: verification_result.is_valid,
         data,
         indexes,
-        error,
+        error: verification_result.error,
     }
 }
 
-async fn verify(request: &LoginRequest) -> (bool, Option<String>) {
+pub struct VerifyResult {
+    pub is_valid: bool,
+    pub address: Option<String>,
+    pub nonce: Option<u64>,
+    pub error: Option<String>,
+}
+
+async fn verify(request: &LoginRequest) -> VerifyResult {
     let message = &request.message;
-    let address = &request.address;
     let signature = &request.signature;
-    let result = match request.chain.as_str() {
-        "solana" => solana::verify_signature(address, signature, message),
-        "sui" => sui::verify_signature(address, signature, message).await,
-        _ => return (false, Some("Invalid chain".into())),
-    };
-    match result {
-        Ok(is_valid) => {
-            if is_valid {
-                (true, None)
-            } else {
-                (false, Some("Invalid signature".into()))
+    let address = &request.address;
+    let result: Result<VerifyResult, Box<dyn std::error::Error>> = match request.login_type.as_str()
+    {
+        "social" => match request.chain.as_str() {
+            "google" => google::verify_signature(&request.address, signature, message).await,
+            "github" => github::verify_signature(&request.address, signature, message).await,
+            _ => {
+                return VerifyResult {
+                    is_valid: false,
+                    address: None,
+                    nonce: None,
+                    error: Some("Invalid social login provider".into()),
+                };
             }
+        },
+        "wallet" => match request.chain.as_str() {
+            "solana" => solana::verify_signature(address, signature, message),
+            "sui" => sui::verify_signature(address, signature, message).await,
+            "ethereum" => ethereum::verify_signature(address, signature, message),
+            _ => {
+                return VerifyResult {
+                    is_valid: false,
+                    address: None,
+                    nonce: None,
+                    error: Some("Invalid chain".into()),
+                };
+            }
+        },
+        _ => {
+            return VerifyResult {
+                is_valid: false,
+                address: None,
+                nonce: None,
+                error: Some("Invalid login type".into()),
+            };
         }
+    };
+
+    match result {
+        Ok(result) => result,
         Err(e) => {
             let error_msg = format!("Error verifying signature: {}", e);
             log_verification_error(&request.chain, &request.address, &error_msg);
-            (false, Some(error_msg))
+            VerifyResult {
+                is_valid: false,
+                address: None,
+                nonce: None,
+                error: Some(error_msg),
+            }
         }
     }
 }

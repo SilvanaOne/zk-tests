@@ -1,9 +1,19 @@
+use crate::login::VerifyResult;
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::hash::{Blake2b256, HashFunction};
-use fastcrypto::traits::ToFromBytes;
-use fastcrypto::traits::VerifyingKey;
+use fastcrypto::traits::{KeyPair as KeyPairTrait, ToFromBytes, VerifyingKey};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+
+pub type KeyPair = Ed25519KeyPair;
+
+pub fn create_keypair() -> Ed25519KeyPair {
+    Ed25519KeyPair::generate(&mut rand::thread_rng())
+}
+
+pub fn to_address(key: &Ed25519KeyPair) -> String {
+    get_address(&key.public())
+}
 
 // pub struct Ed25519SuiSignature(
 //     #[schemars(with = "Base64")]
@@ -18,21 +28,26 @@ pub async fn verify_signature(
     address: &str,
     signature_base64: &str,
     message: &str,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    println!(
-        "Sui verify signature: {:?}",
-        (address, signature_base64, message)
-    );
+) -> Result<VerifyResult, Box<dyn std::error::Error>> {
     let bytes = message.as_bytes();
     if !address.starts_with("0x") || address.len() != 66 {
-        return Err("Invalid address format".into());
+        return Ok(VerifyResult {
+            is_valid: false,
+            address: None,
+            nonce: None,
+            error: Some("Invalid address format".into()),
+        });
     }
 
     let ok = verify_personal_message_signature(signature_base64, bytes, address)
         .await
         .is_ok();
-    println!("Sui verify signature result: {:?}", ok);
-    Ok(ok)
+    Ok(VerifyResult {
+        is_valid: ok,
+        address: None,
+        nonce: None,
+        error: None,
+    })
 }
 
 pub async fn verify_personal_message_signature(

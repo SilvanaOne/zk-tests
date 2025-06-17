@@ -30,13 +30,13 @@ impl KMS {
     /// Create a new KMS instance by resolving a key name/alias to its key ID
     /// Accepts key names like "my-seed-key" and converts them to "alias/my-seed-key"
     /// Also accepts full aliases like "alias/my-seed-key" or actual key IDs
-    pub async fn new(key_name: impl Into<String>) -> Result<Self> {
-        let key_name = key_name.into();
+    pub async fn new(key_id: impl Into<String>) -> Result<Self> {
+        let key_id = key_id.into();
         let shared_cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
         let client = Client::new(&shared_cfg);
 
         // Resolve the key name to actual key ID
-        let key_id = Self::resolve_key_id(&client, &key_name).await?;
+        //let key_id = Self::resolve_key_id(&client, &key_name).await?;
 
         Ok(Self {
             client: Arc::new(client),
@@ -110,7 +110,7 @@ impl KMS {
 
         // Generate a random nonce
         let mut nonce_bytes = [0u8; 12]; // 96-bit nonce for GCM
-        rand::rng().fill_bytes(&mut nonce_bytes);
+        rand::thread_rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Encrypt the data

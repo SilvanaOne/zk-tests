@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-/// Composite key: (chain, wallet, address)
+/// Composite key: (login_type, chain, wallet, address)
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Key {
+    pub login_type: String,
     pub chain: String,
     pub wallet: String,
     pub address: String,
@@ -20,5 +21,3 @@ pub struct Value {
     pub expiry: u64,
     pub shares: Vec<Share>,
 }
-
-

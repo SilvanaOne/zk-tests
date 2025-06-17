@@ -41,6 +41,13 @@ export async function connectPhantom(
       console.log("Phantom connected to", resp);
       return resp?.publicKey?.toString();
     }
+    if (chain === "ethereum") {
+      const accounts = await provider.request({
+        method: "eth_requestAccounts",
+      });
+      console.log("Phantom connected to", accounts);
+      return accounts[0];
+    }
   } catch (err) {
     console.log("Error connecting to Phantom", err);
     // { code: 4001, message: 'User rejected the request.' }
@@ -83,6 +90,24 @@ export async function signPhantomMessage(params: {
       console.log("Sui Address", address);
       const signedMessage = await provider.signMessage(encodedMessage, address);
       console.log("Phantom signed message for Sui", signedMessage);
+      return signedMessage;
+    }
+    if (chain === "ethereum") {
+      const accounts = await provider.request({
+        method: "eth_requestAccounts",
+      });
+      const from = accounts?.[0];
+      console.log("Phantom connected to", from);
+      if (!from) {
+        console.log("No Ethereum account found");
+        return;
+      }
+      const msg = `0x${Buffer.from(message, "utf8").toString("hex")}`;
+      const signedMessage = await provider.request({
+        method: "personal_sign",
+        params: [msg, from, "Silvana TEE login"],
+      });
+      console.log("Phantom signed message", signedMessage);
       return signedMessage;
     }
   } catch (err) {

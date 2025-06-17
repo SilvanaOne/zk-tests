@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+use tee_login::keys::Keys;
 
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::serde::json::Json;
@@ -176,6 +177,8 @@ async fn rocket() -> _ {
     };
 
     info!("Starting TEE Login server...");
+    let keys = Keys::new();
+    info!("Keys: {:?}", keys.to_addresses());
 
     // Initialize the database
     // let db_store = match DBStore::open() {
@@ -191,9 +194,8 @@ async fn rocket() -> _ {
 
     // Initialize the database
     let table = std::env::var("DB").expect("DB environment variable not set");
-    let key_name =
-        std::env::var("KMS_KEY_NAME").expect("KMS_KEY_NAME environment variable not set");
-    let db_store = match tee_login::dynamodb::DynamoDB::new(table, key_name).await {
+    let key_id = std::env::var("KMS_KEY_ID").expect("KMS_KEY_ID environment variable not set");
+    let db_store = match tee_login::dynamodb::DynamoDB::new(table, key_id).await {
         Ok(db) => {
             info!("Database initialized successfully");
             db
