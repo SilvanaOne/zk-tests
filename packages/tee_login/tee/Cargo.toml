@@ -1,12 +1,13 @@
 [workspace]
 members = [
-  "src/aws",
+  "src/aws", "src/forwarder",
   "src/init",
   "src/system"
 ]
 
 exclude = [
-  "src/server"
+  "src/server",
+  "src/forwarder"
 ]
 
 # Set default resolver to version 2

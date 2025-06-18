@@ -47,11 +47,15 @@ echo "$JSON_RESPONSE" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /tmp/kvpair
 
 # == ATTENTION: code should be generated here that added all hosts to forward traffic ===
 # Traffic-forwarder-block
-python3 /traffic_forwarder.py 127.0.0.64 443 3 8101 &
-python3 /traffic_forwarder.py 127.0.0.65 443 3 8102 &
-python3 /traffic_forwarder.py 127.0.0.66 443 3 8103 &
-python3 /traffic_forwarder.py 127.0.0.67 443 3 8104 &
+# python3 /traffic_forwarder.py 127.0.0.64 443 3 8101 &
+# python3 /traffic_forwarder.py 127.0.0.65 443 3 8102 &
+# python3 /traffic_forwarder.py 127.0.0.66 443 3 8103 &
+# python3 /traffic_forwarder.py 127.0.0.67 443 3 8104 &
 
+/forwarder 127.0.0.64 443 3 8101 &
+/forwarder 127.0.0.65 443 3 8102 &
+/forwarder 127.0.0.66 443 3 8103 &
+/forwarder 127.0.0.67 443 3 8104 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &

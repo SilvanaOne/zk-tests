@@ -108,12 +108,12 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                         log_database_error("update", &error_msg);
                     }
                 } else {
-                    error!("Nonce is less than the existing nonce, returning error");
+                    error!("Nonce is less than the existing nonce, returning error, request nonce: {}, existing nonce: {}", request_nonce, nonce);
                     return LoginResponse {
                         success: false,
                         data: None,
                         indexes: None,
-                        error: Some("Nonce error E104".into()),
+                        error: Some("Nonce error E104: reusing access token is prohibited for security reasons".into()),
                     };
                 }
                 let filtered_shares: Vec<Share> = value
