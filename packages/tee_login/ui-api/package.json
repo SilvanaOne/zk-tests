@@ -1,0 +1,28 @@
+{
+  "name": "tee-login-ui-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "embed-wasm": "node embed-wasm.js",
+    "build": "npm run embed-wasm && node build.js",
+    "build:dev": "npm run embed-wasm && node build.js --dev",
+    "build:prod": "npm run embed-wasm && node build.js --prod",
+    "watch": "npm run embed-wasm && node build.js --dev --watch"
+  },
+  "dependencies": {
+    "bip32": "2.0.6",
+    "bip39": "3.0.2",
+    "bs58check": "2.1.2",
+    "mina-signer": "^3.0.7",
+    "safe-buffer": "5.2.1"
+  },
+  "devDependencies": {
+    "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
+    "@types/bs58check": "^2.1.2",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.25.5",
+    "events": "^3.3.0",
+    "stream-browserify": "^3.0.0"
+  }
+}

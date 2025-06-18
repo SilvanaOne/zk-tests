@@ -4,11 +4,20 @@ import bs58check from "bs58check";
 import { Buffer } from "safe-buffer";
 import Client from "mina-signer";
 
+const client = new Client({
+  network: "mainnet",
+});
+
+export function sign(message: bigint[], privateKey: string): string {
+  const signed = client.signFields(message, privateKey);
+  return signed.signature;
+}
+
 export function getHDpath(account = 0) {
-  let purpose = 44;
-  let index = 0;
-  let charge = 0;
-  let hdPath =
+  const purpose = 44;
+  const index = 0;
+  const charge = 0;
+  const hdPath =
     "m/" +
     purpose +
     "'/" +
@@ -46,7 +55,6 @@ export async function importWalletByMnemonic(
   const childPrivateKey = reverse(child0.privateKey);
   const privateKeyHex = `5a01${childPrivateKey.toString("hex")}`;
   const privateKey = bs58check.encode(Buffer.from(privateKeyHex, "hex") as any);
-  const client = new Client({ network: "mainnet" });
   const publicKey = client.derivePublicKey(privateKey);
   return {
     privateKey,

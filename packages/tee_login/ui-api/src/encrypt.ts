@@ -1,4 +1,5 @@
-"use client";
+import { recover_mnemonic } from "./pkg/precompiles.js";
+import { importWalletByMnemonic } from "./seed.js";
 
 const { subtle } = crypto;
 
@@ -22,7 +23,30 @@ export async function generateKeyPair(): Promise<{
   return { publicKey: pubB64, privateKey };
 }
 
-export async function decrypt(params: {
+export async function decryptShares(params: {
+  data: string[];
+  privateKey: CryptoKey;
+}): Promise<{
+  privateKey: string;
+  publicKey: string;
+} | null> {
+  console.log("decryptShares", params.data);
+  const shares: Uint8Array[] = [];
+  for (const share of params.data) {
+    const shareDecrypted = await decrypt({
+      encrypted: share,
+      privateKey: params.privateKey,
+    });
+    if (shareDecrypted === null) {
+      return null;
+    }
+    shares.push(shareDecrypted);
+  }
+
+  return await importWalletByMnemonic(recover_mnemonic(shares));
+}
+
+async function decrypt(params: {
   encrypted: string;
   privateKey: CryptoKey | null;
 }): Promise<Uint8Array | null> {

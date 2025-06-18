@@ -1,5 +1,6 @@
 mod hash;
 mod keypair;
+mod secrets;
 mod signer;
 
 use crate::hash::{PoseidonInput, poseidon_hash};
@@ -7,6 +8,7 @@ use crate::keypair::generate_keypair;
 use crate::signer::{sign_fields, verify_fields};
 use mina_hasher::Fp;
 use mina_signer::{Keypair, SecKey};
+use secrets::{add, remove, with_secret};
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -44,4 +46,14 @@ fn main() {
     let duration = time_end.duration_since(time_start);
     println!("Time taken: {:?}", duration);
     println!("Hash: {:?}", hash);
+    add("alice", b"top-secret-bytes".to_vec());
+
+    // Use
+    with_secret("alice", |bytes| {
+        println!("length = {}", bytes.len());
+        // sign_message(bytes);
+    });
+
+    // Rotate / delete
+    remove("alice");
 }

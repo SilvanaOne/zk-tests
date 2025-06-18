@@ -1,6 +1,7 @@
 # Silvana TEE login
 
 This TEE configuration is based on Nautilus TEE configuration
+https://github.com/MystenLabs/nautilus
 
 ## Create AWS keys
 

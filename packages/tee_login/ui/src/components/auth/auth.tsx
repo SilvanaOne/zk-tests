@@ -5,18 +5,27 @@ import { getMessage, login, LoginRequest, LoginResponse } from "@/lib/login";
 
 export type SocialLoginFunction = (params: {
   address: string;
-  seed: string;
   result: LoginResponse;
   provider: "google" | "github";
 }) => void;
 
-export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
-  const { socialLogin } = props;
+export function AuthComponent(props: {
+  socialLogin: SocialLoginFunction;
+  getPrivateKeyId: () => Promise<{
+    privateKeyId: string;
+    publicKey: string;
+  } | null>;
+  decryptShares: (
+    data: string[],
+    privateKeyId: string
+  ) => Promise<string | null>;
+  setPublicKey: (publicKey: string) => void;
+}) {
+  const { socialLogin, getPrivateKeyId, decryptShares, setPublicKey } = props;
   const { data: session, status } = useSession();
   const [loginProcessing, setLoginProcessing] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState<boolean | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [seed, setSeed] = useState<string | null>(null);
   const [shares, setShares] = useState<number[] | null>(null);
 
   const handleSocialLogin = async (provider: "google" | "github") => {
@@ -58,12 +67,19 @@ export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
         hasAccessToken: !!session.accessToken,
       });
 
+      const pk_result = await getPrivateKeyId();
+      if (!pk_result) {
+        setLoginError("No private key id");
+        return;
+      }
+
       // Use the existing getMessage function with social login type
       const msgData = await getMessage({
         login_type: "social",
         chain: provider,
         wallet: provider,
         address: session.user.email ?? provider,
+        publicKey: pk_result.publicKey,
       });
 
       if (!msgData) {
@@ -77,7 +93,8 @@ export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
         ...msgData.request,
         signature: (provider === "google"
           ? session.idToken
-          : session.accessToken) as string, // OAuth ID JWT token as signature
+          : session.accessToken) as string, // OAuth ID JWT token as signature,
+        public_key: pk_result.publicKey,
       };
 
       console.log(`Sending ${provider} login request with ID token:`, {
@@ -90,22 +107,30 @@ export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
       });
 
       // Use the existing login function to send to Rust backend
-      const result = await login({
-        request: loginRequest,
-        privateKey: msgData.privateKey,
-      });
+      const result = await login(loginRequest);
 
       console.log(`${provider} login result:`, result);
 
-      if (result.success && result.seed) {
+      if (result.success && result.data) {
         setLoginSuccess(true);
-        setSeed(result.seed);
-        setShares(result.indexes || null);
+        setPublicKey(pk_result.publicKey);
+        const publicKey = await decryptShares(
+          result.data,
+          pk_result.privateKeyId
+        );
+        if (!publicKey) {
+          setLoginError("Failed to decrypt shares");
+          setLoginSuccess(false);
+          return;
+        }
+        setShares(result.data.map((share) => parseInt(share)) || null);
         setLoginError(null);
         socialLogin({
           address: session.user.email ?? provider,
-          seed: result.seed,
-          result,
+          result: {
+            ...result,
+            publicKey,
+          },
           provider,
         });
       } else {
@@ -126,7 +151,6 @@ export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
     setLoginProcessing(false);
     setLoginSuccess(null);
     setLoginError(null);
-    setSeed(null);
     setShares(null);
     signOut();
   };
@@ -237,16 +261,6 @@ export function AuthComponent(props: { socialLogin: SocialLoginFunction }) {
             )}
           </div>
         </div>
-
-        {/* Seed Display */}
-        {seed && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-            <h3 className="font-bold text-green-800 mb-2">Recovery Seed:</h3>
-            <code className="text-xs bg-green-100 p-2 rounded block break-all">
-              {seed}
-            </code>
-          </div>
-        )}
 
         {/* Request Details */}
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">

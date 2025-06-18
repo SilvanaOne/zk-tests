@@ -1,8 +1,5 @@
 "use client";
 
-import { generateKeyPair, decrypt } from "./encrypt";
-import { rust_recover_mnemonic } from "./precompiles";
-
 export interface UnsignedLoginRequest {
   login_type: "wallet" | "social";
   chain: string;
@@ -20,7 +17,7 @@ export interface LoginRequest extends UnsignedLoginRequest {
 
 export interface LoginResponse {
   success: boolean;
-  seed: string | null;
+  publicKey: string | null;
   error: string | null;
   indexes?: number[] | null;
 }
@@ -64,17 +61,13 @@ export async function getMessage(params: {
   chain: string;
   wallet: string;
   address: string;
+  publicKey: string;
 }): Promise<{
-  privateKey: CryptoKey;
   request: UnsignedLoginRequest;
 } | null> {
-  const { login_type, chain, wallet, address } = params;
+  const { login_type, chain, wallet, address, publicKey } = params;
   const nonce = Date.now();
   const domain = "https://login.silvana.dev";
-  const { publicKey, privateKey } = await generateKeyPair();
-  if (publicKey === null || privateKey === null) {
-    return null;
-  }
 
   const metadata = JSON.stringify({
     domain,
@@ -101,22 +94,12 @@ export async function getMessage(params: {
 
   return {
     request: loginRequest,
-    privateKey,
   };
 }
 
-export async function login(params: {
-  request: LoginRequest;
-  privateKey: CryptoKey;
-}): Promise<LoginResponse> {
-  const { request, privateKey } = params;
-  if (privateKey === null) {
-    return {
-      success: false,
-      seed: null,
-      error: "Failed to generate key pair",
-    };
-  }
+export async function login(
+  request: LoginRequest
+): Promise<EncryptedLoginResponse> {
   console.log("NEXT_PUBLIC_LOCAL", process.env.NEXT_PUBLIC_LOCAL);
   const endpoint =
     process.env.NEXT_PUBLIC_LOCAL === "true"
@@ -125,19 +108,20 @@ export async function login(params: {
   if (endpoint === undefined) {
     return {
       success: false,
-      seed: null,
+      data: null,
       error: "NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT is not set",
+      indexes: null,
     };
   }
   try {
-    console.log("Login request", params.request);
+    console.log("Login request", request);
     console.log("endpoint", endpoint);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ payload: params.request }),
+      body: JSON.stringify({ payload: request }),
       //body: JSON.stringify({ payload: { memo: "hi from client" } }),
     });
     console.timeEnd("Login request");
@@ -145,8 +129,9 @@ export async function login(params: {
       console.error("Login error:", response);
       return {
         success: false,
-        seed: null,
+        data: null,
         error: `HTTP error! status: ${response.status}`,
+        indexes: null,
       };
     }
 
@@ -161,33 +146,12 @@ export async function login(params: {
       data.data !== undefined &&
       Array.isArray(data.data)
     ) {
-      const shares: Uint8Array[] = [];
-      for (const share of data.data) {
-        const shareDecrypted = await decrypt({
-          encrypted: share,
-          privateKey: params.privateKey,
-        });
-        if (shareDecrypted === null) {
-          return {
-            success: false,
-            seed: null,
-            error: "Failed to decrypt share",
-          };
-        }
-        shares.push(shareDecrypted);
-      }
-
-      const seed = await rust_recover_mnemonic(shares);
-      return {
-        success: true,
-        seed,
-        error: null,
-        indexes: data.indexes,
-      };
+      return data;
     } else {
       return {
         success: false,
-        seed: null,
+        data: null,
+        indexes: null,
         error: data.error,
       };
     }
@@ -195,7 +159,8 @@ export async function login(params: {
     console.error("Login error:", error);
     return {
       success: false,
-      seed: null,
+      data: null,
+      indexes: null,
       error: `Login error: ${error?.message}`,
     };
   }

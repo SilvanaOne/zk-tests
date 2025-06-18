@@ -8,4 +8,7 @@ edition = "2024"
 [dependencies]
 mina-hasher = { git = "https://github.com/o1-labs/proof-systems", branch = "master", package = "mina-hasher" }
 mina-signer = { git = "https://github.com/o1-labs/proof-systems", branch = "master", package = "mina-signer" }
+once_cell = "=1.21.3"
 rand_core = { version = "0.6.3" }
+secrecy   = { version = "0.8", features = ["alloc"] }
+zeroize   = { version = "1.7", features = ["zeroize_derive"] }

@@ -3,6 +3,8 @@ name = "forwarder"
 version = "0.1.0"
 edition = "2024"
 authors = ["DFST"]
+license = "Apache-2.0"
+
 
 [dependencies]
 libc = "0.2"
