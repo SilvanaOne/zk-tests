@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "src/aws", "src/forwarder",
+  "src/aws",
   "src/init",
   "src/system"
 ]
