@@ -160,7 +160,9 @@ pub async fn get_github_account(
         return Err("Invalid timestamp: cannot be negative".into());
     }
 
-    let nonce = timestamp as u64;
+    let nonce = timestamp
+        .checked_mul(1000)
+        .ok_or("Timestamp conversion overflow")?;
 
     // Validate user ID
     if user_meta.id == 0 {
@@ -169,7 +171,7 @@ pub async fn get_github_account(
 
     let account = GitHubAccount {
         address: user_meta.id.to_string(),
-        nonce,
+        nonce: nonce as u64,
         name: user_meta.name,
         email: user_meta.email,
     };
