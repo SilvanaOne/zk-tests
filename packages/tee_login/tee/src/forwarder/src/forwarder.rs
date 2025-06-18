@@ -92,6 +92,7 @@ fn copy_stream(src: &mut TcpStream, dst: &mut TcpStream) {
 }
 
 fn vsock_connect(cid: u32, port: u32) -> io::Result<TcpStream> {
+    use libc::sa_family_t;
     use libc::{AF_VSOCK, SOCK_STREAM, c_int, sockaddr, sockaddr_vm};
     unsafe {
         // Create socket
@@ -101,7 +102,7 @@ fn vsock_connect(cid: u32, port: u32) -> io::Result<TcpStream> {
         }
         // Prepare address
         let mut addr: sockaddr_vm = std::mem::zeroed();
-        addr.svm_family = AF_VSOCK as u8;
+        addr.svm_family = AF_VSOCK as sa_family_t;
         addr.svm_cid = cid;
         addr.svm_port = port;
 
