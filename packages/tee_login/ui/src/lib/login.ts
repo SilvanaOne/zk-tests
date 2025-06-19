@@ -8,7 +8,7 @@ export interface UnsignedLoginRequest {
   address: string;
   public_key: string;
   nonce: number;
-  share_indexes?: number[];
+  share_indexes: number[];
 }
 
 export interface LoginRequest extends UnsignedLoginRequest {
@@ -50,9 +50,7 @@ async function hashToBase64(data: string): Promise<string> {
   const dataBytes = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest("SHA-256", dataBytes);
   const hashArray = new Uint8Array(hashBuffer);
-  console.log("hashArray", hashArray);
   const base64 = Buffer.from(hashArray).toString("base64");
-  console.log("base64", base64);
   return base64;
 }
 

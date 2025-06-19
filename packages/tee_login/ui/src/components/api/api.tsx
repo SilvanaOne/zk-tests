@@ -52,7 +52,6 @@ export type ApiResponse =
   | ReadyResponse;
 
 // helpers ---------------------------------------
-const toB64 = (a: Uint8Array) => btoa(String.fromCharCode(...a));
 
 function uuid() {
   return crypto.randomUUID();

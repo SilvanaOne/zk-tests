@@ -1,0 +1,11 @@
+[package]
+name = "tidb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+rand  = "0.8"
+sqlx  = { version = "0.7", features = ["mysql", "runtime-tokio-native-tls", "macros"] }
+dotenvy = "0.15"         # optional convenience
+anyhow = "1.0.98"
