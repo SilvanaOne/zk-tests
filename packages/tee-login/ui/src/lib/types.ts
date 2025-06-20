@@ -89,6 +89,10 @@ export interface ApiFunctions {
     publicKey: string;
     message: string;
   }) => Promise<{ signature: string | null; error: string | null }>;
+  signPayment: (params: {
+    publicKey: string;
+    payment: string;
+  }) => Promise<{ signature: string | null; error: string | null }>;
 }
 
 export interface UnifiedUserState {

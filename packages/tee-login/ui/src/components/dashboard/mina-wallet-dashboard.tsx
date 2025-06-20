@@ -19,7 +19,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useUserState } from "@/context/userState";
-import { balance as getBalance, faucet } from "@/lib/balance";
+import {
+  balance as getBalance,
+  faucet,
+  preparePayment,
+  broadcastPayment,
+} from "@/lib/mina";
 
 export function MinaWalletDashboard() {
   const { state: userState, apiFunctions } = useUserState();
@@ -49,16 +54,15 @@ export function MinaWalletDashboard() {
     "idle" | "loading" | "success" | "error"
   >("idle");
 
-  const fetchBalance = async () => {
-    if (isConnected && publicKey) {
-      const balanceAmount = await getBalance(publicKey);
-      setBalance((BigInt(balanceAmount) / 1_000_000n / 1000n).toString());
-    } else {
-      setBalance("0.00");
-    }
-  };
-
   useEffect(() => {
+    const fetchBalance = async () => {
+      if (isConnected && publicKey) {
+        const balanceAmount = await getBalance(publicKey);
+        setBalance((BigInt(balanceAmount) / 1_000_000n / 1000n).toString());
+      } else {
+        setBalance("0.00");
+      }
+    };
     fetchBalance();
 
     // Set up interval to refresh balance every 30 seconds
@@ -118,19 +122,56 @@ export function MinaWalletDashboard() {
 
   const handleTransfer = async () => {
     if (!transferRecipient || !transferAmount || !publicKey) return;
-    setTransferStatus({ status: "loading" });
-    await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate transfer
-    const success = Math.random() > 0.2; // Simulate success/failure
-    if (success) {
-      setTransferStatus({ status: "success", txHash: `mock_tx_${Date.now()}` });
-      setTransferRecipient("");
-      setTransferAmount("");
-    } else {
+    const amount = Number(transferAmount);
+    if (isNaN(amount)) {
       setTransferStatus({
         status: "error",
-        error: "Transfer failed. Check details and try again.",
+        error: "Invalid amount. Please enter a valid number.",
       });
+      return;
     }
+    setTransferStatus({ status: "loading" });
+    const payment = await preparePayment({
+      from: publicKey,
+      to: transferRecipient,
+      amount: BigInt(amount * 1_000) * 1_000_000n,
+      fee: BigInt(100_000_000n),
+      memo: "Silvana TEE transfer",
+    });
+    if (!payment) {
+      setTransferStatus({
+        status: "error",
+        error: "Transfer failed - cannot get nonce. Try again later.",
+      });
+      return;
+    }
+    const signedPayment = await apiFunctions.signPayment({
+      payment,
+      publicKey,
+    });
+    if (!signedPayment.signature) {
+      setTransferStatus({
+        status: "error",
+        error:
+          signedPayment.error ||
+          "Transfer failed - cannot sign payment. Try again later.",
+      });
+      return;
+    }
+    const txHash = await broadcastPayment({
+      payment: signedPayment.signature,
+    });
+    if (!txHash) {
+      setTransferStatus({
+        status: "error",
+        error:
+          "Transfer failed - cannot broadcast payment. Try again later when previous transactions will be included in the block.",
+      });
+      return;
+    }
+    setTransferStatus({ status: "success", txHash });
+    setTransferRecipient("");
+    setTransferAmount("");
   };
 
   if (!isConnected) {
@@ -277,13 +318,14 @@ export function MinaWalletDashboard() {
                 Faucet Request Successful
               </AlertTitle>
               <AlertDescription className="text-xs">
+                View Transaction
                 <a
                   href={`https://minascan.io/devnet/tx/${faucetStatus.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-primary flex items-center"
                 >
-                  View Transaction {faucetStatus.txHash}
+                  {faucetStatus.txHash}
                   <ExternalLink className="h-3 w-3 ml-1" />
                 </a>
               </AlertDescription>
@@ -343,13 +385,15 @@ export function MinaWalletDashboard() {
                 Transfer Successful
               </AlertTitle>
               <AlertDescription className="text-xs">
+                View Transaction
                 <a
-                  href={`https://minascan.io/testworld/tx/${transferStatus.txHash}`}
+                  href={`https://minascan.io/devnet/tx/${transferStatus.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-primary flex items-center"
                 >
-                  View Transaction <ExternalLink className="h-3 w-3 ml-1" />
+                  {transferStatus.txHash}
+                  <ExternalLink className="h-3 w-3 ml-1" />
                 </a>
               </AlertDescription>
             </Alert>

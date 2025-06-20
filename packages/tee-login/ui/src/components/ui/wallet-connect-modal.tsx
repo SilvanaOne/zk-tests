@@ -23,7 +23,7 @@ function WalletButton({
       case "Social":
         return "text-brand-green";
       default:
-        return "text-white";
+        return "text-foreground";
     }
   };
 
@@ -65,7 +65,7 @@ function WalletButton({
                      ? "bg-gradient-to-br from-brand-green/60 via-brand-green/40 to-brand-green/20 border-brand-green text-white shadow-xl shadow-brand-green/40"
                      : `bg-gradient-to-br ${getChainGradient(
                          wallet.chain
-                       )} border-white/50 text-white hover:border-brand-pink hover:shadow-xl hover:shadow-brand-purple/30`
+                       )} border-white/50 text-foreground hover:border-brand-pink hover:shadow-xl hover:shadow-brand-purple/30`
                  }`}
       tabIndex={0}
     >
@@ -100,10 +100,10 @@ function WalletButton({
 
       {/* Wallet Name */}
       <div className="text-center px-2 relative z-10">
-        <div className="text-[0.75rem] font-semibold leading-tight mb-1 text-white drop-shadow-md">
+        <div className="text-[0.75rem] font-semibold leading-tight mb-1 text-foreground drop-shadow-md">
           {wallet.name}
         </div>
-        <div className="text-[0.625rem] text-white/90 font-bold drop-shadow-md">
+        <div className="text-[0.625rem] text-foreground/90 font-bold drop-shadow-md">
           {wallet.chain}
         </div>
       </div>
@@ -219,7 +219,7 @@ export function WalletConnectModal({
               <div className="px-6 py-6 border-b border-white/30 relative z-10">
                 <div className="flex items-center justify-between">
                   <div className="text-center flex-1">
-                    <h2 className="text-2xl md:text-3xl font-bold text-white font-sans mb-2 drop-shadow-lg">
+                    <h2 className="text-2xl md:text-3xl font-bold text-foreground font-sans mb-2 drop-shadow-lg">
                       <span className="bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue bg-clip-text text-transparent">
                         Connect your Wallets &
                       </span>
@@ -241,7 +241,7 @@ export function WalletConnectModal({
                   </div>
                   <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 p-2 text-pink-500/80 hover:text-white transition-all duration-200 rounded-xl hover:bg-white/20 hover:shadow-lg hover:scale-110"
+                    className="absolute top-4 right-4 p-2 text-pink-500/80 hover:text-foreground transition-all duration-200 rounded-xl hover:bg-white/20 hover:shadow-lg hover:scale-110"
                   >
                     <X className="w-5 h-5" />
                   </button>

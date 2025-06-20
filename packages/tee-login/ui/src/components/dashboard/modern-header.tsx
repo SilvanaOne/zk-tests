@@ -14,60 +14,63 @@ export function ModernHeader({
   onAddConnection,
 }: ModernHeaderProps) {
   const { theme, setTheme, resolvedTheme, systemTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [actualTheme, setActualTheme] = useState<string>("dark");
+  // const [mounted, setMounted] = useState(false);
+  // const [actualTheme, setActualTheme] = useState<string>("dark");
 
-  // More robust theme detection
-  useEffect(() => {
-    setMounted(true);
+  // // More robust theme detection
+  // useEffect(() => {
+  //   setMounted(true);
 
-    // Check multiple sources for theme
-    const detectTheme = () => {
-      // 1. Check HTML class
-      const htmlClass = document.documentElement.classList.contains("dark")
-        ? "dark"
-        : "light";
+  //   // Check multiple sources for theme
+  //   const detectTheme = () => {
+  //     // 1. Check HTML class
+  //     const htmlClass = document.documentElement.classList.contains("dark")
+  //       ? "dark"
+  //       : "light";
 
-      // 2. Check system preference
-      const systemPref = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light";
+  //     // 2. Check system preference
+  //     const systemPref = window.matchMedia("(prefers-color-scheme: dark)")
+  //       .matches
+  //       ? "dark"
+  //       : "light";
 
-      // 3. Use resolvedTheme if available
-      const detected = resolvedTheme || htmlClass || systemPref || "dark";
+  //     // 3. Use resolvedTheme if available
+  //     const detected = resolvedTheme || htmlClass || systemPref || "dark";
 
-      setActualTheme(detected);
-      console.log("Theme detection:", {
-        resolvedTheme,
-        htmlClass,
-        systemPref,
-        detected,
-      });
-    };
+  //     setActualTheme(detected);
+  //     console.log("Theme detection:", {
+  //       resolvedTheme,
+  //       htmlClass,
+  //       systemPref,
+  //       detected,
+  //     });
+  //   };
 
-    // Initial detection
-    detectTheme();
+  //   // Initial detection
+  //   detectTheme();
 
-    // Listen for theme changes
-    const observer = new MutationObserver(detectTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+  //   // Listen for theme changes
+  //   const observer = new MutationObserver(detectTheme);
+  //   observer.observe(document.documentElement, {
+  //     attributes: true,
+  //     attributeFilter: ["class"],
+  //   });
 
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    mediaQuery.addEventListener("change", detectTheme);
+  //   // Listen for system theme changes
+  //   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  //   mediaQuery.addEventListener("change", detectTheme);
 
-    return () => {
-      observer.disconnect();
-      mediaQuery.removeEventListener("change", detectTheme);
-    };
-  }, [resolvedTheme]);
+  //   return () => {
+  //     observer.disconnect();
+  //     mediaQuery.removeEventListener("change", detectTheme);
+  //   };
+  // }, [resolvedTheme]);
+
+  console.log("theme:", theme);
 
   const toggleTheme = () => {
-    setTheme(actualTheme === "dark" ? "light" : "dark");
+    console.log("toggleTheme", theme, resolvedTheme);
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
   return (
@@ -95,7 +98,20 @@ export function ModernHeader({
           </span>
         </div>
 
-        {/* Theme button hidden temporarily */}
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200 border border-white/20 hover:border-white/30"
+          title={`Switch to ${
+            resolvedTheme === "dark" ? "light" : "dark"
+          } mode`}
+        >
+          {resolvedTheme === "dark" ? (
+            <Sun className="h-4 w-4 text-brand-yellow" />
+          ) : (
+            <Moon className="h-4 w-4 text-brand-purple" />
+          )}
+        </button>
 
         <button
           onClick={onAddConnection}

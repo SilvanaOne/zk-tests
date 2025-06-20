@@ -2,7 +2,7 @@
 // Compile with `tsc` or bundle with esbuild / Rollup → a single JS file.
 
 import { initSync } from "./pkg/precompiles.js";
-import { sign } from "./seed.js";
+import { signMessage, signPayment } from "./mina.js";
 import { getWasmBytes } from "./embedded-wasm.js";
 
 import { b64ToBytes, bytesToHex, secureZero, uuid } from "./utils";
@@ -28,15 +28,22 @@ type DecryptSharesRequest = {
   data: string[];
   privateKeyId: string;
 };
-type SignRequest = {
+type SignMessageRequest = {
   id: string;
-  type: "sign";
+  type: "sign_message";
   msg: bigint[];
+  publicKey: string;
+};
+type SignPaymentRequest = {
+  id: string;
+  type: "sign_payment";
+  payment: string;
   publicKey: string;
 };
 
 export type ApiRequest =
-  | SignRequest
+  | SignMessageRequest
+  | SignPaymentRequest
   | PrivateKeyIdRequest
   | DecryptSharesRequest;
 
@@ -50,14 +57,20 @@ type DecryptSharesResponse = {
   type: "decrypt_shares";
   value: string;
 };
-type SignResponse = { id: string; type: "sign"; value: string }; // hex
+type SignMessageResponse = { id: string; type: "sign_message"; value: string }; // hex
+type SignPaymentResponse = {
+  id: string;
+  type: "sign_payment";
+  value: string | undefined;
+}; // hex
 type ErrorResponse = { id: string; type: "error"; reason: string };
 type ReadyResponse = { type: "ready" };
 
 export type ApiResponse =
   | PrivateKeyIdResponse
   | DecryptSharesResponse
-  | SignResponse
+  | SignMessageResponse
+  | SignPaymentResponse
   | ErrorResponse
   | ReadyResponse;
 
@@ -135,8 +148,8 @@ export type ApiResponse =
           parent.postMessage(resp, "*");
           break;
         }
-        case "sign": {
-          debug("processing sign request", {
+        case "sign_message": {
+          debug("processing sign message request", {
             id,
             msgLength: ev.data.msg.length,
           });
@@ -147,8 +160,7 @@ export type ApiResponse =
             publicKey,
             async (keyBytes) => {
               const key = new TextDecoder().decode(keyBytes);
-              console.log("key", key);
-              return sign(msg, key);
+              return signMessage(msg, key);
             }
           );
 
@@ -156,12 +168,48 @@ export type ApiResponse =
             throw new Error("Failed to sign message");
           }
 
-          const resp: SignResponse = {
+          const resp: SignMessageResponse = {
             id,
-            type: "sign",
+            type: "sign_message",
             value: signature,
           };
-          debug("sending sign response", { id, sigLength: resp.value.length });
+          debug("sending sign message response", {
+            id,
+            sigLength: resp.value?.length,
+          });
+          parent.postMessage(resp, "*");
+          break;
+        }
+
+        case "sign_payment": {
+          debug("processing sign payment request", {
+            id,
+            paymentLength: ev.data.payment.length,
+          });
+
+          const payment = ev.data.payment;
+          const publicKey = ev.data.publicKey;
+          const signature = await secrets.withSecret(
+            publicKey,
+            async (keyBytes) => {
+              const key = new TextDecoder().decode(keyBytes);
+              return signPayment({ payment, privateKey: key });
+            }
+          );
+
+          if (!signature) {
+            throw new Error("Failed to sign message");
+          }
+
+          const resp: SignPaymentResponse = {
+            id,
+            type: "sign_payment",
+            value: signature,
+          };
+          debug("sending sign payment response", {
+            id,
+            sigLength: resp.value?.length,
+          });
           parent.postMessage(resp, "*");
           break;
         }

@@ -16149,7 +16149,7 @@
         }
         return pub.mul(this.priv).getX();
       };
-      KeyPair.prototype.sign = function sign2(msg, enc, options) {
+      KeyPair.prototype.sign = function sign(msg, enc, options) {
         return this.ec.sign(msg, this, enc, options);
       };
       KeyPair.prototype.verify = function verify(msg, signature, options) {
@@ -16405,7 +16405,7 @@
         else
           return msg;
       };
-      EC.prototype.sign = function sign2(msg, key, enc, options) {
+      EC.prototype.sign = function sign(msg, key, enc, options) {
         if (typeof enc === "object") {
           options = enc;
           enc = null;
@@ -16582,7 +16582,7 @@
       cachedProperty(KeyPair, "messagePrefix", function messagePrefix() {
         return this.hash().slice(this.eddsa.encodingLength);
       });
-      KeyPair.prototype.sign = function sign2(message) {
+      KeyPair.prototype.sign = function sign(message) {
         assert(this._secret, "KeyPair can only verify");
         return this.eddsa.sign(message, this);
       };
@@ -16676,7 +16676,7 @@
         this.hash = hash.sha512;
       }
       module2.exports = EDDSA;
-      EDDSA.prototype.sign = function sign2(message, secret) {
+      EDDSA.prototype.sign = function sign(message, secret) {
         message = parseBytes(message);
         var key = this.keyFromSecret(secret);
         var r = this.hashInt(key.messagePrefix(), message);
@@ -16931,7 +16931,7 @@
         if (!isPrivate(dt2)) return null;
         return dt2;
       }
-      function sign2(hash, x) {
+      function sign(hash, x) {
         return __sign(hash, x);
       }
       function signWithEntropy(hash, x, addData) {
@@ -16996,7 +16996,7 @@
         pointMultiply,
         privateAdd,
         privateSub,
-        sign: sign2,
+        sign,
         signWithEntropy,
         verify
       };
@@ -35055,7 +35055,7 @@
     return __wbg_finalize_init(instance, module2);
   }
 
-  // src/seed.ts
+  // src/mina.ts
   init_polyfills();
   var bip32 = __toESM(require_src2(), 1);
   var bip39 = __toESM(require_src3(), 1);
@@ -37379,11 +37379,21 @@ This shouldn't have happened and indicates an internal bug.`);
     return { feePayer: e.feePayer, fee: n, nonce: se(e.nonce), memo: R.toValidString(e.memo), validUntil: e.validUntil === void 0 || e.validUntil === null ? null : se(e.validUntil) };
   }
 
-  // src/seed.ts
+  // src/mina.ts
   var client = new Pn({
-    network: "mainnet"
+    network: "testnet"
   });
-  function sign(message, privateKey) {
+  async function signPayment(params) {
+    try {
+      const { privateKey } = params;
+      const payment = JSON.parse(params.payment);
+      return JSON.stringify(client.signPayment(payment, privateKey));
+    } catch (error) {
+      console.error("Error signing payment", error?.message);
+      return void 0;
+    }
+  }
+  function signMessage(message, privateKey) {
     const signed = client.signFields(message, privateKey);
     return signed.signature;
   }
@@ -37604,8 +37614,8 @@ This shouldn't have happened and indicates an internal bug.`);
             parent.postMessage(resp, "*");
             break;
           }
-          case "sign": {
-            debug2("processing sign request", {
+          case "sign_message": {
+            debug2("processing sign message request", {
               id,
               msgLength: ev.data.msg.length
             });
@@ -37615,8 +37625,7 @@ This shouldn't have happened and indicates an internal bug.`);
               publicKey,
               async (keyBytes) => {
                 const key = new TextDecoder().decode(keyBytes);
-                console.log("key", key);
-                return sign(msg, key);
+                return signMessage(msg, key);
               }
             );
             if (!signature) {
@@ -37624,10 +37633,42 @@ This shouldn't have happened and indicates an internal bug.`);
             }
             const resp = {
               id,
-              type: "sign",
+              type: "sign_message",
               value: signature
             };
-            debug2("sending sign response", { id, sigLength: resp.value.length });
+            debug2("sending sign message response", {
+              id,
+              sigLength: resp.value?.length
+            });
+            parent.postMessage(resp, "*");
+            break;
+          }
+          case "sign_payment": {
+            debug2("processing sign payment request", {
+              id,
+              paymentLength: ev.data.payment.length
+            });
+            const payment = ev.data.payment;
+            const publicKey = ev.data.publicKey;
+            const signature = await secrets.withSecret(
+              publicKey,
+              async (keyBytes) => {
+                const key = new TextDecoder().decode(keyBytes);
+                return signPayment({ payment, privateKey: key });
+              }
+            );
+            if (!signature) {
+              throw new Error("Failed to sign message");
+            }
+            const resp = {
+              id,
+              type: "sign_payment",
+              value: signature
+            };
+            debug2("sending sign payment response", {
+              id,
+              sigLength: resp.value?.length
+            });
             parent.postMessage(resp, "*");
             break;
           }

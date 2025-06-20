@@ -5,7 +5,8 @@ import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 // ---------- types the parent will see ----------
 export interface ApiFrameHandle {
   /** returns hex-encoded signature */
-  sign(msg: bigint[], publicKey: string): Promise<string>;
+  signMessage(msg: bigint[], publicKey: string): Promise<string>;
+  signPayment(payment: string, publicKey: string): Promise<string | undefined>;
   privateKeyId(): Promise<{ privateKeyId: string; publicKey: string }>;
   decryptShares(data: string[], privateKeyId: string): Promise<string>;
 }
@@ -18,15 +19,22 @@ type DecryptSharesRequest = {
   data: string[];
   privateKeyId: string;
 };
-type SignRequest = {
+type SignMessageRequest = {
   id: string;
-  type: "sign";
+  type: "sign_message";
   msg: bigint[];
+  publicKey: string;
+};
+type SignPaymentRequest = {
+  id: string;
+  type: "sign_payment";
+  payment: string;
   publicKey: string;
 };
 
 export type ApiRequest =
-  | SignRequest
+  | SignMessageRequest
+  | SignPaymentRequest
   | PrivateKeyIdRequest
   | DecryptSharesRequest;
 
@@ -40,14 +48,20 @@ type DecryptSharesResponse = {
   type: "decrypt_shares";
   value: string;
 };
-type SignResponse = { id: string; type: "sign"; value: string }; // hex
+type SignMessageResponse = { id: string; type: "sign_message"; value: string }; // hex
+type SignPaymentResponse = {
+  id: string;
+  type: "sign_payment";
+  value: string | undefined;
+}; // hex
 type ErrorResponse = { id: string; type: "error"; reason: string };
 type ReadyResponse = { type: "ready" };
 
 export type ApiResponse =
   | PrivateKeyIdResponse
   | DecryptSharesResponse
-  | SignResponse
+  | SignMessageResponse
+  | SignPaymentResponse
   | ErrorResponse
   | ReadyResponse;
 
@@ -90,7 +104,9 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
       }
       delete pending.current[id];
 
-      if (ev.data.type === "sign") {
+      if (ev.data.type === "sign_message") {
+        pendingRequest.resolve(ev.data.value);
+      } else if (ev.data.type === "sign_payment") {
         pendingRequest.resolve(ev.data.value);
       } else if (ev.data.type === "private_key_id") {
         pendingRequest.resolve(ev.data.value);
@@ -111,7 +127,7 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
   useImperativeHandle(
     ref,
     (): ApiFrameHandle => ({
-      sign(msg, publicKey) {
+      signMessage(msg, publicKey) {
         return new Promise<string>((resolve, reject) => {
           // Wait for iframe to be ready
           const attemptSend = () => {
@@ -121,10 +137,48 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
             }
 
             const id = uuid();
-            const req: SignRequest = {
+            const req: SignMessageRequest = {
               id,
-              type: "sign",
+              type: "sign_message",
               msg,
+              publicKey,
+            };
+
+            pending.current[id] = { resolve, reject };
+
+            // Add timeout for the request
+            setTimeout(() => {
+              if (pending.current[id]) {
+                delete pending.current[id];
+                reject(new Error("Request timeout"));
+              }
+            }, 5000);
+
+            if (!frameRef.current?.contentWindow) {
+              reject(new Error("Iframe not available"));
+              return;
+            }
+
+            frameRef.current.contentWindow.postMessage(req, "*");
+          };
+
+          attemptSend();
+        });
+      },
+      signPayment(payment, publicKey) {
+        return new Promise<string>((resolve, reject) => {
+          // Wait for iframe to be ready
+          const attemptSend = () => {
+            if (!isReady.current) {
+              setTimeout(attemptSend, 50);
+              return;
+            }
+
+            const id = uuid();
+            const req: SignPaymentRequest = {
+              id,
+              type: "sign_payment",
+              payment,
               publicKey,
             };
 

@@ -5,10 +5,33 @@ import { Buffer } from "safe-buffer";
 import Client from "mina-signer";
 
 const client = new Client({
-  network: "mainnet",
+  network: "testnet",
 });
 
-export function sign(message: bigint[], privateKey: string): string {
+export interface PaymentParams {
+  from: string;
+  to: string;
+  amount: string;
+  fee: string;
+  nonce: number;
+  memo: string;
+}
+
+export async function signPayment(params: {
+  payment: string;
+  privateKey: string;
+}): Promise<string | undefined> {
+  try {
+    const { privateKey } = params;
+    const payment: PaymentParams = JSON.parse(params.payment);
+    return JSON.stringify(client.signPayment(payment, privateKey));
+  } catch (error: any) {
+    console.error("Error signing payment", error?.message);
+    return undefined;
+  }
+}
+
+export function signMessage(message: bigint[], privateKey: string): string {
   const signed = client.signFields(message, privateKey);
   return signed.signature;
 }

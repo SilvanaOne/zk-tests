@@ -260,11 +260,16 @@ export async function signWalletMessage(params: {
           return undefined;
         }
         const message = new TextEncoder().encode(msgData.request.message);
+        console.log("signing message with slush", {
+          message,
+          address,
+          connectedAddress,
+        });
         const signedMessage = await wallet?.features[
           "sui:signPersonalMessage"
         ].signPersonalMessage({
           message,
-          account: address,
+          account: connected?.accounts[0],
           chain: "sui:mainnet",
         });
         if (!signedMessage) {

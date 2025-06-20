@@ -257,7 +257,7 @@ export default function SilvanaTeeDashboard() {
       const msg: bigint[] = Array.from(new TextEncoder().encode(message)).map(
         (b) => BigInt(b)
       );
-      const signature = await apiRef.current.sign(msg, publicKey);
+      const signature = await apiRef.current.signMessage(msg, publicKey);
 
       console.log("signature:", signature);
       return { signature, error: null };
@@ -266,6 +266,36 @@ export default function SilvanaTeeDashboard() {
       return {
         signature: null,
         error: error?.message || "Error E101 signing message",
+      };
+    }
+  }
+
+  async function signPayment(params: {
+    publicKey: string;
+    payment: string;
+  }): Promise<{ signature: string | null; error: string | null }> {
+    try {
+      const { publicKey, payment } = params;
+      console.log("signPayment button clicked", params);
+      if (!apiRef.current || !publicKey || !payment) {
+        console.log("signPayment Api or publicKey or payment not found");
+        return {
+          signature: null,
+          error: "Api or publicKey or payment not found",
+        };
+      }
+
+      const signature = await apiRef.current.signPayment(payment, publicKey);
+      console.log("signature:", signature);
+      if (!signature) {
+        return { signature: null, error: "Error E102 signing payment" };
+      }
+      return { signature, error: null };
+    } catch (error: any) {
+      console.error("signPayment error:", error?.message);
+      return {
+        signature: null,
+        error: error?.message || "Error E103 signing payment",
       };
     }
   }
@@ -316,6 +346,7 @@ export default function SilvanaTeeDashboard() {
     getPrivateKeyId,
     decryptShares,
     signMessage,
+    signPayment,
   };
 
   return (

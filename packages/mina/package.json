@@ -25,7 +25,8 @@
     "array": "npm run test test/array.test.ts",
     "if": "npm run test test/if.test.ts",
     "if2": "npm run test test/if2.test.ts",
-    "eddsa": "npm run test test/eddsa.test.ts"
+    "eddsa": "npm run test test/eddsa.test.ts",
+    "payment": "npm run test test/payment.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
@@ -45,6 +46,7 @@
     "bs58": "^6.0.0",
     "jose": "^6.0.11",
     "js-sha256": "^0.11.1",
+    "mina-signer": "^3.0.7",
     "o1js": "^2.6.0",
     "secp256k1": "^5.0.1"
   },

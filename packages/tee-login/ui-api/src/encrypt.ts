@@ -1,5 +1,5 @@
 import { recover_mnemonic } from "./pkg/precompiles.js";
-import { importWalletByMnemonic } from "./seed.js";
+import { importWalletByMnemonic } from "./mina.js";
 
 const { subtle } = crypto;
 
