@@ -11,7 +11,7 @@ FROM ${STAGEX_REG}/core-ca-certificates:sx2025.06.0 AS core-ca-certificates
 FROM ${STAGEX_REG}/core-gcc:sx2025.06.0 AS core-gcc
 FROM ${STAGEX_REG}/core-git:sx2025.06.0 AS core-git
 FROM ${STAGEX_REG}/core-zlib:sx2025.06.0 AS core-zlib
-FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm docker
+FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm
 FROM ${STAGEX_REG}/core-openssl:sx2025.06.0 AS core-openssl
 FROM ${STAGEX_REG}/core-rust:sx2025.06.0 AS core-rust
 FROM ${STAGEX_REG}/core-musl:sx2025.06.0 AS core-musl
