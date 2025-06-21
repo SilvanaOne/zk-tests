@@ -54,7 +54,6 @@ COPY --from=core-libffi . /
 COPY --from=user-cpio . /
 COPY --from=user-libseccomp . /
 COPY --from=user-linux-nitro /bzImage .
-COPY --from=user-linux-nitro /nsm.ko .
 COPY --from=user-linux-nitro /linux.config .
 
 
@@ -78,7 +77,6 @@ WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
 
 RUN mkdir initramfs/
-COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
 COPY --from=core-busybox . initramfs
 # COPY --from=core-python . initramfs
 COPY --from=core-musl . initramfs
