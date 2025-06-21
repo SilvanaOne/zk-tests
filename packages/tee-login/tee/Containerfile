@@ -1,7 +1,7 @@
 # Copyright (c), Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-ARG   STAGEX_REG=ghcr.io/siderolabs/stagex   # default registry for StageX images
+ARG   STAGEX_REG=quay.io/stagex              # default registry for StageX images (anonymous pulls work)
 
 # This containerfile uses StageX (https://stagex.tools) images, which provide a
 # full source bootstrapped, deterministic, and hermetic build toolchain
