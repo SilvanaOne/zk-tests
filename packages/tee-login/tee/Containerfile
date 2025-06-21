@@ -11,7 +11,7 @@ FROM ${STAGEX_REG}/core-ca-certificates:sx2025.06.0 AS core-ca-certificates
 FROM ${STAGEX_REG}/core-gcc:sx2025.06.0 AS core-gcc
 FROM ${STAGEX_REG}/core-git:sx2025.06.0 AS core-git
 FROM ${STAGEX_REG}/core-zlib:sx2025.06.0 AS core-zlib
-FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm
+FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm docker
 FROM ${STAGEX_REG}/core-openssl:sx2025.06.0 AS core-openssl
 FROM ${STAGEX_REG}/core-rust:sx2025.06.0 AS core-rust
 FROM ${STAGEX_REG}/core-musl:sx2025.06.0 AS core-musl
@@ -24,10 +24,10 @@ FROM ${STAGEX_REG}/user-eif_build:sx2025.06.0 AS user-eif_build
 FROM ${STAGEX_REG}/user-gen_initramfs:sx2025.06.0 AS user-gen_initramfs
 FROM ${STAGEX_REG}/user-linux-nitro:sx2025.06.0 AS user-linux-nitro
 FROM ${STAGEX_REG}/user-cpio:sx2025.06.0 AS user-cpio
-FROM ${STAGEX_REG}/user-socat:local@sha256:sx2025.06.0 AS user-socat
+FROM ${STAGEX_REG}/user-socat:local@sx2025.06.0 AS user-socat
 FROM ${STAGEX_REG}/user-jq:sx2025.06.0 AS user-jq
 FROM ${STAGEX_REG}/user-libseccomp:sx2025.06.0 AS user-libseccomp
-FROM ${STAGEX_REG}/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
+FROM ${STAGEX_REG}/core-clang@abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
 FROM ${STAGEX_REG}/core-libffi:sx2025.06.0 AS core-libffi
 
 FROM scratch as base
