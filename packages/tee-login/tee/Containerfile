@@ -6,29 +6,29 @@ ARG   STAGEX_REG=quay.io/stagex              # default registry for StageX image
 # This containerfile uses StageX (https://stagex.tools) images, which provide a
 # full source bootstrapped, deterministic, and hermetic build toolchain
 
-FROM ${STAGEX_REG}/core-binutils@sha256:sx2025.06.0 AS core-binutils
-FROM ${STAGEX_REG}/core-ca-certificates@sha256:sx2025.06.0 AS core-ca-certificates
-FROM ${STAGEX_REG}/core-gcc@sha256:sx2025.06.0 AS core-gcc
-FROM ${STAGEX_REG}/core-git@sha256:sx2025.06.0 AS core-git
-FROM ${STAGEX_REG}/core-zlib@sha256:sx2025.06.0 AS core-zlib
-FROM ${STAGEX_REG}/core-llvm@sha256:sx2025.06.0 AS core-llvm
-FROM ${STAGEX_REG}/core-openssl@sha256:sx2025.06.0 AS core-openssl
-FROM ${STAGEX_REG}/core-rust@sha256:sx2025.06.0 AS core-rust
-FROM ${STAGEX_REG}/core-musl@sha256:sx2025.06.0 AS core-musl
-FROM ${STAGEX_REG}/core-libunwind@sha256:sx2025.06.0 AS core-libunwind
-FROM ${STAGEX_REG}/core-pkgconf@sha256:sx2025.06.0 AS core-pkgconf
-FROM ${STAGEX_REG}/core-busybox@sha256:sx2025.06.0 AS core-busybox
+FROM ${STAGEX_REG}/core-binutils:sx2025.06.0 AS core-binutils
+FROM ${STAGEX_REG}/core-ca-certificates:sx2025.06.0 AS core-ca-certificates
+FROM ${STAGEX_REG}/core-gcc:sx2025.06.0 AS core-gcc
+FROM ${STAGEX_REG}/core-git:sx2025.06.0 AS core-git
+FROM ${STAGEX_REG}/core-zlib:sx2025.06.0 AS core-zlib
+FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm
+FROM ${STAGEX_REG}/core-openssl:sx2025.06.0 AS core-openssl
+FROM ${STAGEX_REG}/core-rust:sx2025.06.0 AS core-rust
+FROM ${STAGEX_REG}/core-musl:sx2025.06.0 AS core-musl
+FROM ${STAGEX_REG}/core-libunwind:sx2025.06.0 AS core-libunwind
+FROM ${STAGEX_REG}/core-pkgconf:sx2025.06.0 AS core-pkgconf
+FROM ${STAGEX_REG}/core-busybox:sx2025.06.0 AS core-busybox
 # FROM ${STAGEX_REG}/core-python:local@sha256:17d634028c3ed31707aa492dc65dc15ac27bab197d08e447786b3b1e8c26df2c AS core-python
-FROM ${STAGEX_REG}/core-libzstd@sha256:sx2025.06.0 AS core-libzstd
-FROM ${STAGEX_REG}/user-eif_build@sha256:sx2025.06.0 AS user-eif_build
-FROM ${STAGEX_REG}/user-gen_initramfs@sha256:sx2025.06.0 AS user-gen_initramfs
-FROM ${STAGEX_REG}/user-linux-nitro@sha256:sx2025.06.0 AS user-linux-nitro
-FROM ${STAGEX_REG}/user-cpio@sha256:sx2025.06.0 AS user-cpio
+FROM ${STAGEX_REG}/core-libzstd:sx2025.06.0 AS core-libzstd
+FROM ${STAGEX_REG}/user-eif_build:sx2025.06.0 AS user-eif_build
+FROM ${STAGEX_REG}/user-gen_initramfs:sx2025.06.0 AS user-gen_initramfs
+FROM ${STAGEX_REG}/user-linux-nitro:sx2025.06.0 AS user-linux-nitro
+FROM ${STAGEX_REG}/user-cpio:sx2025.06.0 AS user-cpio
 FROM ${STAGEX_REG}/user-socat:local@sha256:sx2025.06.0 AS user-socat
-FROM ${STAGEX_REG}/user-jq@sha256:sx2025.06.0 AS user-jq
-FROM ${STAGEX_REG}/user-libseccomp@sha256:sx2025.06.07 AS user-libseccomp
-FROM ${STAGEX_REG}/core-clang@sha256:sx2025.06.0 AS core-clang
-FROM ${STAGEX_REG}/core-libffi@sha256:sx2025.06.0 AS core-libffi
+FROM ${STAGEX_REG}/user-jq:sx2025.06.0 AS user-jq
+FROM ${STAGEX_REG}/user-libseccomp:sx2025.06.0 AS user-libseccomp
+FROM ${STAGEX_REG}/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
+FROM ${STAGEX_REG}/core-libffi:sx2025.06.0 AS core-libffi
 
 FROM scratch as base
 ENV TARGET=aarch64-unknown-linux-musl
