@@ -68,14 +68,14 @@ and in terminal run
 
 ```sh
 git clone https://github.com/SilvanaOne/zk-tests
-cd zk-tests/packages/tee_login/tee
+cd zk-tests/packages/tee-login/tee
 make
 ```
 
 on update
 
 ```sh
-cd ../../.. && git pull origin main && cd packages/tee_login/tee && rm -rf out
+cd ../../.. && git pull origin main && cd packages/tee-login/tee && rm -rf out
 make
 ```
 

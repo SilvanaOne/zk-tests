@@ -339,6 +339,7 @@ export = async () => {
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
+    amiId: amiId,
     instanceId: instance.id,
     instancePublicIp: elasticIp.publicIp,
     instancePrivateIp: instance.privateIp,
