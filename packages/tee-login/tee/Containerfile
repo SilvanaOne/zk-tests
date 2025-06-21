@@ -27,7 +27,7 @@ FROM ${STAGEX_REG}/user-cpio:sx2025.06.0 AS user-cpio
 FROM ${STAGEX_REG}/user-socat@sx2025.06.0 AS user-socat
 FROM ${STAGEX_REG}/user-jq:sx2025.06.0 AS user-jq
 FROM ${STAGEX_REG}/user-libseccomp:sx2025.06.0 AS user-libseccomp
-FROM ${STAGEX_REG}/core-clang@abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
+FROM ${STAGEX_REG}/core-clang:sx2025.06.0 AS core-clang
 FROM ${STAGEX_REG}/core-libffi:sx2025.06.0 AS core-libffi
 
 FROM scratch as base
