@@ -1,32 +1,34 @@
 # Copyright (c), Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+ARG   STAGEX_REG=ghcr.io/siderolabs/stagex   # default registry for StageX images
+
 # This containerfile uses StageX (https://stagex.tools) images, which provide a
 # full source bootstrapped, deterministic, and hermetic build toolchain
 
-FROM stagex/core-binutils@sha256:83c66e9d7393d7004442f8c1f2ad0f69979cc2a9193222338f4736abf17b6752 AS core-binutils
-FROM stagex/core-ca-certificates@sha256:d6fca6c0080e8e5360cd85fc1c4bd3eab71ce626f40602e38488bfd61fd3e89d AS core-ca-certificates
-FROM stagex/core-gcc@sha256:125bd6306e7f37e57d377d5a189c0e499388aff42b22cc79acee6097357c617f AS core-gcc
-FROM stagex/core-git@sha256:5b0ce8741532026bb7e6f2302855a93057a27a7f38e596e9a7fb0e782f04d0f6 AS core-git
-FROM stagex/core-zlib@sha256:b35b643642153b1620093cfe2963f5fa8e4d194fb2344a5786da5717018976c2 AS core-zlib
-FROM stagex/core-llvm@sha256:bc1c6d67aa73a96dd92f5def7e2701de78b0639d0c815d69110fbb9b3b3e85fe AS core-llvm
-FROM stagex/core-openssl@sha256:8670a22fb76965f31bda1b61cd75ae39a96e1008deffe289a5d94ee4337b1cb2 AS core-openssl
-FROM stagex/core-rust@sha256:9be04ac253dabe11367336d29a1582a25535876a1b68fb9508ac85e898d812fd AS core-rust
-FROM stagex/core-musl@sha256:d5f86324920cfc7fc34f0163502784b73161543ba0a312030a3ddff3ef8ab2f8 AS core-musl
-FROM stagex/core-libunwind@sha256:4f3ead61255c1e58e7dc43a33043f297f8730ec88e068a4460e5fff09e503781 AS core-libunwind
-FROM stagex/core-pkgconf@sha256:fb69c51519edd6aa8e889877b48d2b6874bc5756f72d412908dc629842c46b4a AS core-pkgconf
-FROM stagex/core-busybox@sha256:cac5d773db1c69b832d022c469ccf5f52daf223b91166e6866d42d6983a3b374 AS core-busybox
-# FROM stagex/core-python:local@sha256:17d634028c3ed31707aa492dc65dc15ac27bab197d08e447786b3b1e8c26df2c AS core-python
-FROM stagex/core-libzstd@sha256:35ae8f0433cf1472f8fb25e74dc631723e9f458ca3e9544976beb724690adea8 AS core-libzstd
-FROM stagex/user-eif_build@sha256:c1d030fcaa20d26cd144ce992ba4b77665a0e9683f01a92960f9823d39401e41 AS user-eif_build
-FROM stagex/user-gen_initramfs@sha256:6c398be1eea26dcee005d11b5c063e1f7cf079710175e5d550d859c685d81825 AS user-gen_initramfs
-FROM stagex/user-linux-nitro@sha256:352bb3b24afdc2b3c4263535c04e3de194655a9f04037d9612722df40c88610a AS user-linux-nitro
-FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da01954efae1bce95c4 AS user-cpio
-FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
-FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
-FROM stagex/user-libseccomp@sha256:7a397b5261c24aa745fe9158499e0db1ba21df415354bbbe77c90a6a3fd4c517 AS user-libseccomp
-FROM stagex/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
-FROM stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS core-libffi
+FROM ${STAGEX_REG}/core-binutils@sha256:83c66e9d7393d7004442f8c1f2ad0f69979cc2a9193222338f4736abf17b6752 AS core-binutils
+FROM ${STAGEX_REG}/core-ca-certificates@sha256:d6fca6c0080e8e5360cd85fc1c4bd3eab71ce626f40602e38488bfd61fd3e89d AS core-ca-certificates
+FROM ${STAGEX_REG}/core-gcc@sha256:125bd6306e7f37e57d377d5a189c0e499388aff42b22cc79acee6097357c617f AS core-gcc
+FROM ${STAGEX_REG}/core-git@sha256:5b0ce8741532026bb7e6f2302855a93057a27a7f38e596e9a7fb0e782f04d0f6 AS core-git
+FROM ${STAGEX_REG}/core-zlib@sha256:b35b643642153b1620093cfe2963f5fa8e4d194fb2344a5786da5717018976c2 AS core-zlib
+FROM ${STAGEX_REG}/core-llvm@sha256:bc1c6d67aa73a96dd92f5def7e2701de78b0639d0c815d69110fbb9b3b3e85fe AS core-llvm
+FROM ${STAGEX_REG}/core-openssl@sha256:8670a22fb76965f31bda1b61cd75ae39a96e1008deffe289a5d94ee4337b1cb2 AS core-openssl
+FROM ${STAGEX_REG}/core-rust@sha256:9be04ac253dabe11367336d29a1582a25535876a1b68fb9508ac85e898d812fd AS core-rust
+FROM ${STAGEX_REG}/core-musl@sha256:d5f86324920cfc7fc34f0163502784b73161543ba0a312030a3ddff3ef8ab2f8 AS core-musl
+FROM ${STAGEX_REG}/core-libunwind@sha256:4f3ead61255c1e58e7dc43a33043f297f8730ec88e068a4460e5fff09e503781 AS core-libunwind
+FROM ${STAGEX_REG}/core-pkgconf@sha256:fb69c51519edd6aa8e889877b48d2b6874bc5756f72d412908dc629842c46b4a AS core-pkgconf
+FROM ${STAGEX_REG}/core-busybox@sha256:cac5d773db1c69b832d022c469ccf5f52daf223b91166e6866d42d6983a3b374 AS core-busybox
+# FROM ${STAGEX_REG}/core-python:local@sha256:17d634028c3ed31707aa492dc65dc15ac27bab197d08e447786b3b1e8c26df2c AS core-python
+FROM ${STAGEX_REG}/core-libzstd@sha256:35ae8f0433cf1472f8fb25e74dc631723e9f458ca3e9544976beb724690adea8 AS core-libzstd
+FROM ${STAGEX_REG}/user-eif_build@sha256:c1d030fcaa20d26cd144ce992ba4b77665a0e9683f01a92960f9823d39401e41 AS user-eif_build
+FROM ${STAGEX_REG}/user-gen_initramfs@sha256:6c398be1eea26dcee005d11b5c063e1f7cf079710175e5d550d859c685d81825 AS user-gen_initramfs
+FROM ${STAGEX_REG}/user-linux-nitro@sha256:352bb3b24afdc2b3c4263535c04e3de194655a9f04037d9612722df40c88610a AS user-linux-nitro
+FROM ${STAGEX_REG}/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da01954efae1bce95c4 AS user-cpio
+FROM ${STAGEX_REG}/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
+FROM ${STAGEX_REG}/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
+FROM ${STAGEX_REG}/user-libseccomp@sha256:7a397b5261c24aa745fe9158499e0db1ba21df415354bbbe77c90a6a3fd4c517 AS user-libseccomp
+FROM ${STAGEX_REG}/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
+FROM ${STAGEX_REG}/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS core-libffi
 
 FROM scratch as base
 ENV TARGET=aarch64-unknown-linux-musl
@@ -128,4 +130,3 @@ COPY --from=build /build_cpio/rootfs.cpio .
 
 FROM scratch as package
 COPY --from=install /rootfs .
-
