@@ -28,8 +28,8 @@ def extract_stagex_images(containerfile_path: str) -> List[Tuple[str, str, str]]
         if line.startswith('#') or not line:
             continue
             
-        # Match FROM stagex/... lines
-        match = re.match(r'^FROM\s+stagex/([^@:]+)[@:]([^@\s]+)\s+AS\s+(.+)$', line)
+        # Match FROM ${STAGEX_REG}/... lines (handles both variable and direct registry formats)
+        match = re.match(r'^FROM\s+(?:\$\{STAGEX_REG\}/|[^/]+/)?([^@:]+)[@:]([^@\s]+)\s+AS\s+(.+)$', line)
         if match:
             image_name = match.group(1)
             current_ref = match.group(2)  # Could be sha256:hash or 'local'
@@ -57,7 +57,7 @@ def get_arm64_hash(image_name: str) -> Optional[str]:
     # Handle special cases first
     if image_name == "core-ca-certificates":
         url = "https://stagex.tools/packages/core/ca-certificates"
-    elif image_name == "linux-nitro":
+    elif image_name == "user-linux-nitro":
         url = "https://stagex.tools/packages/user/linux-nitro"
     else:
         # Determine namespace (core vs user) and strip that prefix
@@ -75,8 +75,10 @@ def get_arm64_hash(image_name: str) -> Optional[str]:
         url = f"https://stagex.tools/packages/{kind}/{subpath}"
  
     try:
+        print(f"Fetching {url}...")
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
+
 
         # Parse the HTML and look for a line like:  "linux/arm64 sha256:<hex>"
         soup = bs4.BeautifulSoup(resp.text, "html.parser")
@@ -101,8 +103,8 @@ def update_containerfile(containerfile_path: str, updates: Dict[str, str]) -> No
     original_content = content
     
     for image_name, new_hash in updates.items():
-        # Pattern to match the FROM line for this image
-        pattern = rf'(FROM\s+stagex/{re.escape(image_name)}@sha256:)[a-f0-9]{{64}}(\s+AS\s+.+)'
+        # Pattern to match the FROM line for this image (handles ${STAGEX_REG}/ format)
+        pattern = rf'(FROM\s+(?:\$\{{STAGEX_REG\}}/|[^/]+/)?{re.escape(image_name)}@sha256:)[a-f0-9]{{64}}(\s+AS\s+.+)'
         replacement = rf'\g<1>{new_hash}\g<2>'
         
         content = re.sub(pattern, replacement, content)
