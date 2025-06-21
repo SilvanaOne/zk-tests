@@ -24,7 +24,7 @@ FROM ${STAGEX_REG}/user-eif_build:sx2025.06.0 AS user-eif_build
 FROM ${STAGEX_REG}/user-gen_initramfs:sx2025.06.0 AS user-gen_initramfs
 FROM ${STAGEX_REG}/user-linux-nitro:sx2025.06.0 AS user-linux-nitro
 FROM ${STAGEX_REG}/user-cpio:sx2025.06.0 AS user-cpio
-FROM ${STAGEX_REG}/user-socat@sx2025.06.0 AS user-socat
+FROM ${STAGEX_REG}/user-socat:sx2025.06.0 AS user-socat
 FROM ${STAGEX_REG}/user-jq:sx2025.06.0 AS user-jq
 FROM ${STAGEX_REG}/user-libseccomp:sx2025.06.0 AS user-libseccomp
 FROM ${STAGEX_REG}/core-clang:sx2025.06.0 AS core-clang
