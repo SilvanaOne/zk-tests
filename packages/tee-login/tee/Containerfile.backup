@@ -24,9 +24,9 @@ FROM stagex/linux-nitro@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eae
 FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da01954efae1bce95c4 AS user-cpio
 FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
 FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
-FROM stagex/user-libseccomp@sha256:1b3cb1a7faad08a74a756894bf4e3ad24296c5bef5d30c918c64fc3cc74d1648 AS user-libseccomp
-FROM stagex/core-clang@sha256:2fefd58ff45dcfe742422f6e457971fee4b8223187657fd375a82f240f46bbbd AS core-clang
-FROM stagex/core-libffi@sha256:47096e1c82771a075dd43b99e1c4ee0ed45c5a4b311f1e2db7ff3ca29530af54 AS core-libffi
+FROM stagex/user-libseccomp@sha256:7a397b5261c24aa745fe9158499e0db1ba21df415354bbbe77c90a6a3fd4c517 AS user-libseccomp
+FROM stagex/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 AS core-clang
+FROM stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS core-libffi
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl

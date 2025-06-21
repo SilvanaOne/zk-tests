@@ -5,9 +5,10 @@ Script to update StageX image SHA256 hashes in Containerfile to their latest ARM
 
 import json
 import re
-import subprocess
 import sys
 from typing import Dict, List, Tuple, Optional
+import requests
+import bs4
 
 
 def extract_stagex_images(containerfile_path: str) -> List[Tuple[str, str, str]]:
@@ -49,42 +50,44 @@ def extract_stagex_images(containerfile_path: str) -> List[Tuple[str, str, str]]
 
 def get_arm64_hash(image_name: str) -> Optional[str]:
     """
-    Get the ARM64 SHA256 hash for a stagex image using docker manifest inspect.
+    Fetch the linux/arm64 digest from the StageX package index.
+    This avoids registry quirks and works even when the image is hosted
+    on Quay or Docker Hub but not GHCR.
     """
-    registry_url = f"ghcr.io/siderolabs/stagex/{image_name}:latest"
-    
+    # Handle special cases first
+    if image_name == "core-ca-certificates":
+        url = "https://stagex.tools/packages/core/ca-certificates"
+    elif image_name == "linux-nitro":
+        url = "https://stagex.tools/packages/user/linux-nitro"
+    else:
+        # Determine namespace (core vs user) and strip that prefix
+        if image_name.startswith("core-"):
+            kind = "core"
+            subpath = image_name[len("core-"):]
+        elif image_name.startswith("user-"):
+            kind = "user"
+            subpath = image_name[len("user-"):]
+        else:
+            # Fallback for odd names: treat everything after first dash as subpath
+            kind, subpath = image_name.split("-", 1)
+
+        subpath = subpath.replace("-", "/")  # dashes → path separators
+        url = f"https://stagex.tools/packages/{kind}/{subpath}"
+ 
     try:
-        print(f"Fetching manifest for {image_name}...")
-        result = subprocess.run(
-            ['docker', 'manifest', 'inspect', '--verbose', registry_url],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        manifest_data = json.loads(result.stdout)
-        
-        # Look for ARM64 platform
-        for entry in manifest_data:
-            descriptor = entry.get('Descriptor', {})
-            platform = descriptor.get('platform', {})
-            
-            if platform.get('architecture') == 'arm64' and platform.get('os') == 'linux':
-                # Extract SHA256 from the Ref field
-                ref = entry.get('Ref', '')
-                match = re.search(r'@sha256:([a-f0-9]{64})', ref)
-                if match:
-                    return match.group(1)
-        
-        print(f"Warning: No ARM64 platform found for {image_name}")
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+
+        # Parse the HTML and look for a line like:  "linux/arm64 sha256:<hex>"
+        soup = bs4.BeautifulSoup(resp.text, "html.parser")
+        match = soup.find(string=re.compile(r"linux/arm64 sha256:([a-f0-9]{64})"))
+        if match:
+            return re.search(r"sha256:([a-f0-9]{64})", match).group(1)
+        print(f"Warning: no arm64 digest listed for {image_name}")
         return None
-        
-    except subprocess.CalledProcessError as e:
-        print(f"Error fetching manifest for {image_name}: {e}")
-        print(f"stderr: {e.stderr}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON for {image_name}: {e}")
+
+    except Exception as e:
+        print(f"Error fetching digest for {image_name}: {e}")
         return None
 
 
@@ -167,4 +170,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

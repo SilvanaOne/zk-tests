@@ -88,7 +88,12 @@ export = async () => {
     user: api.name,
   });
 
-  const amiId = "ami-085ad6ae776d8f09c";
+  // const amiId = "ami-085ad6ae776d8f09c";
+  const amiId = (
+    await aws.ssm.getParameter({
+      name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
+    })
+  ).value;
   const keyPairName = "TEE"; // TODO: create key pair in AWS
   const kmsKeyName = "TEEKMS"; // TODO: create kms key in AWS
 
@@ -285,7 +290,7 @@ export = async () => {
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
-    instanceType: "t3.xlarge", //"m5.xlarge",  minimum: t3a.xlarge ($0.1504  per hour) or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge
+    instanceType: "c7g.4xlarge", //"m5.xlarge",  minimum: t3a.xlarge ($0.1504  per hour) or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,
@@ -296,7 +301,7 @@ export = async () => {
     },
 
     rootBlockDevice: {
-      volumeSize: 30, // TODO: increase to 200GB
+      volumeSize: 100,
       volumeType: "gp3",
       deleteOnTermination: true,
     },

@@ -133,6 +133,11 @@ skopeo inspect --raw docker://stagex/core-binutils:sx \
 docker manifest inspect --verbose \
  ghcr.io/siderolabs/stagex/core-binutils:latest
 
+core-ca-certificates
+
+docker manifest inspect --verbose \
+ ghcr.io/siderolabs/stagex/user-libseccomp:latest
+
 # Docker Hub still lists them, even though the images are on GHCR
 
 curl -s https://hub.docker.com/v2/repositories/stagex/core-binutils/tags/ \
@@ -163,3 +168,14 @@ done
 done
 
 curl -fsSL "https://codeberg.org/stagex/stagex/raw/branch/main/digests/core.txt"
+
+# one-liner using skopeo; replace package name as needed
+
+skopeo inspect --raw docker://ghcr.io/siderolabs/stagex/core-binutils:latest \
+ | jq -r '.manifests[] | select(.platform.architecture=="arm64") | .digest'
+
+skopeo inspect --raw docker://quay.io/stagex/core-libffi:latest \
+ | jq -r '.manifests[] | select(.platform.architecture=="arm64") | .digest'
+
+docker manifest inspect --verbose \
+ quay.io/stagex/core-binutils:latest
