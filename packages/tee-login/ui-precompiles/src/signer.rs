@@ -6,6 +6,7 @@ pub fn sign_fields(data: &PoseidonInput, keypair: &Keypair) -> Signature {
     ctx.sign(&keypair, &data)
 }
 
+#[allow(dead_code)]
 pub fn verify_fields(data: &PoseidonInput, public_key: &PubKey, signature: &Signature) -> bool {
     let mut ctx = mina_signer::create_legacy::<PoseidonInput>(());
     ctx.verify(&signature, &public_key, &data)

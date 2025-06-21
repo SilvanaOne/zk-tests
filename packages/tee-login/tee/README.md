@@ -121,3 +121,45 @@ curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/get_at
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/login
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "hi"}}' -X POST http://23.21.249.129:3000/ping
+
+docker manifest inspect --verbose stagex/core-binutils:sx \
+ | grep arm64 -B1 -A4
+
+skopeo inspect --raw docker://stagex/core-binutils:sx \
+ | jq -r '.manifests[] | select(.platform.architecture=="arm64") | .digest'
+
+# multi-arch tag (both amd64 & arm64)
+
+docker manifest inspect --verbose \
+ ghcr.io/siderolabs/stagex/core-binutils:latest
+
+# Docker Hub still lists them, even though the images are on GHCR
+
+curl -s https://hub.docker.com/v2/repositories/stagex/core-binutils/tags/ \
+ | jq '."results"[]|.name' | head
+
+docker manifest inspect ghcr.io/siderolabs/stagex/user-libseccomp:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="arm64")
+| .digest'
+
+docker manifest inspect --verbose \
+ ghcr.io/siderolabs/stagex/core-binutils:latest \
+ | jq -r '.manifests[]
+| select(.platform.architecture=="arm64")
+| .digest'
+
+TARGET="Containerfile"
+SOURCE="https://codeberg.org/stagex/stagex/raw/branch/main/digests"
+STAGES="core user bootstrap"
+
+TMPFILE="$(mktemp)"
+
+DIGESTS_TMP="$(mktemp)"
+for stage in $STAGES; do
+    curl -fsSL "$SOURCE/$stage.txt" | while read -r digest name; do
+        echo "$name $digest" # >> "$DIGESTS_TMP"
+done
+done
+
+curl -fsSL "https://codeberg.org/stagex/stagex/raw/branch/main/digests/core.txt"

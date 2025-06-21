@@ -108,6 +108,13 @@ export = async () => {
             Effect: "Allow",
             Action: ["kms:Decrypt", "kms:GenerateDataKey*"],
             Resource: key.targetKeyArn,
+            /*
+                #95 0.797 BootMeasurement: Sha384 { ... }: {"HashAlgorithm": "Sha384 { ... }",
+                "PCR0": "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883",
+                "PCR1": "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883", 
+                "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"}
+                #95 DONE 0.8s
+            */
             // Condition: {
             //   StringEqualsIgnoreCase: {
             //     "kms:RecipientAttestation:ImageSha384":
@@ -275,9 +282,10 @@ export = async () => {
   );
 
   // Create EC2 Instance
+  // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
-    instanceType: "c7i.4xlarge", //"m5.xlarge",  minimum: t3.nano, standard: m5.xlarge or m5.2xlarge
+    instanceType: "t3.xlarge", //"m5.xlarge",  minimum: t3a.xlarge ($0.1504  per hour) or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,
@@ -287,7 +295,6 @@ export = async () => {
       enabled: true,
     },
 
-    // Configure root volume (200GB)
     rootBlockDevice: {
       volumeSize: 30, // TODO: increase to 200GB
       volumeType: "gp3",

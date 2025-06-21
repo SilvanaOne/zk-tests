@@ -1,3 +1,4 @@
+use crate::attestation::Attestation;
 use bc_shamir::recover_secret;
 use bip39::Mnemonic;
 use js_sys::{Array, Uint8Array};
@@ -12,8 +13,10 @@ use crate::hash::PoseidonInput;
 use crate::keypair::generate_keypair;
 use crate::signer::sign_fields;
 
+mod attestation;
 mod hash;
 mod keypair;
+mod nitro_attestation;
 mod signer;
 
 // Convenient macro for console logging
@@ -99,4 +102,26 @@ pub fn signature() -> String {
     let signature = sign_fields(&msg, &keypair);
     println!("Signature: {:?}", signature);
     signature.to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AttestationVerificationResult {
+    pub result: Option<Attestation>,
+    pub error: Option<String>,
+}
+
+#[wasm_bindgen]
+pub fn verify_attestation(attestation: &str) -> String {
+    let result = match attestation::verify_attestation(attestation) {
+        Ok(att) => AttestationVerificationResult {
+            result: Some(att),
+            error: None,
+        },
+        Err(e) => AttestationVerificationResult {
+            result: None,
+            error: Some(e.to_string()),
+        },
+    };
+    serde_json::to_string(&result)
+        .unwrap_or_else(|e| format!(r#"{{"error": "Serialization failed: {}"}}"#, e))
 }

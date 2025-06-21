@@ -50,10 +50,12 @@ pub enum NitroAttestationVerifyError {
     /// Invalid attestation document
     InvalidAttestationDoc(String),
     /// Invalid user data.
+    #[allow(dead_code)]
     InvalidUserData,
     /// Invalid certificate: {0}
     InvalidCertificate(String),
     /// Invalid PCRs
+    #[allow(dead_code)]
     InvalidPcrs,
 }
 
@@ -669,6 +671,7 @@ impl AttestationDocument {
     }
 
     /// Get the length of the certificate chain.
+    #[allow(dead_code)]
     pub fn get_cert_chain_length(&self) -> usize {
         self.cabundle.len()
     }

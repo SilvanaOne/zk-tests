@@ -31,22 +31,15 @@ export function UserStatusDashboard() {
     getConnectedMethods,
   } = useUserState();
 
-  useEffect(() => {
-    console.log("UserStatusDashboard userState", userState);
-  }, [userState]);
-
   const selectedAuthMethod = getSelectedAuthMethod();
-  console.log("selectedAuthMethod", selectedAuthMethod);
 
   // Get connected methods
   const connectedMethods = getConnectedMethods().filter(
     (method) => method.isConnected
   );
-  console.log("connectedMethods", connectedMethods);
   const walletConnections = getWalletConnections().filter(
     (wallet) => wallet.isConnected
   );
-  console.log("walletConnections", walletConnections);
   const socialConnections = getSocialConnections();
 
   // All available methods (connected and not connected)

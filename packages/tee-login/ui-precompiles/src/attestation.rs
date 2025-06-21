@@ -1,6 +1,6 @@
 use crate::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
+use js_sys::Date;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,19 +26,8 @@ pub struct Attestation {
 }
 
 pub fn verify_attestation(attestation: &str) -> Result<Attestation, Box<dyn std::error::Error>> {
-    // Parse JSON to extract attestation field
-    let json: Value = match serde_json::from_str(attestation) {
-        Ok(v) => v,
-        Err(e) => return Err(format!("Invalid attestation json: {}", e).into()),
-    };
-
-    let attestation_str = match json.get("attestation").and_then(|v| v.as_str()) {
-        Some(s) => s,
-        None => return Err("Invalid attestation json - missing attestation field".into()),
-    };
-
     // Handle hex decoding with proper error handling
-    let attestation_bytes = match hex::decode(attestation_str) {
+    let attestation_bytes = match hex::decode(attestation) {
         Ok(bytes) => bytes,
         Err(e) => return Err(format!("Failed to decode hex attestation: {}", e).into()),
     };
@@ -77,7 +66,7 @@ pub fn verify_attestation(attestation: &str) -> Result<Attestation, Box<dyn std:
         .map(|(k, v)| (*k, hex::encode(v)))
         .collect::<HashMap<u8, String>>();
 
-    let res = verify_nitro_attestation(&vec0, &vec1, &attestation, 1731627987382);
+    let res = verify_nitro_attestation(&vec0, &vec1, &attestation, Date::now() as u64);
 
     Ok(Attestation {
         is_valid: res.is_ok(),

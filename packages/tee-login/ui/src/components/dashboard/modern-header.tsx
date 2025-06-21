@@ -1,75 +1,23 @@
 "use client";
 
-import { ShieldCheck, Wifi, WifiOff, Sun, Moon } from "lucide-react";
+import { ShieldCheck, Wifi, WifiOff, Sun, Moon, Loader2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
 interface ModernHeaderProps {
   teeConnected: boolean;
+  teeLoading: boolean;
   onAddConnection: () => void;
 }
 
 export function ModernHeader({
   teeConnected,
+  teeLoading,
   onAddConnection,
 }: ModernHeaderProps) {
   const { theme, setTheme, resolvedTheme, systemTheme } = useTheme();
-  // const [mounted, setMounted] = useState(false);
-  // const [actualTheme, setActualTheme] = useState<string>("dark");
-
-  // // More robust theme detection
-  // useEffect(() => {
-  //   setMounted(true);
-
-  //   // Check multiple sources for theme
-  //   const detectTheme = () => {
-  //     // 1. Check HTML class
-  //     const htmlClass = document.documentElement.classList.contains("dark")
-  //       ? "dark"
-  //       : "light";
-
-  //     // 2. Check system preference
-  //     const systemPref = window.matchMedia("(prefers-color-scheme: dark)")
-  //       .matches
-  //       ? "dark"
-  //       : "light";
-
-  //     // 3. Use resolvedTheme if available
-  //     const detected = resolvedTheme || htmlClass || systemPref || "dark";
-
-  //     setActualTheme(detected);
-  //     console.log("Theme detection:", {
-  //       resolvedTheme,
-  //       htmlClass,
-  //       systemPref,
-  //       detected,
-  //     });
-  //   };
-
-  //   // Initial detection
-  //   detectTheme();
-
-  //   // Listen for theme changes
-  //   const observer = new MutationObserver(detectTheme);
-  //   observer.observe(document.documentElement, {
-  //     attributes: true,
-  //     attributeFilter: ["class"],
-  //   });
-
-  //   // Listen for system theme changes
-  //   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  //   mediaQuery.addEventListener("change", detectTheme);
-
-  //   return () => {
-  //     observer.disconnect();
-  //     mediaQuery.removeEventListener("change", detectTheme);
-  //   };
-  // }, [resolvedTheme]);
-
-  console.log("theme:", theme);
 
   const toggleTheme = () => {
-    console.log("toggleTheme", theme, resolvedTheme);
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
@@ -84,17 +32,28 @@ export function ModernHeader({
 
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
-          {teeConnected ? (
+          {teeLoading ? (
+            <Loader2 className="h-4 w-4 text-brand-yellow animate-spin" />
+          ) : teeConnected ? (
             <Wifi className="h-4 w-4 text-brand-green" />
           ) : (
             <WifiOff className="h-4 w-4 text-danger" />
           )}
           <span
             className={`text-xs font-medium ${
-              teeConnected ? "text-brand-green" : "text-danger"
+              teeConnected
+                ? "text-brand-green"
+                : teeLoading
+                ? "text-brand-yellow"
+                : "text-danger"
             }`}
           >
-            TEE: {teeConnected ? "Connected" : "Disconnected"}
+            TEE:{" "}
+            {teeLoading
+              ? "Connecting..."
+              : teeConnected
+              ? "Connected"
+              : "Disconnected"}
           </span>
         </div>
 

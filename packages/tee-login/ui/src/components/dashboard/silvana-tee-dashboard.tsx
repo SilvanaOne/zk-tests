@@ -6,57 +6,37 @@ import { ModernHeader } from "@/components/dashboard/modern-header";
 import { TeeStatusDashboard } from "@/components/dashboard/tee-status-dashboard";
 import { UserStatusDashboard } from "@/components/dashboard/user-status-dashboard";
 import { MinaWalletDashboard } from "@/components/dashboard/mina-wallet-dashboard";
-import { WalletConnectModal } from "@/components/ui/wallet-connect-modal";
+import { WalletConnectModal } from "@/components/dashboard/wallet-connect-modal";
 import { AnimatedBackground } from "@/components/ui/animated-background";
 import { ModernCard, SectionHeader } from "@/components/ui/modern-card";
 import type {
-  TeeStatusData,
   UserWalletStatus,
   UserSocialLoginStatus,
   ApiFunctions,
 } from "@/lib/types";
+import {
+  Attestation,
+  TeeStats,
+  TeeStatusData,
+  getAttestation,
+  getStats,
+} from "@/lib/tee";
 import { getWalletById } from "@/lib/wallet";
-import { Github, Globe, Activity } from "lucide-react";
 import Image from "next/image";
-import { AuthComponent, SocialLoginFunction } from "@/components/auth/auth";
 import type { ApiFrameHandle } from "@/components/api/api";
-import { useSession } from "next-auth/react";
 import { useUserState, UserStateProvider } from "@/context/userState";
-import { useTheme } from "next-themes";
 
 const Api = dynamic(() => import("@/components/api/api").then((m) => m.Api), {
   ssr: false,
 });
 
-// Mock data and functions
-const mockTeeStatsResponse = {
-  response: {
-    intent: 1,
-    timestamp_ms: 1750233231496,
-    data: {
-      cpu_cores: 8,
-      memory: 8140572,
-      available_memory: 7886012,
-      free_memory: 8020332,
-      used_memory: 254560,
-      timestamp: "2025-06-18T07:53:51.496+00:00",
-    },
-  },
-  signature:
-    "cfbb777c6712e54e58e16745c4f96288f09c28f6ea90f399cb767835da1e79207c4eeb7d22470869f86ee38c48e7443569c8178035a6aaa5956574b54f92f30d",
-};
-
 // Internal dashboard component
-function SilvanaTeeDashboardInternal() {
+function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
+  const { apiFunctions } = props;
   const [teeStatus, setTeeStatus] = useState<TeeStatusData | null>(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoadingTee, setIsLoadingTee] = useState(true);
-  const [signedMessage, setSignedMessage] = useState<{
-    msg: bigint[];
-    signature: string;
-  } | null>(null);
-  const { data: session } = useSession();
-  const { resolvedTheme } = useTheme();
+  const [isFetchingTee, setIsFetchingTee] = useState(false);
 
   // Get state and methods from context
   const {
@@ -64,57 +44,68 @@ function SilvanaTeeDashboardInternal() {
     connect,
     getConnectionState,
     setSelectedAuthMethod,
+    setConnecting,
+    setConnectionFailed,
     getWalletConnections,
     getSocialConnections,
     getConnectedMethods,
   } = useUserState();
 
   useEffect(() => {
-    console.log("SilvanaTeeDashboard userState", userState);
-  }, [userState]);
-
-  useEffect(() => {
     const fetchTeeData = async () => {
-      setIsLoadingTee(true);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (isFetchingTee || !isLoadingTee) {
+        return;
+      }
+      setIsFetchingTee(true);
+      const stats = await getStats();
+      const attestation = await getAttestation();
+      if (
+        !stats.success ||
+        !attestation.success ||
+        !stats.data ||
+        !attestation.data
+      ) {
+        setIsLoadingTee(false);
+        setIsFetchingTee(false);
+        return;
+      }
+      const verifiedAttestation = await apiFunctions.verifyAttestation(
+        attestation.data
+      );
+      if (
+        !verifiedAttestation ||
+        verifiedAttestation.error ||
+        !verifiedAttestation.verifiedAttestation
+      ) {
+        setIsLoadingTee(false);
+        setIsFetchingTee(false);
+        return;
+      }
+      let attestationData: { result: Attestation; error: string | null };
+      try {
+        attestationData = JSON.parse(
+          verifiedAttestation.verifiedAttestation
+        ) as { result: Attestation; error: string | null };
+      } catch (error) {
+        console.error("Error parsing attestation data", error);
+        setIsLoadingTee(false);
+        setIsFetchingTee(false);
+        return;
+      }
+      if (!attestationData.result) {
+        setIsLoadingTee(false);
+        setIsFetchingTee(false);
+        return;
+      }
       setTeeStatus({
-        stats: mockTeeStatsResponse.response.data,
-        attestation: {
-          is_valid: true,
-          digest: "SHA384",
-          timestamp: 1750233174339,
-          module_id: "i-004c4acc95caeb12a-enc01978206707527d6",
-          pcr_vec: [
-            "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883",
-            "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883",
-            "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a",
-          ],
-          pcr_map: {
-            0: "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883",
-            1: "b9d08361baa85f592c98b491f1982caaf03f5b1fb8a2a76452f5754510c6864dc88cfa146d43704c9ff9911a2b822883",
-            2: "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a",
-          },
-          pcr_locked: {
-            0: true,
-            1: true,
-            2: false,
-            3: true,
-            4: true,
-            8: false,
-          },
-          addresses: {
-            solana_address: "AUJTAeQFrVEoRjKjsKRHaW1aiJG2A5BceSTvGZfpcP1S",
-            sui_address:
-              "0xa9785af780b16b646041d260c19b2087cac4ffeff636b0347f0b07eee8b0d8f1",
-            mina_address:
-              "B62qqngPFeyNniTX8yaTA8S5MxuM2FZrFb2VEsZ3oZ3HudKLBCs4Em3",
-            ethereum_address: "0x0ea8643911f36cc73b473735ca2578bb070598b0",
-          },
-        },
+        stats: stats.data,
+        attestation: attestationData.result,
       });
       setIsLoadingTee(false);
+      setIsFetchingTee(false);
     };
     fetchTeeData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Get connected wallets and social connections
@@ -167,12 +158,12 @@ function SilvanaTeeDashboardInternal() {
       <div className="min-h-screen">
         <ModernHeader
           teeConnected={teeStatus?.attestation.is_valid ?? false}
+          teeLoading={isLoadingTee}
           onAddConnection={() => setIsWalletModalOpen(true)}
         />
 
         <div className="pt-20 pb-12">
           <div className="container mx-auto px-6 xl:px-12 max-w-[1440px]">
-            {/* Connected Wallets Section */}
             <ModernCard delay={0.1} className="mb-6">
               <SectionHeader>Connected Wallets & Accounts</SectionHeader>
 
@@ -226,9 +217,11 @@ function SilvanaTeeDashboardInternal() {
         {/* Wallet Connect Modal */}
         <WalletConnectModal
           isOpen={isWalletModalOpen}
-          onClose={() => setIsWalletModalOpen(false)}
           connect={connect}
+          onClose={() => setIsWalletModalOpen(false)}
           getConnectionState={getConnectionState}
+          setConnecting={setConnecting}
+          setConnectionFailed={setConnectionFailed}
         />
       </div>
     </>
@@ -322,6 +315,27 @@ export default function SilvanaTeeDashboard() {
     }
   }
 
+  async function verifyAttestation(attestation: string): Promise<{
+    verifiedAttestation: string | null;
+    error: string | null;
+  } | null> {
+    try {
+      if (!apiRef.current) {
+        console.log("Api not found");
+        return { verifiedAttestation: null, error: "Api not found" };
+      }
+
+      const verifiedAttestation = await apiRef.current.verifyAttestation(
+        attestation
+      );
+
+      return { verifiedAttestation, error: null };
+    } catch (error: any) {
+      console.error("verifyAttestation error:", error?.message);
+      return { verifiedAttestation: null, error: error?.message };
+    }
+  }
+
   async function decryptShares(
     data: string[],
     privateKeyId: string
@@ -347,12 +361,13 @@ export default function SilvanaTeeDashboard() {
     decryptShares,
     signMessage,
     signPayment,
+    verifyAttestation,
   };
 
   return (
     <>
       <UserStateProvider apiFunctions={apiFunctions}>
-        <SilvanaTeeDashboardInternal />
+        <SilvanaTeeDashboardInternal apiFunctions={apiFunctions} />
       </UserStateProvider>
       <Api ref={apiRef} />
     </>

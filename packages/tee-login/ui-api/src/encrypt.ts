@@ -30,7 +30,6 @@ export async function decryptShares(params: {
   privateKey: string;
   publicKey: string;
 } | null> {
-  console.log("decryptShares", params.data);
   const shares: Uint8Array[] = [];
   for (const share of params.data) {
     const shareDecrypted = await decrypt({

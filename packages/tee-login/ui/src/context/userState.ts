@@ -8,7 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import { connectWallet, signWalletMessage, getWalletById } from "@/lib/wallet";
-import { login } from "@/lib/login";
+import { getMessage, login, LoginRequest } from "@/lib/login";
 import type {
   UnifiedUserState,
   UserConnectionStatus,
@@ -16,6 +16,8 @@ import type {
   UserSocialLoginStatus,
   WalletConnectionResult,
   ApiFunctions,
+  SocialLoginData,
+  WalletType,
 } from "@/lib/types";
 
 // Mock attestation response for addresses
@@ -149,8 +151,13 @@ interface UserStateContextType {
   dispatch: React.Dispatch<UserStateAction>;
   apiFunctions: ApiFunctions;
   // Action methods
-  connect: (walletId: string) => Promise<void>;
+  connect: (params: {
+    walletId: string;
+    socialLoginData?: SocialLoginData;
+  }) => Promise<void>;
   getConnectionState: (walletId: string) => WalletConnectionResult;
+  setConnecting: (walletId: string, walletType: WalletType) => void;
+  setConnectionFailed: (walletId: string) => void;
   resetConnection: (walletId: string) => void;
   setSelectedAuthMethod: (connection: UserConnectionStatus | null) => void;
   getWalletConnections: () => UserWalletStatus[];
@@ -171,6 +178,8 @@ const UserStateContext = createContext<UserStateContextType>({
   apiFunctions: {} as ApiFunctions,
   connect: async () => {},
   getConnectionState: () => ({ state: "idle" }),
+  setConnecting: (walletId: string, walletType: WalletType) => {},
+  setConnectionFailed: (walletId: string) => {},
   resetConnection: () => {},
   setSelectedAuthMethod: () => {},
   getWalletConnections: () => [],
@@ -187,7 +196,11 @@ export const UserStateProvider: React.FC<{
   const [state, dispatch] = useReducer(userStateReducer, initialUserState);
 
   const connect = useCallback(
-    async (walletId: string): Promise<void> => {
+    async (params: {
+      walletId: string;
+      socialLoginData?: SocialLoginData;
+    }): Promise<void> => {
+      const { walletId, socialLoginData } = params;
       // Get wallet information from the wallet registry
       const walletInfo = getWalletById(walletId);
       if (!walletInfo) {
@@ -200,19 +213,37 @@ export const UserStateProvider: React.FC<{
         type: "SET_CONNECTING",
         payload: {
           walletId,
-          loginType: walletInfo.type === "social" ? "social" : "wallet",
+          loginType: walletInfo.type,
         },
       });
 
       try {
-        const address = await connectWallet(walletId);
-        if (!address && walletInfo.type !== "social") {
-          console.log(`Connection rejected for ${walletId}`);
-          dispatch({
-            type: "SET_CONNECTION_FAILED",
-            payload: { walletId },
-          });
-          return;
+        let address: string | undefined;
+        if (walletInfo.type === "social") {
+          console.log("Signing in with social provider", walletInfo.provider);
+          console.log("social login data", socialLoginData);
+
+          if (!socialLoginData) {
+            console.error(
+              `Social login ${walletInfo.provider} is not completed`
+            );
+            dispatch({
+              type: "SET_CONNECTION_FAILED",
+              payload: { walletId },
+            });
+            return;
+          }
+          address = socialLoginData.id;
+        } else {
+          address = await connectWallet(walletId);
+          if (!address) {
+            console.log(`Connection rejected for ${walletId}`);
+            dispatch({
+              type: "SET_CONNECTION_FAILED",
+              payload: { walletId },
+            });
+            return;
+          }
         }
 
         console.log("Connected to wallet", walletId, address);
@@ -239,36 +270,67 @@ export const UserStateProvider: React.FC<{
 
           // For social logins, we don't need to sign a wallet message
           if (walletInfo.type === "social") {
-            // Mock successful social login
-            const result = {
-              success: true,
-              data: ["mock", "social", "shares"],
+            const msgData = await getMessage({
+              login_type: "social",
+              chain: walletInfo.provider,
+              wallet: walletInfo.provider,
+              address: address,
+              publicKey: keyResult.publicKey,
+            });
+            if (!msgData || !socialLoginData) {
+              console.error("Failed to get message");
+              dispatch({
+                type: "SET_CONNECTION_FAILED",
+                payload: { walletId },
+              });
+              return;
+            }
+            const signature =
+              walletInfo.provider === "google"
+                ? socialLoginData.idToken
+                : socialLoginData.accessToken;
+            if (!signature) {
+              console.error("No access token found");
+              dispatch({
+                type: "SET_CONNECTION_FAILED",
+                payload: { walletId },
+              });
+              return;
+            }
+            const loginRequest: LoginRequest = {
+              ...msgData.request,
+              signature: signature,
+              public_key: keyResult.publicKey,
             };
+            const result = await login(loginRequest);
 
             if (result.success && result.data) {
               const publicKey = await apiFunctions.decryptShares(
                 result.data,
                 keyResult.privateKeyId
               );
+              if (!publicKey) {
+                console.error("Failed to decrypt shares");
+                dispatch({
+                  type: "SET_CONNECTION_FAILED",
+                  payload: { walletId },
+                });
+                return;
+              }
 
               // Create social login connection
               const newConnection: UserSocialLoginStatus = {
                 loginType: "social",
-                provider: walletInfo.provider as "google" | "github",
+                provider: walletInfo.provider,
                 walletId,
                 isConnected: true,
                 isConnecting: false,
-                address: publicKey || undefined,
-                minaPublicKey: mockAttestationResponse.addresses?.mina_address,
-                shamirShares: Array.from(
-                  { length: Math.floor(Math.random() * 5) + 1 },
-                  () => Math.floor(Math.random() * 16) + 1
-                ).sort((a, b) => a - b),
+                address: address,
+                minaPublicKey: publicKey,
+                shamirShares: loginRequest.share_indexes,
                 isLoggedIn: true,
-                username: `${walletInfo.provider}User${Math.floor(
-                  Math.random() * 1000
-                )}`,
-                email: `${walletInfo.provider?.toLowerCase()}user@example.com`,
+                username: socialLoginData.name ?? undefined,
+                email: socialLoginData.email ?? undefined,
                 sessionExpires: new Date(
                   Date.now() + 3600 * 1000
                 ).toLocaleString(),
@@ -415,6 +477,26 @@ export const UserStateProvider: React.FC<{
     [dispatch]
   );
 
+  const setConnecting = useCallback(
+    (walletId: string, walletType: WalletType) => {
+      dispatch({
+        type: "SET_CONNECTING",
+        payload: { walletId, loginType: walletType },
+      });
+    },
+    [dispatch]
+  );
+
+  const setConnectionFailed = useCallback(
+    (walletId: string) => {
+      dispatch({
+        type: "SET_CONNECTION_FAILED",
+        payload: { walletId },
+      });
+    },
+    [dispatch]
+  );
+
   // Helper functions to get specific types of connections
   const getWalletConnections = useCallback(() => {
     return Object.values(state.connections).filter(
@@ -444,6 +526,8 @@ export const UserStateProvider: React.FC<{
     apiFunctions,
     connect,
     getConnectionState,
+    setConnecting,
+    setConnectionFailed,
     resetConnection,
     setSelectedAuthMethod,
     getWalletConnections,

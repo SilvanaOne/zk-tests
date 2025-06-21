@@ -4,17 +4,26 @@ import { connectPhantom, signPhantomMessage } from "@/lib/phantom";
 import { getWallets } from "@mysten/wallet-standard";
 import { connectSolflare, signSolflareMessage } from "@/lib/solflare";
 import { getMessage, LoginRequest, LoginResponse } from "./login";
+import { WalletChain, WalletProvider, WalletType } from "./types";
 
-export interface WalletOption {
+export interface WalletOptionBase {
   id: string;
   name: string;
-  chain: "ethereum" | "solana" | "sui" | "social";
   logo: string;
-  type: "wallet" | "social";
+  type: WalletType;
   description: string;
-  connectionKey: string;
-  provider?: string; // For social logins
 }
+export interface WalletOptionWallet extends WalletOptionBase {
+  type: "wallet";
+  chain: WalletChain;
+}
+
+export interface WalletOptionSocial extends WalletOptionBase {
+  type: "social";
+  provider: WalletProvider; // For social logins
+}
+
+export type WalletOption = WalletOptionWallet | WalletOptionSocial;
 
 export const walletOptions: WalletOption[] = [
   // Ethereum wallets
@@ -25,7 +34,6 @@ export const walletOptions: WalletOption[] = [
     logo: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
     type: "wallet",
     description: "Ethereum",
-    connectionKey: "ethereum",
   },
   {
     id: "phantom-ethereum",
@@ -34,7 +42,6 @@ export const walletOptions: WalletOption[] = [
     logo: "/phantom.svg",
     type: "wallet",
     description: "Ethereum",
-    connectionKey: "ethereum",
   },
 
   // Sui wallets
@@ -45,7 +52,6 @@ export const walletOptions: WalletOption[] = [
     logo: "/phantom.svg",
     type: "wallet",
     description: "Sui",
-    connectionKey: "sui",
   },
   {
     id: "slush-sui",
@@ -54,7 +60,6 @@ export const walletOptions: WalletOption[] = [
     logo: "/slush.svg",
     type: "wallet",
     description: "Sui",
-    connectionKey: "sui",
   },
 
   // Solana wallets
@@ -65,7 +70,6 @@ export const walletOptions: WalletOption[] = [
     logo: "/phantom.svg",
     type: "wallet",
     description: "Solana",
-    connectionKey: "solana",
   },
   {
     id: "solflare-solana",
@@ -74,29 +78,24 @@ export const walletOptions: WalletOption[] = [
     logo: "/solflare.svg",
     type: "wallet",
     description: "Solana",
-    connectionKey: "solana",
   },
 
   // Social logins
   {
     id: "google",
     name: "Google",
-    chain: "social",
     logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/google.svg",
     type: "social",
-    description: "Social Login",
-    connectionKey: "google",
-    provider: "Google",
+    description: "Google Login",
+    provider: "google",
   },
   {
     id: "github",
     name: "GitHub",
-    chain: "social",
     logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/github.svg",
     type: "social",
-    description: "Social Login",
-    connectionKey: "github",
-    provider: "GitHub",
+    description: "GitHub Login",
+    provider: "github",
   },
 ];
 
@@ -108,10 +107,17 @@ export interface WalletButtonProps {
 }
 
 // Helper functions to filter wallets by type
-export const getWalletsByChain = (chain: WalletOption["chain"]) =>
-  walletOptions.filter((wallet) => wallet.chain === chain);
+export const getWalletsByChain = (chain: WalletChain) =>
+  walletOptions.filter(
+    (wallet) => wallet.type === "wallet" && wallet.chain === chain
+  );
 
-export const getWalletsByType = (type: WalletOption["type"]) =>
+export const getWalletsByProvider = (provider: WalletProvider) =>
+  walletOptions.filter(
+    (wallet) => wallet.type === "social" && wallet.provider === provider
+  );
+
+export const getWalletsByType = (type: WalletType) =>
   walletOptions.filter((wallet) => wallet.type === type);
 
 export const getWalletById = (id: string) =>

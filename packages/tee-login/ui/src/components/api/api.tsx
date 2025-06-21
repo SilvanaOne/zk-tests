@@ -9,6 +9,7 @@ export interface ApiFrameHandle {
   signPayment(payment: string, publicKey: string): Promise<string | undefined>;
   privateKeyId(): Promise<{ privateKeyId: string; publicKey: string }>;
   decryptShares(data: string[], privateKeyId: string): Promise<string>;
+  verifyAttestation(attestation: string): Promise<string>;
 }
 
 // internal message shapes -------------
@@ -31,12 +32,18 @@ type SignPaymentRequest = {
   payment: string;
   publicKey: string;
 };
+type VerifyAttestationRequest = {
+  id: string;
+  type: "verify_attestation";
+  attestation: string;
+};
 
 export type ApiRequest =
   | SignMessageRequest
   | SignPaymentRequest
   | PrivateKeyIdRequest
-  | DecryptSharesRequest;
+  | DecryptSharesRequest
+  | VerifyAttestationRequest;
 
 type PrivateKeyIdResponse = {
   id: string;
@@ -54,6 +61,11 @@ type SignPaymentResponse = {
   type: "sign_payment";
   value: string | undefined;
 }; // hex
+type VerifyAttestationResponse = {
+  id: string;
+  type: "verify_attestation";
+  value: string;
+};
 type ErrorResponse = { id: string; type: "error"; reason: string };
 type ReadyResponse = { type: "ready" };
 
@@ -63,7 +75,8 @@ export type ApiResponse =
   | SignMessageResponse
   | SignPaymentResponse
   | ErrorResponse
-  | ReadyResponse;
+  | ReadyResponse
+  | VerifyAttestationResponse;
 
 // helpers ---------------------------------------
 
@@ -75,7 +88,6 @@ function uuid() {
 export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const isReady = useRef(false);
-
   // pending promises keyed by id
   const pending = useRef<
     Record<string, { resolve: (v: any) => void; reject: (e: Error) => void }>
@@ -83,7 +95,7 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
 
   // listen for replies
   useEffect(() => {
-    function handler(ev: MessageEvent<ApiResponse>) {
+    async function handler(ev: MessageEvent<ApiResponse>) {
       // For sandboxed iframes without allow-same-origin, we can't reliably check ev.source
       // Instead, we rely on the fact that only our iframe should be posting to this origin
       // and that we control the iframe content
@@ -111,6 +123,8 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
       } else if (ev.data.type === "private_key_id") {
         pendingRequest.resolve(ev.data.value);
       } else if (ev.data.type === "decrypt_shares") {
+        pendingRequest.resolve(ev.data.value);
+      } else if (ev.data.type === "verify_attestation") {
         pendingRequest.resolve(ev.data.value);
       } else if (ev.data.type === "error") {
         pendingRequest.reject(new Error(ev.data.reason));
@@ -229,16 +243,14 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
       decryptShares(data, privateKeyId) {
         return new Promise<string>((resolve, reject) => {
           const id = uuid();
-          console.log("decryptShares 5", data, privateKeyId);
           const req: DecryptSharesRequest = {
             id,
             type: "decrypt_shares",
             data,
             privateKeyId,
           };
-          console.log("decryptShares 6", req);
+
           pending.current[id] = { resolve, reject };
-          console.log("decryptShares 7", pending.current);
 
           setTimeout(() => {
             if (pending.current[id]) {
@@ -253,7 +265,29 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
           }
 
           frameRef.current?.contentWindow?.postMessage(req, "*");
-          console.log("decryptShares 3", data, privateKeyId);
+        });
+      },
+      verifyAttestation(attestation) {
+        return new Promise<string>((resolve, reject) => {
+          const id = uuid();
+          console.log("verifyAttestation called", id);
+          const req: VerifyAttestationRequest = {
+            id,
+            type: "verify_attestation",
+            attestation,
+          };
+          pending.current[id] = { resolve, reject };
+          setTimeout(() => {
+            if (pending.current[id]) {
+              delete pending.current[id];
+              reject(new Error("Request timeout"));
+            }
+          }, 5000);
+          if (!frameRef.current?.contentWindow) {
+            reject(new Error("Iframe not available"));
+            return;
+          }
+          frameRef.current?.contentWindow?.postMessage(req, "*");
         });
       },
     }),

@@ -1,5 +1,7 @@
 "use client";
 
+import { teeApiCall } from "./tee";
+
 export interface UnsignedLoginRequest {
   login_type: "wallet" | "social";
   chain: string;
@@ -98,45 +100,24 @@ export async function getMessage(params: {
 export async function login(
   request: LoginRequest
 ): Promise<EncryptedLoginResponse> {
-  console.log("NEXT_PUBLIC_LOCAL", process.env.NEXT_PUBLIC_LOCAL);
-  const endpoint =
-    process.env.NEXT_PUBLIC_LOCAL === "true"
-      ? process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT_LOCAL
-      : process.env.NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT_AWS;
-  if (endpoint === undefined) {
-    return {
-      success: false,
-      data: null,
-      error: "NEXT_PUBLIC_SILVANA_TEE_LOGIN_ENPOINT is not set",
-      indexes: null,
-    };
-  }
   try {
-    console.log("Login request", request);
-    console.log("endpoint", endpoint);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ payload: request }),
-      //body: JSON.stringify({ payload: { memo: "hi from client" } }),
+    const response = await teeApiCall({
+      endpoint: "login",
+      request,
     });
-    console.timeEnd("Login request");
-    if (!response.ok) {
-      console.error("Login error:", response);
+    if (!response.success) {
       return {
         success: false,
         data: null,
-        error: `HTTP error! status: ${response.status}`,
+        error: response.error ?? "Error T102",
         indexes: null,
       };
     }
 
     const data: EncryptedLoginResponse =
       process.env.NEXT_PUBLIC_LOCAL === "true"
-        ? ((await response.json()) as EncryptedLoginResponse)
-        : ((await response.json())?.response?.data as EncryptedLoginResponse);
+        ? (response.data as EncryptedLoginResponse)
+        : ((response.data as any)?.response?.data as EncryptedLoginResponse);
     console.log("Login response:", data);
     if (
       data.success &&

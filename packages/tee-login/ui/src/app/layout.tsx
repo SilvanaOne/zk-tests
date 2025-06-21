@@ -10,10 +10,10 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata: Metadata = {
-  title: "Silvana TEE login",
-  description: "Silvana TEE login",
-};
+// export const metadata: Metadata = {
+//   title: "Silvana TEE login",
+//   description: "Silvana TEE login",
+// };
 
 export default function RootLayout({
   children,
@@ -26,7 +26,7 @@ export default function RootLayout({
         <AuthSessionProvider>
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
+            defaultTheme="system"
             enableSystem
             disableTransitionOnChange
           >

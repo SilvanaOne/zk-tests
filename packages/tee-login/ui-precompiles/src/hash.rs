@@ -21,6 +21,7 @@ impl Hashable for PoseidonInput {
     }
 }
 
+#[allow(dead_code)]
 pub fn poseidon_hash(data: &PoseidonInput, iterations: usize) -> String {
     let mut hasher = create_kimchi::<PoseidonInput>(());
     let mut i = 0;

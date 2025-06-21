@@ -1,41 +1,20 @@
 import type React from "react";
-export interface Addresses {
-  solana_address: string;
-  sui_address: string;
-  mina_address: string;
-  ethereum_address: string;
-}
 
-export interface Attestation {
-  is_valid: boolean;
-  digest: string;
-  timestamp: number;
-  module_id: string;
-  public_key?: Uint8Array; // Assuming it might be part of full data
-  user_data?: Uint8Array; // Assuming it might be part of full data
-  nonce?: Uint8Array; // Assuming it might be part of full data
-  pcr_vec: string[];
-  pcr_map: Record<number, string>;
-  pcr_locked?: Record<number, boolean>; // Add locked status for each PCR
-  addresses?: Addresses;
-}
+export type WalletChain = "solana" | "sui" | "ethereum";
+export type WalletProvider = "google" | "github";
+export type WalletType = "wallet" | "social";
 
-export interface TeeStats {
-  cpu_cores: number;
-  memory: number; // Total memory in bytes
-  available_memory: number;
-  free_memory: number; // This might be different from available_memory depending on OS
-  used_memory: number;
-  timestamp: string; // ISO date string
-}
-
-export interface TeeStatusData {
-  stats: TeeStats;
-  attestation: Attestation;
+export interface SocialLoginData {
+  id: string;
+  name?: string;
+  email?: string;
+  idToken?: string;
+  accessToken?: string;
+  expires: string;
 }
 
 export interface UserStatus {
-  loginType: "wallet" | "social";
+  loginType: WalletType;
   walletId?: string;
   address?: string;
   isConnected: boolean;
@@ -47,13 +26,13 @@ export interface UserStatus {
 
 export interface UserWalletStatus extends UserStatus {
   loginType: "wallet";
-  chain: "ethereum" | "solana" | "sui";
+  chain: WalletChain;
   wallet: string;
 }
 
 export interface UserSocialLoginStatus extends UserStatus {
   loginType: "social";
-  provider: "google" | "github";
+  provider: WalletProvider;
   isLoggedIn: boolean;
   username?: string;
   email?: string;
@@ -93,6 +72,10 @@ export interface ApiFunctions {
     publicKey: string;
     payment: string;
   }) => Promise<{ signature: string | null; error: string | null }>;
+  verifyAttestation: (attestation: string) => Promise<{
+    verifiedAttestation: string | null;
+    error: string | null;
+  } | null>;
 }
 
 export interface UnifiedUserState {

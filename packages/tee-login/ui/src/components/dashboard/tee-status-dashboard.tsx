@@ -1,7 +1,7 @@
 "use client";
 
 import { StatusCard, DataRow, StatusPill } from "./status-card";
-import type { TeeStatusData } from "@/lib/types";
+import type { TeeStatus } from "@/lib/tee";
 import {
   Cpu,
   ShieldCheck,
@@ -17,13 +17,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-interface TeeStatusDashboardProps {
-  status: TeeStatusData | null;
-  isLoading: boolean;
-  sections?: string[];
-  title?: string;
-}
 
 const formatBytes = (bytes: number, decimals = 2) => {
   if (bytes === 0) return "0 Bytes";
@@ -106,7 +99,7 @@ export function TeeStatusDashboard({
     "tee-addresses",
   ],
   title = "TEE Status",
-}: TeeStatusDashboardProps) {
+}: TeeStatus) {
   const attestation = status?.attestation;
   const stats = status?.stats;
 

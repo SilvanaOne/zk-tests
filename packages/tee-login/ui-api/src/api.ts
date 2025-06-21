@@ -1,7 +1,7 @@
 // src/api.ts
 // Compile with `tsc` or bundle with esbuild / Rollup → a single JS file.
 
-import { initSync } from "./pkg/precompiles.js";
+import { initSync, verify_attestation } from "./pkg/precompiles.js";
 import { signMessage, signPayment } from "./mina.js";
 import { getWasmBytes } from "./embedded-wasm.js";
 
@@ -40,12 +40,18 @@ type SignPaymentRequest = {
   payment: string;
   publicKey: string;
 };
+type VerifyAttestationRequest = {
+  id: string;
+  type: "verify_attestation";
+  attestation: string;
+};
 
 export type ApiRequest =
   | SignMessageRequest
   | SignPaymentRequest
   | PrivateKeyIdRequest
-  | DecryptSharesRequest;
+  | DecryptSharesRequest
+  | VerifyAttestationRequest;
 
 type PrivateKeyIdResponse = {
   id: string;
@@ -63,6 +69,11 @@ type SignPaymentResponse = {
   type: "sign_payment";
   value: string | undefined;
 }; // hex
+type VerifyAttestationResponse = {
+  id: string;
+  type: "verify_attestation";
+  value: string;
+};
 type ErrorResponse = { id: string; type: "error"; reason: string };
 type ReadyResponse = { type: "ready" };
 
@@ -72,7 +83,8 @@ export type ApiResponse =
   | SignMessageResponse
   | SignPaymentResponse
   | ErrorResponse
-  | ReadyResponse;
+  | ReadyResponse
+  | VerifyAttestationResponse;
 
 (async () => {
   debug("starting up");
@@ -212,6 +224,18 @@ export type ApiResponse =
           });
           parent.postMessage(resp, "*");
           break;
+        }
+
+        case "verify_attestation": {
+          debug("processing verify attestation request", { id });
+          const attestation = ev.data.attestation;
+          const verification_result = verify_attestation(attestation);
+          const resp: VerifyAttestationResponse = {
+            id,
+            type: "verify_attestation",
+            value: verification_result,
+          };
+          parent.postMessage(resp, "*");
         }
 
         default:

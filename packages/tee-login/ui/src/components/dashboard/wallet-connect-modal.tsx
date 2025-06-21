@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Check } from "lucide-react";
 import Image from "next/image";
 import { WalletButtonProps, WalletOption, walletOptions } from "@/lib/wallet";
+import { useSession, getSession } from "next-auth/react";
+import { SocialLoginData, WalletType } from "@/lib/types";
+import { useSocialLogin } from "@/hooks/use-social-login";
 
 function WalletButton({
   wallet,
@@ -29,13 +32,13 @@ function WalletButton({
 
   const getChainGradient = (chain: string) => {
     switch (chain) {
-      case "Ethereum":
+      case "ethereum":
         return "from-brand-blue/40 via-brand-blue/30 to-brand-blue/20";
-      case "Solana":
+      case "solana":
         return "from-brand-purple/40 via-brand-purple/30 to-brand-purple/20";
-      case "Sui":
+      case "sui":
         return "from-brand-pink/40 via-brand-pink/30 to-brand-pink/20";
-      case "Social":
+      case "social":
         return "from-brand-green/40 via-brand-green/30 to-brand-green/20";
       default:
         return "from-brand-purple/30 via-brand-pink/20 to-brand-blue/30";
@@ -64,7 +67,7 @@ function WalletButton({
                    connected
                      ? "bg-gradient-to-br from-brand-green/60 via-brand-green/40 to-brand-green/20 border-brand-green text-white shadow-xl shadow-brand-green/40"
                      : `bg-gradient-to-br ${getChainGradient(
-                         wallet.chain
+                         wallet.type === "wallet" ? wallet.chain : "social"
                        )} border-white/50 text-foreground hover:border-brand-pink hover:shadow-xl hover:shadow-brand-purple/30`
                  }`}
       tabIndex={0}
@@ -93,7 +96,7 @@ function WalletButton({
         {/* Loading spinner overlay */}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-brand-purple/20 rounded backdrop-blur-sm">
-            <div className="w-4 h-4 border-2 border-transparent border-t-brand-pink border-l-brand-purple rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-transparent border-t-brand-pink border-l-brand-purple rounded-full animate-spin" />
           </div>
         )}
       </div>
@@ -104,7 +107,7 @@ function WalletButton({
           {wallet.name}
         </div>
         <div className="text-[0.625rem] text-foreground/90 font-bold drop-shadow-md">
-          {wallet.chain}
+          {wallet.type === "wallet" ? wallet.chain : wallet.provider}
         </div>
       </div>
 
@@ -124,51 +127,42 @@ function WalletButton({
 interface WalletConnectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConnect?: (walletId: string, walletName: string) => void;
-  connect: (walletId: string) => Promise<void>;
+  connect: (params: {
+    walletId: string;
+    socialLoginData?: SocialLoginData;
+  }) => Promise<void>;
   getConnectionState: (walletId: string) => any;
+  setConnecting: (walletId: string, walletType: WalletType) => void;
+  setConnectionFailed: (walletId: string) => void;
 }
 
 export function WalletConnectModal({
   isOpen,
   onClose,
-  onConnect,
   connect,
   getConnectionState,
+  setConnecting,
+  setConnectionFailed,
 }: WalletConnectModalProps) {
   const [successWallet, setSuccessWallet] = useState<string | null>(null);
+  const openSocialLogin = useSocialLogin();
+  const { data: session, update } = useSession();
+  const [processSocialLogin, setProcessSocialLogin] =
+    useState<WalletOption | null>(null); // trying to refresh the session due to next-auth bug https://github.com/nextauthjs/next-auth/issues/9504
 
-  const handleWalletClick = async (wallet: WalletOption) => {
-    const currentState = getConnectionState(wallet.id);
-    if (
-      currentState.state === "connecting" ||
-      currentState.state === "connected"
-    )
-      return;
+  const [counter, setCounter] = useState<number>(0);
 
-    try {
-      console.log("handleWalletClick: connecting", wallet.id, wallet.name);
-      await connect(wallet.id);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      console.log("handleWalletClick: connected", wallet.id, wallet.name);
-      const finalState = getConnectionState(wallet.id);
-      console.log("handleWalletClick: finalState", finalState);
-
-      if (finalState.state === "connected") {
-        console.log("handleWalletClick: connected", wallet.id, wallet.name);
-        setSuccessWallet(wallet.id);
-        //onConnect(wallet.id, wallet.name);
-
-        // Show success animation for 900ms then close modal
-        setTimeout(() => {
-          onClose();
-          setSuccessWallet(null);
-        }, 900);
+  useEffect(() => {
+    async function processLogin() {
+      if (processSocialLogin !== null) {
+        const option = processSocialLogin;
+        setProcessSocialLogin(null);
+        await handleWalletClick(option, true);
       }
-    } catch (error) {
-      console.error("handleWalletClick: Connection failed:", error);
     }
-  };
+    processLogin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processSocialLogin]);
 
   const isConnected = (walletId: string) => {
     const state = getConnectionState(walletId);
@@ -178,6 +172,80 @@ export function WalletConnectModal({
   const isLoading = (walletId: string) => {
     return getConnectionState(walletId).state === "connecting";
   };
+
+  async function handleWalletClick(
+    wallet: WalletOption,
+    followUp: boolean = false
+  ): Promise<boolean | undefined> {
+    const currentState = getConnectionState(wallet.id);
+    if (
+      (!followUp && currentState.state === "connecting") ||
+      currentState.state === "connected"
+    )
+      return undefined;
+
+    try {
+      console.log("handleWalletClick: connecting", wallet.id, wallet.name);
+      const walletInfo = walletOptions.find((w) => w.id === wallet.id);
+      if (!walletInfo) {
+        console.error("Wallet not found", wallet.id);
+        return;
+      }
+      if (walletInfo.type === "social") {
+        console.log(
+          "handleWalletClick: signing in",
+          walletInfo.provider,
+          session
+        );
+        const newSession = await getSession();
+        console.log("newSession", newSession);
+        if (newSession?.provider !== walletInfo.provider) {
+          console.log("ERROR: wrong provider", {
+            sessionProvider: session?.provider,
+            requestedProvider: walletInfo.provider,
+          });
+          if (counter < 5) {
+            setCounter(counter + 1);
+            await update();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            setProcessSocialLogin(wallet); // trying to refresh the session due to next-auth bug 5 times
+            return;
+          }
+          setConnectionFailed(wallet.id);
+          return;
+        }
+        if (!newSession) {
+          console.error("Session not found");
+          setConnectionFailed(wallet.id);
+          return;
+        }
+        const socialLoginData: SocialLoginData = {
+          id: newSession.user.id ?? walletInfo.provider,
+          name: newSession.user.name || undefined,
+          email: newSession.user.email || undefined,
+          idToken: newSession.idToken,
+          accessToken: newSession.accessToken,
+          expires: newSession.expires,
+        };
+        console.log("handleWalletClick: socialLoginData", socialLoginData);
+        await connect({ walletId: wallet.id, socialLoginData });
+      } else {
+        await connect({ walletId: wallet.id });
+      }
+      console.log("handleWalletClick: connected", wallet.id, wallet.name);
+      const finalState = getConnectionState(wallet.id);
+      console.log("handleWalletClick: finalState", finalState);
+
+      if (finalState.state === "connected") {
+        console.log("handleWalletClick: connected", wallet.id, wallet.name);
+        return true;
+      }
+    } catch (error) {
+      console.error("handleWalletClick: Connection failed:", error);
+      setConnectionFailed(wallet.id);
+      return false;
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -260,7 +328,30 @@ export function WalletConnectModal({
                     wallet={wallet}
                     connected={isConnected(wallet.id)}
                     loading={isLoading(wallet.id)}
-                    onClick={() => handleWalletClick(wallet)}
+                    onClick={async () => {
+                      setConnecting(wallet.id, wallet.type);
+                      if (wallet.type === "social") {
+                        setCounter(0);
+                        await openSocialLogin(wallet.provider);
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, 100)
+                        );
+                        await update(); // does not work in many cases to to next-auth bug
+                        setProcessSocialLogin(wallet);
+                        return;
+                      } else {
+                        setProcessSocialLogin(null);
+                        handleWalletClick(wallet).then((result) => {
+                          if (result === true) {
+                            setSuccessWallet(wallet.id);
+                            setTimeout(() => {
+                              onClose();
+                              setSuccessWallet(null);
+                            }, 900);
+                          }
+                        });
+                      }
+                    }}
                   />
                 ))}
               </div>

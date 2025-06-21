@@ -21,9 +21,9 @@ sudo systemctl stop nitro-enclaves-allocator.service
 # Adjust the enclave allocator memory
 ALLOCATOR_YAML=/etc/nitro_enclaves/allocator.yaml
 MEM_KEY=memory_mib
-DEFAULT_MEM=8192
+DEFAULT_MEM=384
 CPU_KEY=cpu_count
-DEFAULT_CPU=8
+DEFAULT_CPU=1
 sudo sed -i "s/^${MEM_KEY}:.*/${MEM_KEY}: ${DEFAULT_MEM}/" "$ALLOCATOR_YAML"
 sudo sed -i "s/^${CPU_KEY}:.*/${CPU_KEY}: ${DEFAULT_CPU}/" "$ALLOCATOR_YAML"
 

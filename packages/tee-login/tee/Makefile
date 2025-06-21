@@ -43,8 +43,8 @@ run-tiny: out/nitro.eif
 run-debug: out/nitro.eif
 	sudo nitro-cli \
 		run-enclave \
-		--cpu-count 8 \
-		--memory 8192M \
+		--cpu-count 1 \
+		--memory 384M \
 		--eif-path out/nitro.eif \
 		--debug-mode \
 		--attach-console
