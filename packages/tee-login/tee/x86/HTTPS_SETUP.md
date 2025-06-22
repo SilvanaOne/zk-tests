@@ -10,8 +10,8 @@ This guide explains how to enable HTTPS in your Silvana TEE Login server using A
 
 ## Your Current Configuration
 
-- **Certificate ARN**: `arn:aws:acm:us-east-1:977098992151:certificate/7097f06e-22ef-464f-a3a6-4585cbebe624`
-- **Certificate ID**: `7097f06e-22ef-464f-a3a6-4585cbebe624`
+- **Certificate ARN**: `arn:aws:acm:us-east-1:977098992151:certificate/d4078b9f-164d-49b8-963f-f3afd011fbb6`
+- **Certificate ID**: `d4078b9f-164d-49b8-963f-f3afd011fbb6`
 - **Domain**: `tee.silvana.dev` (from Pulumi config)
 
 ## Step 1: Set up ACM for Nitro Enclaves on Parent Instance
@@ -23,7 +23,7 @@ SSH into your EC2 instance and run the setup script:
 ssh -i "TEE.pem" ec2-user@your-instance-ip
 
 # Set the certificate ARN
-export ACM_CERTIFICATE_ARN="arn:aws:acm:us-east-1:977098992151:certificate/7097f06e-22ef-464f-a3a6-4585cbebe624"
+export ACM_CERTIFICATE_ARN="arn:aws:acm:us-east-1:977098992151:certificate/d4078b9f-164d-49b8-963f-f3afd011fbb6"
 
 # Run the setup script
 chmod +x setup_acm_nitro_enclaves.sh
@@ -92,7 +92,7 @@ export KMS_KEY_ID="your-kms-key-id"
 export AWS_REGION="us-east-1"
 export AWS_ACCESS_KEY_ID="your-access-key"
 export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export ACM_CERTIFICATE="7097f06e-22ef-464f-a3a6-4585cbebe624"
+export ACM_CERTIFICATE="d4078b9f-164d-49b8-963f-f3afd011fbb6"
 ```
 
 ## How It Works

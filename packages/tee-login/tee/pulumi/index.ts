@@ -145,7 +145,7 @@ export = async () => {
     }
   );
 
-  // Create ACM certificate for HTTPS
+  //Create ACM certificate for HTTPS
   const certificate = new aws.acm.Certificate("silvana-tee-certificate", {
     domainName: "tee.silvana.dev",
     validationMethod: "DNS",
@@ -155,7 +155,7 @@ export = async () => {
     },
   });
 
-  // Create IAM policy for ACM certificate access
+  //Create IAM policy for ACM certificate access
   const acmPolicy = new aws.iam.Policy("silvana-tee-acm-policy", {
     description: "Policy for ACM certificate access from Nitro Enclave",
     policy: pulumi.all([certificate.arn]).apply(([certArn]) =>
@@ -176,7 +176,7 @@ export = async () => {
     ),
   });
 
-  // Attach ACM policy to API user
+  //Attach ACM policy to API user
   const acmPolicyAttachment = new aws.iam.UserPolicyAttachment(
     "acm-policy-attachment",
     {
@@ -340,7 +340,7 @@ export = async () => {
   // c6a.xlarge - min Intel, 4 cpu, 16gb ram
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
-    instanceType: "c7i.4xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
+    instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,
@@ -351,7 +351,7 @@ export = async () => {
     },
 
     rootBlockDevice: {
-      volumeSize: 200,
+      volumeSize: 30,
       volumeType: "gp3",
       deleteOnTermination: true,
     },

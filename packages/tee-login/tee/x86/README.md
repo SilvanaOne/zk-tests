@@ -120,3 +120,39 @@ curl -H 'Content-Type: application/json' -X GET http://23.21.249.129:3000/get_at
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "agent"}}' -X POST http://54.242.34.226:3000/login
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "memo": "hi"}}' -X POST http://23.21.249.129:3000/ping
+
+sudo dnf update -y
+sudo dnf install -y nginx certbot python3-certbot-nginx
+sudo certbot --nginx -d tee.silvana.dev
+
+/etc/nginx/conf.d/tee.silvana.dev.conf
+
+```
+server {
+    listen 443 ssl;
+    server_name tee.silvana.dev;
+
+    ssl_certificate     /etc/letsencrypt/live/tee.silvana.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tee.silvana.dev/privkey.pem;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+}
+
+# Optionally also redirect HTTP → HTTPS:
+server {
+    listen      80;
+    server_name tee.silvana.dev;
+    return      301 https://$host$request_uri;
+}
+
+```
+
+sudo systemctl enable --now nginx
+sudo nginx -t # test syntax
+sudo systemctl reload nginx
