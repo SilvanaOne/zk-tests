@@ -14,6 +14,25 @@ RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
 
 RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl
 
+# ------------------------------------------------------------------
+# Build the enclave kernel and NSM driver on ARM64
+# ------------------------------------------------------------------
+FROM alpine:3.18 AS kernel-build
+RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
+    ncurses-dev bash tar xz
+WORKDIR /src
+RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
+# Configure a minimal kernel with Nitro Enclaves support
+RUN make ARCH=arm64 defconfig && \
+    scripts/config -m NITRO_ENCLAVES && \
+    scripts/config -e VIRTIO_VSOCK VIRTIO_MMIO
+RUN make -j$(nproc) ARCH=arm64 Image modules
+# Export the kernel, driver, and config for later stages
+RUN mkdir /out && \
+    cp arch/arm64/boot/Image /out/Image && \
+    cp drivers/virt/nitro_enclaves/nitro_enclaves.ko /out/nsm.ko && \
+    cp .config /out/linux.config
+
 FROM alpine:3.19 AS runtime
 COPY --from=builder /root/.cargo/bin/eif_build /usr/local/bin/
 ENTRYPOINT ["eif_build", "--help"]
@@ -33,15 +52,6 @@ ENV OPENSSL_STATIC=true
 
 # Build Linux kernel + NSM
 WORKDIR /root
-RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git && cd linux && \
-    make ARCH=arm64 defconfig && \
-    # enable Nitro Enclaves and vsock:
-    sed -i 's/# CONFIG_NITRO_ENCLAVES is not set/CONFIG_NITRO_ENCLAVES=m/' .config && \
-    sed -i 's/# CONFIG_VIRTIO_VSOCK/CONFIG_VIRTIO_VSOCK=y/' .config && \
-    sed -i 's/# CONFIG_VIRTIO_MMIO/CONFIG_VIRTIO_MMIO=y/' .config && \
-    sed -i 's/CONFIG_MODULE_SIG_ALL=y/CONFIG_MODULE_SIG_ALL=n/' .config && \
-    make -j$(nproc) ARCH=arm64 && \
-    cp arch/arm64/boot/Image /out/Image && cp drivers/virt/nitro_enclaves/nitro_enclaves.ko /out/nsm.ko
 
 FROM alpine:3.18 AS alpine-runtime
 RUN apk add --no-cache \
@@ -97,6 +107,8 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
+COPY --from=kernel-build /out/nsm.ko initramfs/nsm.ko
+
 RUN <<-EOF
     set -eux
     cd initramfs
@@ -114,8 +126,13 @@ RUN <<-EOF
 EOF
 
 WORKDIR /build_eif
+
+# Bring in the freshly‑built ARM64 kernel and its config
+COPY --from=kernel-build /out/Image /Image
+COPY --from=kernel-build /out/linux.config /linux.config
+
 RUN eif_build \
-	--kernel /bzImage \
+	--kernel /Image \
 	--kernel_config /linux.config \
 	--ramdisk /build_cpio/rootfs.cpio \
 	--pcrs_output /nitro.pcrs \
