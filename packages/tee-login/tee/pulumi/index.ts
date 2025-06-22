@@ -220,6 +220,13 @@ export = async () => {
         protocol: "tcp",
         cidrBlocks: ["0.0.0.0/0"],
       },
+      {
+        description: "Port 80",
+        fromPort: 80,
+        toPort: 80,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
     ],
     egress: [
       {
