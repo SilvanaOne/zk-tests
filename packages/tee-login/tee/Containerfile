@@ -28,6 +28,11 @@ RUN make ARCH=arm64 defconfig && \
     scripts/config -e VIRTIO_VSOCK && \
     scripts/config -e VIRTIO_MMIO
 RUN scripts/config -d BTRFS_FS
+# Strip out GPU, framebuffer, and MMC stacks – enclaves have no such hardware
+RUN scripts/config -d DRM \
+    -d DRM_NOUVEAU -d DRM_AMDGPU -d DRM_VIRTIO_GPU -d DRM_SIMPLEDRM \
+    -d FB -d FRAMEBUFFER_CONSOLE \
+    -d MMC -d MMC_BLOCK
 RUN make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel, driver, and config for later stages
 RUN mkdir /out && \
