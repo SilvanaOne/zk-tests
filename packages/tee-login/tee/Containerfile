@@ -127,6 +127,9 @@ COPY --from=alpine-runtime /usr/bin/jq      initramfs/bin/
 COPY --from=alpine-runtime /usr/bin/socat   initramfs/bin/
 RUN mkdir initramfs/proc
 RUN mkdir initramfs/run
+RUN mkdir -p initramfs/dev && \
+    mknod -m 0666 initramfs/dev/console c 5 1 && \
+    mknod -m 0666 initramfs/dev/vsock c 10 63
 
 RUN cp /target/${TARGET}/release/init initramfs
 RUN cp /src/server/target/${TARGET}/release/server initramfs
