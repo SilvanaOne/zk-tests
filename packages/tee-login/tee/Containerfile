@@ -35,6 +35,7 @@ RUN mkdir /out && \
     cp .config /out/linux.config
 
 FROM alpine:3.19 AS runtime
+RUN apk add --no-cache curl build-base tar xz
 COPY --from=builder /root/.cargo/bin/eif_build /usr/local/bin/
 ENTRYPOINT ["eif_build", "--help"]
 
