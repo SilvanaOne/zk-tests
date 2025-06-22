@@ -30,6 +30,8 @@ RUN make ARCH=arm64 defconfig && \
     scripts/config -d DRM && \
     scripts/config -d DRM_PANEL -d GPU_HOST1X -d TEGRA_HOST1X -d STAGING -d FB -d FRAMEBUFFER_CONSOLE && \
     scripts/config -d BTRFS_FS
+# Disable NFS and its RPC stack
+RUN scripts/config -d NFS_FS -d NFS_V4 -d NFS_V4_1 -d NFS_V4_2 -d PNFS_FILE_LAYOUT -d PNFS_FLEXFILE_LAYOUT -d SUNRPC -d RPCSEC_GSS_KRB5
 # Keep the config minimal
 RUN yes "" | make olddefconfig
 RUN make -j$(nproc) ARCH=arm64 Image
