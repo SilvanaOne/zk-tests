@@ -27,6 +27,7 @@ RUN make ARCH=arm64 defconfig && \
     scripts/config -m NITRO_ENCLAVES && \
     scripts/config -e VIRTIO_VSOCK && \
     scripts/config -e VIRTIO_MMIO
+RUN scripts/config -d BTRFS_FS
 RUN make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel, driver, and config for later stages
 RUN mkdir /out && \
