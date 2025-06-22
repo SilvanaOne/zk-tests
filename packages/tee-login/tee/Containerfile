@@ -49,7 +49,7 @@ RUN scripts/config \
 RUN yes "" | make olddefconfig
 RUN make -j$(nproc) ARCH=arm64 Image
 # Build NSM driver as a module and the rest of modules (nsm.ko will be needed at runtime)
-RUN scripts/config -m NSM && \
+RUN scripts/config -m NSM && yes "" | make olddefconfig && \
     make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel and config for later stages
 RUN mkdir /out && \
