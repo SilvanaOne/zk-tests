@@ -302,3 +302,5 @@ docker buildx build \
  -f packages/user/eif_build/Dockerfile \
  -t dfstio/user-eif_build:sx2025.06.0 \
  --push .
+
+system src lin.rs 101 fdopen as \*const i8
