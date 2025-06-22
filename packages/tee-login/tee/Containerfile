@@ -12,7 +12,10 @@ ENV RUSTUP_HOME=/root/.rustup \
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
     rustup target add aarch64-unknown-linux-musl
 
-RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl
+# Build eif_build with a vendored, static OpenSSL so we don’t need system libssl.a
+ENV OPENSSL_STATIC=1 \
+    OPENSSL_NO_VENDOR=0
+RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl --features vendored
 
 # ------------------------------------------------------------------
 # Build the enclave kernel and NSM driver on ARM64
