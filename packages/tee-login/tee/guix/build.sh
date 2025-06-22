@@ -1,7 +1,6 @@
 guix pull
 guix pack -f docker \
   --system=aarch64-linux \
-  --target=aarch64-linux-musl \
   --entry-point=/bin/bash \
   -m manifest.scm \
   -S /bin/bash=bin/bash \
