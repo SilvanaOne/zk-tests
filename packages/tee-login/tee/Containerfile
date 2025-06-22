@@ -42,7 +42,7 @@ WORKDIR /root
 RUN curl -LO https://busybox.net/downloads/busybox-1.36.1.tar.bz2 && \
     tar xf busybox-1.36.1.tar.bz2 && cd busybox-1.36.1 && \
     make defconfig && sed -i 's/.*CONFIG_STATIC.*/CONFIG_STATIC=y/' .config && \
-    make -j$(nproc) && cp busybox /out/busybox
+    make -j$(nproc) && mkdir -p /out && cp busybox /out/busybox
 
 FROM scratch as base
 ENV TARGET=aarch64-unknown-linux-musl
@@ -62,7 +62,12 @@ RUN apk add --no-cache \
         socat
 
 
-FROM base as build
+FROM builder as build
+# environment for Rust static builds
+ENV TARGET=aarch64-unknown-linux-musl \
+    RUSTFLAGS="-C target-feature=+crt-static" \
+    CARGOFLAGS="--locked --no-default-features --release --target=${TARGET}" \
+    OPENSSL_STATIC=true
 COPY . .
 RUN cargo build --workspace --locked --no-default-features --release --target ${TARGET}
 
@@ -90,6 +95,9 @@ COPY --from=alpine-runtime /usr/lib/libseccomp.so.*      initramfs/lib/
 
 # CA bundle for TLS
 COPY --from=alpine-runtime /etc/ssl/certs/ca-certificates.crt initramfs/etc/ssl/certs/
+
+# copy the statically‑linked BusyBox we built earlier
+COPY --from=runtime /out/busybox initramfs/bin/busybox
 
 # BusyBox already gives you /bin/sh; create a link instead of copying from StageX
 RUN ln -s busybox initramfs/bin/sh
