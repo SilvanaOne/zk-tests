@@ -63,8 +63,10 @@ RUN scripts/config -m NSM -e CBOR -e HW_RANDOM && \
 RUN mkdir /out && \
     cp arch/arm64/boot/Image /out/Image && \
     cp .config /out/linux.config && \
-    # Export the freshly-built NSM driver
-    cp drivers/misc/nsm.ko /out/nsm.ko
+    ls -l /drivers && \
+    ls -l /drivers/misc && \
+    # Export the freshly-built NSM driver (some kernels place it in drivers/misc/nsm/)
+    cp $(find drivers/misc -name 'nsm*.ko' | head -n1) /out/nsm.ko
 
 FROM alpine:3.19 AS runtime
 RUN apk add --no-cache curl build-base tar xz
