@@ -23,16 +23,14 @@ RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
 WORKDIR /src
 RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
 # Configure a minimal kernel with Nitro Enclaves support
-RUN make ARCH=arm64 defconfig && \
+RUN make ARCH=arm64 virt_defconfig && \
     scripts/config -m NITRO_ENCLAVES && \
     scripts/config -e VIRTIO_VSOCK && \
-    scripts/config -e VIRTIO_MMIO
+    scripts/config -e VIRTIO_MMIO && \
+    scripts/config -d DRM
 RUN scripts/config -d BTRFS_FS
-# Strip out GPU, framebuffer, and MMC stacks – enclaves have no such hardware
-RUN scripts/config -d DRM \
-    -d DRM_NOUVEAU -d DRM_AMDGPU -d DRM_VIRTIO_GPU -d DRM_SIMPLEDRM \
-    -d FB -d FRAMEBUFFER_CONSOLE \
-    -d MMC -d MMC_BLOCK
+# Keep the config minimal
+RUN yes "" | make olddefconfig
 RUN make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel, driver, and config for later stages
 RUN mkdir /out && \
