@@ -71,9 +71,24 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
         return;
       }
       await sleep(1000);
-      const verifiedAttestation = await apiFunctions.verifyAttestation(
-        attestation.data
-      );
+      console.log("Calling verifyAttestation");
+      let count = 0;
+      let verifiedAttestation: {
+        verifiedAttestation: string | null;
+        error: string | null;
+      } | null = null;
+      while (
+        count < 5 &&
+        (!verifiedAttestation || !verifiedAttestation?.verifiedAttestation)
+      ) {
+        verifiedAttestation = await apiFunctions.verifyAttestation(
+          attestation.data
+        );
+        count++;
+        console.log(`verifyAttestation ${count}:`, verifiedAttestation);
+        await sleep(1000);
+      }
+
       if (
         !verifiedAttestation ||
         verifiedAttestation.error ||
