@@ -127,7 +127,7 @@ COPY --from=alpine-runtime /usr/lib/libseccomp.so.*      initramfs/lib/
 # CA bundle for TLS
 COPY --from=alpine-runtime /etc/ssl/certs/ca-certificates.crt initramfs/etc/ssl/certs/
 
-# copy the statically‑linked BusyBox we built earlier
+# copy the statically-linked BusyBox we built earlier
 COPY --from=runtime /out/busybox initramfs/bin/busybox
 
 # BusyBox already gives you /bin/sh; create a link instead of copying from StageX
@@ -149,7 +149,7 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
-# NSM built-in now; no external module needed (no nsm.ko copied)
+# NSM built-in now; no external module needed
 
 RUN <<-EOF
     set -eux
