@@ -163,7 +163,6 @@ RUN eif_build \
 FROM base as install
 WORKDIR /rootfs
 COPY --from=build /nitro.eif .
-COPY --from=build /nitro.pcrs .
 COPY --from=build /build_cpio/rootfs.cpio .
 
 FROM scratch as package
