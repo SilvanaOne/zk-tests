@@ -21,7 +21,7 @@ FROM alpine:3.18 AS kernel-build
 RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
     ncurses-dev bash tar xz perl findutils
 WORKDIR /src
-RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
+RUN git clone --depth=1 -b v6.10 https://github.com/torvalds/linux.git .
 # Configure a minimal kernel with Nitro Enclaves support
 RUN make ARCH=arm64 defconfig && \
     scripts/config -e NITRO_ENCLAVES && \
