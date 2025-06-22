@@ -39,15 +39,9 @@ RUN apk add --no-cache curl build-base tar xz
 COPY --from=builder /root/.cargo/bin/eif_build /usr/local/bin/
 ENTRYPOINT ["eif_build", "--help"]
 
-# Build BusyBox static
-WORKDIR /root
-RUN curl -LO https://busybox.net/downloads/busybox-1.36.1.tar.bz2 && \
-    tar xf busybox-1.36.1.tar.bz2 && cd busybox-1.36.1 && \
-    make defconfig && \
-    sed -i 's/.*CONFIG_STATIC.*/CONFIG_STATIC=y/' .config && \
-    yes "" | make oldconfig && \
-    make -j$(nproc) && \
-    mkdir -p /out && cp busybox /out/busybox
+# BusyBox: use Alpine's pre‑built static binary instead of compiling
+RUN apk add --no-cache busybox-static && \
+    mkdir -p /out && cp /bin/busybox /out/busybox
 
 FROM scratch as base
 ENV TARGET=aarch64-unknown-linux-musl
