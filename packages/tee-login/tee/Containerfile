@@ -3,7 +3,7 @@
 
 FROM alpine:3.18 AS builder
 RUN apk add --no-cache build-base cmake ninja linux-headers git \
-    musl-dev libc-dev libffi-dev openssl-dev zlib-dev libseccomp-dev \
+    musl-dev libc-dev libffi-dev openssl-dev openssl-libs-static zlib-dev libseccomp-dev \
     linux-tools util-linux coreutils tar xz curl ca-certificates
 
 ENV RUSTUP_HOME=/root/.rustup \
