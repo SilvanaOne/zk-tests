@@ -70,6 +70,7 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
         setIsFetchingTee(false);
         return;
       }
+      await sleep(1000);
       const verifiedAttestation = await apiFunctions.verifyAttestation(
         attestation.data
       );
