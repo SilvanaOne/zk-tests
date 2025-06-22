@@ -24,18 +24,18 @@ WORKDIR /src
 RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
 # Configure a minimal kernel with Nitro Enclaves support
 RUN make ARCH=arm64 defconfig && \
-    scripts/config -m NITRO_ENCLAVES && \
+    scripts/config -e NITRO_ENCLAVES && \
     scripts/config -e VIRTIO_VSOCK && \
     scripts/config -e VIRTIO_MMIO && \
-    scripts/config -d DRM
-RUN scripts/config -d BTRFS_FS
+    scripts/config -d DRM && \
+    scripts/config -d DRM_PANEL -d GPU_HOST1X -d TEGRA_HOST1X -d STAGING -d FB -d FRAMEBUFFER_CONSOLE && \
+    scripts/config -d BTRFS_FS
 # Keep the config minimal
 RUN yes "" | make olddefconfig
-RUN make -j$(nproc) ARCH=arm64 Image modules
-# Export the kernel, driver, and config for later stages
+RUN make -j$(nproc) ARCH=arm64 Image
+# Export the kernel and config for later stages
 RUN mkdir /out && \
     cp arch/arm64/boot/Image /out/Image && \
-    cp drivers/virt/nitro_enclaves/nitro_enclaves.ko /out/nsm.ko && \
     cp .config /out/linux.config
 
 FROM alpine:3.19 AS runtime
@@ -120,7 +120,6 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
-COPY --from=kernel-build /out/nsm.ko initramfs/nsm.ko
 
 RUN <<-EOF
     set -eux
