@@ -325,9 +325,9 @@ export default function SilvanaTeeDashboard() {
         console.log("Api not found");
         return { verifiedAttestation: null, error: "Api not found" };
       }
-      await sleep(100);
-      const { privateKeyId } = await apiRef.current.privateKeyId();
-      console.log("privateKeyId:", privateKeyId);
+      // await sleep(100);
+      // const { privateKeyId } = await apiRef.current.privateKeyId();
+      // console.log("privateKeyId:", privateKeyId);
       await sleep(100);
       console.log("Calling verifyAttestation");
 
