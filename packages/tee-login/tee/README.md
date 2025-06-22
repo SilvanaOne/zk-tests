@@ -284,3 +284,22 @@ EOF
 
 docker buildx build --platform=linux/arm64 -t hello-arm64 --load .
 docker run --rm --platform=linux/arm64 hello-arm64
+
+# arm64 only:
+
+git clone --depth=1 \
+ --branch main \
+ --recurse-submodules \
+ https://github.com/siderolabs/stagex.git
+
+docker buildx build \
+ -f packages/bootstrap/stage1/Containerfile \
+ --platform linux/arm64 \
+ -t dfstio/bootstrap-stage1:sx2025.06.0 \
+ --push .
+
+docker buildx build \
+ --platform linux/arm64 \
+ -f packages/user/eif_build/Dockerfile \
+ -t dfstio/user-eif_build:sx2025.06.0 \
+ --push .

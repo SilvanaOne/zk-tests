@@ -1,34 +1,29 @@
 # Copyright (c), Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-ARG   STAGEX_REG=quay.io/stagex              # default registry for StageX images (anonymous pulls work)
-# docker pull quay.io/stagex/core-clang:sx2025.06.0
-# This containerfile uses StageX (https://stagex.tools) images, which provide a
-# full source bootstrapped, deterministic, and hermetic build toolchain
+FROM alpine:3.18 AS builder
+RUN apk add --no-cache build-base cmake ninja linux-headers git \
+    musl-dev libc-dev libffi-dev openssl-dev zlib-dev libseccomp-dev \
+    linux-tools util-linux coreutils tar xz curl ca-certificates
 
-FROM ${STAGEX_REG}/core-binutils:sx2025.06.0 AS core-binutils
-FROM ${STAGEX_REG}/core-ca-certificates:sx2025.06.0 AS core-ca-certificates
-FROM ${STAGEX_REG}/core-gcc:sx2025.06.0 AS core-gcc
-FROM ${STAGEX_REG}/core-git:sx2025.06.0 AS core-git
-FROM ${STAGEX_REG}/core-zlib:sx2025.06.0 AS core-zlib
-FROM ${STAGEX_REG}/core-llvm:sx2025.06.0 AS core-llvm
-FROM ${STAGEX_REG}/core-openssl:sx2025.06.0 AS core-openssl
-FROM ${STAGEX_REG}/core-rust:sx2025.06.0 AS core-rust
-FROM ${STAGEX_REG}/core-musl:sx2025.06.0 AS core-musl
-FROM ${STAGEX_REG}/core-libunwind:sx2025.06.0 AS core-libunwind
-FROM ${STAGEX_REG}/core-pkgconf:sx2025.06.0 AS core-pkgconf
-FROM ${STAGEX_REG}/core-busybox:sx2025.06.0 AS core-busybox
-# FROM ${STAGEX_REG}/core-python:local@sha256:17d634028c3ed31707aa492dc65dc15ac27bab197d08e447786b3b1e8c26df2c AS core-python
-FROM ${STAGEX_REG}/core-libzstd:sx2025.06.0 AS core-libzstd
-FROM ${STAGEX_REG}/user-eif_build:sx2025.06.0 AS user-eif_build
-FROM ${STAGEX_REG}/user-gen_initramfs:sx2025.06.0 AS user-gen_initramfs
-FROM ${STAGEX_REG}/user-linux-nitro:sx2025.06.0 AS user-linux-nitro
-FROM ${STAGEX_REG}/user-cpio:sx2025.06.0 AS user-cpio
-FROM ${STAGEX_REG}/user-socat:sx2025.06.0 AS user-socat
-FROM ${STAGEX_REG}/user-jq:sx2025.06.0 AS user-jq
-FROM ${STAGEX_REG}/user-libseccomp:sx2025.06.0 AS user-libseccomp
-FROM ${STAGEX_REG}/core-clang:sx2025.06.0 AS core-clang
-FROM ${STAGEX_REG}/core-libffi:sx2025.06.0 AS core-libffi
+ENV RUSTUP_HOME=/root/.rustup \
+    CARGO_HOME=/root/.cargo \
+    PATH=$PATH:/root/.cargo/bin
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
+    rustup target add aarch64-unknown-linux-musl
+
+RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl
+
+FROM alpine:3.19 AS runtime
+COPY --from=builder /root/.cargo/bin/eif_build /usr/local/bin/
+ENTRYPOINT ["eif_build", "--help"]
+
+# Build BusyBox static
+WORKDIR /root
+RUN curl -LO https://busybox.net/downloads/busybox-1.36.1.tar.bz2 && \
+    tar xf busybox-1.36.1.tar.bz2 && cd busybox-1.36.1 && \
+    make defconfig && sed -i 's/.*CONFIG_STATIC.*/CONFIG_STATIC=y/' .config && \
+    make -j$(nproc) && cp busybox /out/busybox
 
 FROM scratch as base
 ENV TARGET=aarch64-unknown-linux-musl
@@ -36,28 +31,25 @@ ENV RUSTFLAGS="-C target-feature=+crt-static"
 ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
 ENV OPENSSL_STATIC=true
 
-COPY --from=core-busybox . /
-COPY --from=core-musl . /
-COPY --from=core-libunwind . /
-COPY --from=core-openssl . /
-COPY --from=core-zlib . /
-COPY --from=core-ca-certificates . /
-COPY --from=core-libzstd . /
-COPY --from=core-binutils . /
-COPY --from=core-pkgconf . /
-COPY --from=core-git . /
-COPY --from=core-rust . /
-COPY --from=user-gen_initramfs . /
-COPY --from=user-eif_build . /
-COPY --from=core-llvm . /
-COPY --from=core-gcc . /
-COPY --from=core-clang . /
-COPY --from=core-libffi . /
-COPY --from=user-cpio . /
-COPY --from=user-libseccomp . /
-COPY --from=user-linux-nitro /bzImage .
-COPY --from=user-linux-nitro /linux.config .
+# Build Linux kernel + NSM
+WORKDIR /root
+RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git && cd linux && \
+    make ARCH=arm64 defconfig && \
+    # enable Nitro Enclaves and vsock:
+    sed -i 's/# CONFIG_NITRO_ENCLAVES is not set/CONFIG_NITRO_ENCLAVES=m/' .config && \
+    sed -i 's/# CONFIG_VIRTIO_VSOCK/CONFIG_VIRTIO_VSOCK=y/' .config && \
+    sed -i 's/# CONFIG_VIRTIO_MMIO/CONFIG_VIRTIO_MMIO=y/' .config && \
+    sed -i 's/CONFIG_MODULE_SIG_ALL=y/CONFIG_MODULE_SIG_ALL=n/' .config && \
+    make -j$(nproc) ARCH=arm64 && \
+    cp arch/arm64/boot/Image /out/Image && cp drivers/virt/nitro_enclaves/nitro_enclaves.ko /out/nsm.ko
 
+FROM alpine:3.18 AS alpine-runtime      # tiny, ~15 MiB unpacked
+RUN apk add --no-cache \
+        musl \
+        libseccomp \
+        ca-certificates \
+        jq \
+        socat
 
 
 FROM base as build
@@ -79,14 +71,22 @@ WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
 
 RUN mkdir initramfs/
-COPY --from=core-busybox . initramfs
-# COPY --from=core-python . initramfs
-COPY --from=core-musl . initramfs
-COPY --from=user-libseccomp . initramfs
-COPY --from=core-ca-certificates /etc/ssl/certs initramfs
-COPY --from=core-busybox /bin/sh initramfs/sh
-COPY --from=user-jq /bin/jq initramfs
-COPY --from=user-socat /bin/socat . initramfs
+# musl runtime (dynamic linker + libc) – only needed if any binary is *not* fully static
+COPY --from=alpine-runtime /lib/ld-musl-aarch64.so.1 initramfs/lib/
+COPY --from=alpine-runtime /lib/libc.musl-*.so*          initramfs/lib/
+
+# libseccomp (only if your code or BusyBox was linked dynamically to it)
+COPY --from=alpine-runtime /usr/lib/libseccomp.so.*      initramfs/lib/
+
+# CA bundle for TLS
+COPY --from=alpine-runtime /etc/ssl/certs/ca-certificates.crt initramfs/etc/ssl/certs/
+
+# BusyBox already gives you /bin/sh; create a link instead of copying from StageX
+RUN ln -s busybox initramfs/bin/sh
+
+# jq and socat binaries
+COPY --from=alpine-runtime /usr/bin/jq      initramfs/bin/
+COPY --from=alpine-runtime /usr/bin/socat   initramfs/bin/
 RUN mkdir initramfs/proc
 RUN mkdir initramfs/run
 

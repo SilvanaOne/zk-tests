@@ -8,7 +8,7 @@
              (gnu packages compression) ; zlib, zstd
              (gnu packages linux) ; libseccomp, libunwind, musl
              (gnu packages version-control) ; git
-             (gnu packages pkgconfig)
+             (gnu packages pkg-config)       ; correct module name
              (gnu packages admin) ; ca-certificates
              (gnu packages cpio)
              (gnu packages networking) ; socat
