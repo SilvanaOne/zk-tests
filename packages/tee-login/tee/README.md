@@ -179,3 +179,108 @@ skopeo inspect --raw docker://quay.io/stagex/core-libffi:latest \
 
 docker manifest inspect --verbose \
  quay.io/stagex/core-binutils:latest
+
+docker manifest inspect --verbose \
+ quay.io/stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b
+
+core-libffi:sx2025.06.0
+docker pull quay.io/stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b
+
+ghcr.io/siderolabs/stagex
+docker manifest inspect --verbose \
+ ghcr.io/siderolabs/stagex/core-libffi
+
+docker manifest inspect --verbose \
+ quay.io/stagex/core-libffi
+
+docker manifest inspect --verbose \
+ stagex/core-clang
+
+docker manifest inspect --verbose \
+ ghcr.io/siderolabs/stagex/core-clang
+
+skopeo inspect --raw docker://quay.io/stagex/core-clang:latest \
+ | jq -r '.manifests[] | select(.platform.architecture=="arm64") | .digest'
+
+skopeo inspect --raw docker://quay.io/stagex/core-clang:latest \
+ | jq -r '.manifests[]
+| [.platform.os,
+.platform.architecture,
+(.platform.variant // ""), # prints variant if present (e.g. v8)
+.digest]
+| @tsv'
+
+skopeo inspect --raw docker://quay.io/stagex/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf68980fb8be7d105 \
+ | jq -r '.manifests[]
+| [.platform.os,
+.platform.architecture,
+(.platform.variant // ""), # prints variant if present (e.g. v8)
+.digest]
+| @tsv'
+
+# arm64 child manifest (immutable)
+
+FROM quay.io/stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS core-libffi
+
+# one-off build on ANY host (x86, Arm, CI runner, etc.)
+
+docker buildx build \
+ --platform linux/arm64 \
+ -t hello-libffi-arm64 \
+ .
+
+# run the tiny arm64 image (works on Apple Silicon or Graviton parent EC2)
+
+docker run --rm hello-libffi-arm64
+
+# → hello from libffi + clang on arm64!
+
+# GUIX
+
+https://guix.gnu.org/manual/en/html_node/Installation.html
+
+```
+;; manifest.scm  (pin whatever commit you want with `guix pull --commit=…`)
+(specifications->manifest
+ (list
+   "clang-toolchain"   ; Clang + lld + compiler-rt
+   "libffi"            ; you used it in the demo program
+   "bash-minimal"
+   "coreutils"))       ; convenient basics
+```
+
+guix pack -f docker \
+ --system=aarch64-linux \
+ --entry-point=/bin/bash \
+ -m manifest.scm \
+ -S /bin/bash=bin/bash \
+ -S /bin/sh=bin/bash \
+ -S /bin/clang=bin/clang
+
+# (add more like -S /bin/lld=bin/lld if your build requires them)
+
+docker load < /gnu/store/kp2zcf06d346irszwqsla02hnfwvaxnl-clang-toolchain-libffi-bash-minimal-docker-pack.tar.gz
+docker tag $(docker images -q | head -n1) guix/clang:aarch64
+
+Dockerfile:
+
+```
+FROM guix/clang:aarch64 AS builder
+WORKDIR /src
+COPY hello.c .
+RUN ["/bin/clang", "-static", "-O2", "-s", "-o", "hello", "hello.c"]
+
+FROM scratch
+COPY --from=builder /src/hello /hello
+ENTRYPOINT ["/hello"]
+```
+
+docker images guix/clang:aarch64
+
+cat > hello.c <<'EOF'
+#include <stdio.h>
+int main(void) { puts("hello from libffi + clang on arm64!"); }
+EOF
+
+docker buildx build --platform=linux/arm64 -t hello-arm64 --load .
+docker run --rm --platform=linux/arm64 hello-arm64
