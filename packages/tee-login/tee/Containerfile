@@ -56,6 +56,7 @@ RUN scripts/config \
 
 # Keep the config minimal and ensure NSM & dependencies are enabled then build everything once
 RUN scripts/config -m NSM -e CBOR -e HW_RANDOM && \
+    scripts/config -e NSM -e CBOR -e HW_RANDOM && \
     yes "" | make olddefconfig && \
     make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel and config for later stages
@@ -150,8 +151,7 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
-# copy the NSM kernel module built earlier
-COPY --from=kernel-build /out/nsm.ko initramfs/nsm.ko
+# NSM built-in now; no external module needed
 
 RUN <<-EOF
     set -eux
