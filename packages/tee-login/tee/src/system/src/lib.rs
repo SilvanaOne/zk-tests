@@ -98,7 +98,7 @@ pub fn freopen(filename: &str, mode: &str, file: c_int) -> Result<(), SystemErro
         freopen(
             filename_cs.as_ptr(),
             mode_cs.as_ptr(),
-            fdopen(file, mode_cs.as_ptr() as *const i8),
+            fdopen(file, mode_cs.as_ptr()),
         )
     }
     .is_null()
