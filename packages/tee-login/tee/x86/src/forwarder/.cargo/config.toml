@@ -1,0 +1,9 @@
+# .cargo/config.toml
+[build]
+jobs = 16                 # match vCPU count
+rustflags = [
+  "-Ctarget-cpu=native",
+  "-Ccodegen-units=16",
+  "-Ctarget-feature=+crt-static",
+  "-Crelocation-model=static"
+]

@@ -1,0 +1,12 @@
+*.env
+trust-policy.json
+secrets-policy.json
+
+/move/enclave/build
+/move/app/build
+
+/src/server/target
+/src/server/agents
+
+/out
+/target

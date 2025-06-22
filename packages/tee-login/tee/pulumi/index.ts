@@ -88,8 +88,8 @@ export = async () => {
     user: api.name,
   });
 
-  // const amiId = "ami-085ad6ae776d8f09c";
-  const amiId = (
+  const amiId = "ami-085ad6ae776d8f09c"; // x86_64
+  const amiIdArm64 = (
     await aws.ssm.getParameter({
       name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
     })
@@ -290,7 +290,7 @@ export = async () => {
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
-    instanceType: "c7g.4xlarge", //"m5.xlarge",  minimum: t3a.xlarge ($0.1504  per hour) or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge
+    instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,
@@ -301,7 +301,7 @@ export = async () => {
     },
 
     rootBlockDevice: {
-      volumeSize: 100,
+      volumeSize: 30,
       volumeType: "gp3",
       deleteOnTermination: true,
     },
@@ -339,7 +339,8 @@ export = async () => {
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
-    amiId: amiId,
+    amiIdX86: amiId,
+    amiIdArm64: amiIdArm64,
     instanceId: instance.id,
     instancePublicIp: elasticIp.publicIp,
     instancePrivateIp: instance.privateIp,
