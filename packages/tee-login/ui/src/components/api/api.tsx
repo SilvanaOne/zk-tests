@@ -282,7 +282,7 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
               delete pending.current[id];
               reject(new Error(`Request timeout verifyAttestation ${id}`));
             }
-          }, 10000);
+          }, 5000);
           if (!frameRef.current?.contentWindow) {
             reject(new Error("Iframe not available"));
             return;
