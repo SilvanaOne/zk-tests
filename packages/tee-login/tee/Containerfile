@@ -22,7 +22,7 @@ RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
     ncurses-dev bash tar xz perl findutils
 WORKDIR /src
 RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
-# Configure a minimal kernel with Nitro Enclaves support
+# Configure a minimal kernel with Nitro Enclaves support
 RUN make ARCH=arm64 defconfig && \
     scripts/config -e NITRO_ENCLAVES && \
     scripts/config -e VIRTIO_VSOCK && \
@@ -48,10 +48,15 @@ RUN scripts/config \
 # Keep the config minimal
 RUN yes "" | make olddefconfig
 RUN make -j$(nproc) ARCH=arm64 Image
+# Build NSM driver as a module and the rest of modules (nsm.ko will be needed at runtime)
+RUN scripts/config -m NSM && \
+    make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel and config for later stages
 RUN mkdir /out && \
     cp arch/arm64/boot/Image /out/Image && \
-    cp .config /out/linux.config
+    cp .config /out/linux.config && \
+    # Export the freshly-built NSM driver
+    cp drivers/misc/nsm.ko /out/nsm.ko
 
 FROM alpine:3.19 AS runtime
 RUN apk add --no-cache curl build-base tar xz
@@ -138,6 +143,8 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
+# copy the NSM kernel module built earlier
+COPY --from=kernel-build /out/nsm.ko initramfs/nsm.ko
 
 RUN <<-EOF
     set -eux
