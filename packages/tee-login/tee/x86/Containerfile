@@ -97,6 +97,28 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
+# Create directories for ACM files
+RUN mkdir -p initramfs/opt/aws/acm/lib
+RUN mkdir -p initramfs/opt/aws/acm
+
+# Copy ACM files from parent system if they exist
+# These files are created by the nitro-enclaves-acm service on the parent
+RUN if [ -f "/opt/aws/acm/cert_chain.pem" ]; then \
+        cp /opt/aws/acm/cert_chain.pem initramfs/opt/aws/acm/; \
+        echo "Copied certificate chain to enclave"; \
+    else \
+        echo "Warning: Certificate chain not found. Make sure nitro-enclaves-acm service is running."; \
+        touch initramfs/opt/aws/acm/cert_chain.pem; \
+    fi
+
+RUN if [ -f "/opt/aws/acm/private_key.pem" ]; then \
+        cp /opt/aws/acm/private_key.pem initramfs/opt/aws/acm/; \
+        echo "Copied private key to enclave"; \
+    else \
+        echo "Warning: Private key not found. Make sure nitro-enclaves-acm service is running."; \
+        touch initramfs/opt/aws/acm/private_key.pem; \
+    fi
+
 RUN <<-EOF
     set -eux
     cd initramfs
