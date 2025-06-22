@@ -43,7 +43,7 @@ RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git && cd linu
     make -j$(nproc) ARCH=arm64 && \
     cp arch/arm64/boot/Image /out/Image && cp drivers/virt/nitro_enclaves/nitro_enclaves.ko /out/nsm.ko
 
-FROM alpine:3.18 AS alpine-runtime      # tiny, ~15 MiB unpacked
+FROM alpine:3.18 AS alpine-runtime
 RUN apk add --no-cache \
         musl \
         libseccomp \
