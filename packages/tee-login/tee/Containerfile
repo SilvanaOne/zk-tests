@@ -4,7 +4,8 @@
 FROM alpine:3.18 AS builder
 RUN apk add --no-cache build-base cmake ninja linux-headers git \
     musl-dev libc-dev libffi-dev openssl-dev zlib-dev libseccomp-dev \
-    linux-tools util-linux coreutils tar xz curl ca-certificates
+    linux-tools util-linux coreutils tar xz curl ca-certificates \
+    libressl-dev libressl-static
 
 ENV RUSTUP_HOME=/root/.rustup \
     CARGO_HOME=/root/.cargo \
@@ -12,10 +13,9 @@ ENV RUSTUP_HOME=/root/.rustup \
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
     rustup target add aarch64-unknown-linux-musl
 
-# Build eif_build with a vendored, static OpenSSL so we don’t need system libssl.a
-ENV OPENSSL_STATIC=1 \
-    OPENSSL_NO_VENDOR=0
-RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl --features vendored
+# Build eif_build; link statically against libressl
+ENV OPENSSL_STATIC=1
+RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl
 
 # ------------------------------------------------------------------
 # Build the enclave kernel and NSM driver on ARM64
