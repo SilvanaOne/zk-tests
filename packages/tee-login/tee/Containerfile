@@ -60,7 +60,9 @@ RUN apk add --no-cache \
         libseccomp \
         ca-certificates \
         jq \
-        socat
+        socat \
+        curl \
+        build-base
 
 
 FROM builder as build
