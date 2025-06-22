@@ -37,6 +37,15 @@ RUN scripts/config -d NFS_FS -d NFS_V4 -d NFS_V4_1 -d NFS_V4_2 -d PNFS_FILE_LAYO
 RUN scripts/config \
         -d VIDEO_OUTPUT_CONTROL -d HDMI -d FB -d FBDEV -d FRAMEBUFFER_CONSOLE \
         -d VT -d VGA_CONSOLE -d DUMMY_CONSOLE -d CONSOLE_TRANSLATIONS
+# Disable USB, media, sound, input, and other subsystems unnecessary for Nitro Enclave
+RUN scripts/config \
+        -d USB -d USB_SUPPORT -d USB_COMMON -d USB_XHCI_HCD -d USB_EHCI_HCD \
+        -d USB_OHCI_HCD -d USB_DWC3 -d USB_CHIPIDEA -d USB_GADGET \
+        -d MEDIA_SUPPORT -d DVB_CORE -d VIDEO_DEV -d V4L_TEST_DRIVERS \
+        -d SOUND -d SND -d SND_SOC -d AC97_BUS \
+        -d INPUT -d INPUT_MOUSE -d INPUT_KEYBOARD -d INPUT_MISC \
+        -d I2C -d SPI -d PINCTRL -d PHYLIB \
+        -d POWER_SUPPLY -d POWER_RESET
 # Keep the config minimal
 RUN yes "" | make olddefconfig
 RUN make -j$(nproc) ARCH=arm64 Image
