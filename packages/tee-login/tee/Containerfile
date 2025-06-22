@@ -45,11 +45,19 @@ RUN scripts/config \
         -d INPUT -d INPUT_MOUSE -d INPUT_KEYBOARD -d INPUT_MISC \
         -d I2C -d SPI -d PINCTRL -d PHYLIB \
         -d POWER_SUPPLY -d POWER_RESET
-# Keep the config minimal
-RUN yes "" | make olddefconfig
-RUN make -j$(nproc) ARCH=arm64 Image
-# Build NSM driver as a module and the rest of modules (nsm.ko will be needed at runtime)
-RUN scripts/config -m NSM && yes "" | make olddefconfig && \
+
+# Disable IRQ chips, MHI bus, Tegra aconnect, GPIO, PWM, and PCI subsystems
+RUN scripts/config \
+        -d IRQCHIP \
+        -d MHI -d MHI_BUS_HOST -d MHI_PCI_GENERIC \
+        -d TEGRA_ACONNECT \
+        -d GPIOLIB \
+        -d PWM \
+        -d PCI
+
+# Keep the config minimal and ensure NSM & dependencies are enabled then build everything once
+RUN scripts/config -m NSM -e CBOR -e HW_RANDOM && \
+    yes "" | make olddefconfig && \
     make -j$(nproc) ARCH=arm64 Image modules
 # Export the kernel and config for later stages
 RUN mkdir /out && \
