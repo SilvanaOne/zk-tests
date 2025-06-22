@@ -46,9 +46,8 @@ RUN scripts/config \
         -d I2C -d SPI -d PINCTRL -d PHYLIB \
         -d POWER_SUPPLY -d POWER_RESET
 
-# Disable IRQ chips, MHI bus, Tegra aconnect, GPIO, PWM, and PCI subsystems
+# Disable optional subsystems that are not needed inside the enclave
 RUN scripts/config \
-        -d IRQCHIP \
         -d MHI -d MHI_BUS_HOST -d MHI_PCI_GENERIC \
         -d TEGRA_ACONNECT \
         -d GPIOLIB \
