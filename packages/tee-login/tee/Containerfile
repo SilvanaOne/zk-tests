@@ -23,7 +23,7 @@ RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
 WORKDIR /src
 RUN git clone --depth=1 -b v6.6 https://github.com/torvalds/linux.git .
 # Configure a minimal kernel with Nitro Enclaves support
-RUN make ARCH=arm64 virt_defconfig && \
+RUN make ARCH=arm64 defconfig && \
     scripts/config -m NITRO_ENCLAVES && \
     scripts/config -e VIRTIO_VSOCK && \
     scripts/config -e VIRTIO_MMIO && \
