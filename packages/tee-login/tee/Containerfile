@@ -62,9 +62,7 @@ RUN scripts/config -m NSM -e CBOR -e HW_RANDOM && \
 # Export the kernel and config for later stages
 RUN mkdir /out && \
     cp arch/arm64/boot/Image /out/Image && \
-    cp .config /out/linux.config && \
-    # Export the freshly-built NSM driver (some kernels place it in drivers/misc/nsm/)
-    cp $(find drivers/misc -name 'nsm*.ko' | head -n1) /out/nsm.ko
+    cp .config /out/linux.config
 
 FROM alpine:3.19 AS runtime
 RUN apk add --no-cache curl build-base tar xz
@@ -151,7 +149,7 @@ RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
 RUN cp /src/server/run.sh initramfs/
 RUN cp /src/server/allowed_endpoints.yaml initramfs/
 
-# NSM built-in now; no external module needed
+# NSM built-in now; no external module needed (no nsm.ko copied)
 
 RUN <<-EOF
     set -eux
