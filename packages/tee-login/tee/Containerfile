@@ -31,7 +31,6 @@ RUN make ARCH=arm64 defconfig && \
     scripts/config -d DRM_PANEL -d GPU_HOST1X -d TEGRA_HOST1X -d STAGING -d FB -d FRAMEBUFFER_CONSOLE && \
     scripts/config -d BTRFS_FS
 # Disable NFS and its RPC stack
-# Disable NFS and its RPC stack
 RUN scripts/config -d NFS_FS -d NFS_V4 -d NFS_V4_1 -d NFS_V4_2 -d PNFS_FILE_LAYOUT -d PNFS_FLEXFILE_LAYOUT -d SUNRPC -d RPCSEC_GSS_KRB5
 # Disable all remaining video / framebuffer / console-graphics support
 RUN scripts/config \
@@ -143,13 +142,8 @@ RUN <<-EOF
     find . -exec touch -hcd "@0" "{}" +
     find . -print0 \
     | sort -z \
-    | cpio \
-        --null \
-        --create \
-        --verbose \
-        --reproducible \
-        --format=newc \
-    | gzip --best \
+    | cpio -o -0 -H newc -R 0:0 \
+    | gzip -9 \
     > /build_cpio/rootfs.cpio
 EOF
 
@@ -163,7 +157,6 @@ RUN eif_build \
 	--kernel /Image \
 	--kernel_config /linux.config \
 	--ramdisk /build_cpio/rootfs.cpio \
-	--pcrs_output /nitro.pcrs \
 	--output /nitro.eif \
 	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
