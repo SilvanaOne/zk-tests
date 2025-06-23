@@ -145,6 +145,46 @@ export = async () => {
     }
   );
 
+  //Create ACM certificate for HTTPS
+  const certificate = new aws.acm.Certificate("silvana-tee-certificate", {
+    domainName: "tee.silvana.dev",
+    validationMethod: "DNS",
+    tags: {
+      Name: "silvana-tee-certificate",
+      Project: "silvana-tee-login",
+    },
+  });
+
+  //Create IAM policy for ACM certificate access
+  const acmPolicy = new aws.iam.Policy("silvana-tee-acm-policy", {
+    description: "Policy for ACM certificate access from Nitro Enclave",
+    policy: pulumi.all([certificate.arn]).apply(([certArn]) =>
+      JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Action: [
+              "acm:GetCertificate",
+              "acm:DescribeCertificate",
+              "acm:ListCertificates",
+            ],
+            Resource: certArn,
+          },
+        ],
+      })
+    ),
+  });
+
+  //Attach ACM policy to API user
+  const acmPolicyAttachment = new aws.iam.UserPolicyAttachment(
+    "acm-policy-attachment",
+    {
+      user: api.name,
+      policyArn: acmPolicy.arn,
+    }
+  );
+
   // Create Elastic IP
   const elasticIp = new aws.ec2.Eip("silvana-tee-login-ip", {
     domain: "vpc",
@@ -177,6 +217,13 @@ export = async () => {
         description: "Port 3000",
         fromPort: 3000,
         toPort: 3000,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "Port 80",
+        fromPort: 80,
+        toPort: 80,
         protocol: "tcp",
         cidrBlocks: ["0.0.0.0/0"],
       },
@@ -238,6 +285,15 @@ export = async () => {
     }
   );
 
+  // Attach ACM policy to EC2 role
+  const ec2AcmPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    "ec2-acm-policy-attachment",
+    {
+      role: ec2Role.name,
+      policyArn: acmPolicy.arn,
+    }
+  );
+
   const s3images = "silvana-tee-images";
 
   // Get existing S3 bucket
@@ -288,6 +344,7 @@ export = async () => {
 
   // Create EC2 Instance
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
+  // c6a.xlarge - min Intel, 4 cpu, 16gb ram
   const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
     ami: amiId,
     instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
@@ -333,12 +390,14 @@ export = async () => {
     apiAccessKeyId: apiAccessKey.id,
     apiSecretKey: apiAccessKey.secret,
     kmsKeyArn: pulumi.output(kmsKey).apply((k) => k.targetKeyArn),
+    certificateArn: certificate.arn,
     elasticIpId: elasticIp.id,
     elasticIpAddress: elasticIp.publicIp,
     elasticIpAllocationId: elasticIp.allocationId,
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
+    acmPolicyArn: acmPolicy.arn,
     amiIdX86: amiId,
     amiIdArm64: amiIdArm64,
     instanceId: instance.id,

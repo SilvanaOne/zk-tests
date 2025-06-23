@@ -25,6 +25,7 @@ import { getWalletById } from "@/lib/wallet";
 import Image from "next/image";
 import type { ApiFrameHandle } from "@/components/api/api";
 import { useUserState, UserStateProvider } from "@/context/userState";
+import { sleep } from "@/lib/utils";
 
 const Api = dynamic(() => import("@/components/api/api").then((m) => m.Api), {
   ssr: false,
@@ -69,9 +70,25 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
         setIsFetchingTee(false);
         return;
       }
-      const verifiedAttestation = await apiFunctions.verifyAttestation(
-        attestation.data
-      );
+      await sleep(1000);
+      console.log("Calling verifyAttestation");
+      let count = 0;
+      let verifiedAttestation: {
+        verifiedAttestation: string | null;
+        error: string | null;
+      } | null = null;
+      while (
+        count < 5 &&
+        (!verifiedAttestation || !verifiedAttestation?.verifiedAttestation)
+      ) {
+        verifiedAttestation = await apiFunctions.verifyAttestation(
+          attestation.data
+        );
+        count++;
+        console.log(`verifyAttestation ${count}:`, verifiedAttestation);
+        await sleep(1000);
+      }
+
       if (
         !verifiedAttestation ||
         verifiedAttestation.error ||
@@ -324,6 +341,11 @@ export default function SilvanaTeeDashboard() {
         console.log("Api not found");
         return { verifiedAttestation: null, error: "Api not found" };
       }
+      // await sleep(100);
+      // const { privateKeyId } = await apiRef.current.privateKeyId();
+      // console.log("privateKeyId:", privateKeyId);
+      await sleep(100);
+      console.log("Calling verifyAttestation");
 
       const verifiedAttestation = await apiRef.current.verifyAttestation(
         attestation
