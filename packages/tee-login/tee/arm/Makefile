@@ -6,8 +6,8 @@
 IMAGE_NAME ?= tee-arm:latest
 OUT_DIR ?= out
 EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
-CPU_COUNT ?= 2
-MEMORY ?= 512 # MiB
+CPU_COUNT ?= 1
+MEMORY ?= 256 # MiB
 ENCLAVE_CID ?= 16
 
 # Default target ------------------------------------------------
