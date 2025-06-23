@@ -1,0 +1,43 @@
+### Stage 1 – Build ########################################################
+# Use the official Rust Alpine image for the arm64 architecture as the
+# builder stage. This already contains a musl-based toolchain which lets us
+# build statically-linked binaries that are ideal for Nitro Enclaves.
+FROM --platform=linux/arm64 rust:1.77-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache build-base musl-dev
+
+# Workdir inside the container
+WORKDIR /app
+
+# Pre-add the musl target (the default on Alpine, but be explicit)
+RUN rustup target add aarch64-unknown-linux-musl
+
+# Copy the Rust sources into the build context.
+# We copy the Cargo.toml/Cargo.lock first so that dependency layers are
+# cached when only application code changes.
+COPY server/Cargo.toml server/Cargo.lock ./
+COPY server/src ./src
+
+# Build in release mode for arm64 musl target
+RUN cargo build --release --target aarch64-unknown-linux-musl
+
+### Stage 2 – Runtime ######################################################
+# Use a minimal Alpine image for the final enclave rootfs.
+FROM --platform=linux/arm64 alpine:3.19 AS runtime
+
+# Create a non-root user (optional but recommended)
+RUN addgroup -S app && adduser -S app -G app
+
+# Application directory
+WORKDIR /app
+
+# Copy the statically-linked executable from the builder stage
+COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/tee-arm /app/tee-arm
+
+# Ensure the binary is executable and owned by the non-root user
+RUN chmod +x /app/tee-arm && chown app:app /app/tee-arm
+USER app
+
+# The Nitro Enclave entrypoint is simply the application binary
+ENTRYPOINT ["/app/tee-arm"] 
