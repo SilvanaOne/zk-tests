@@ -3,12 +3,12 @@
 # ------------------------------------------------------------
 
 # Tunables ----------------------------------------------------
-IMAGE_NAME := tee-arm:latest
-OUT_DIR := out
-EIF_NAME := $(OUT_DIR)/tee-arm.eif
-CPU_COUNT := 1
-MEMORY := 3072 # MiB
-ENCLAVE_CID := 16
+IMAGE_NAME ?= tee-arm:latest
+OUT_DIR ?= out
+EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
+CPU_COUNT ?= 2
+MEMORY ?= 512 # MiB
+ENCLAVE_CID ?= 16
 
 # Default target ------------------------------------------------
 .DEFAULT_GOAL :=
@@ -74,16 +74,6 @@ expose:
 	echo "Setting up port forwarding: localhost:3000 -> enclave:3000"; \
 	socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:$$ENCLAVE_CID:3000 &
 
-# Start vsock-proxy for AWS services -----------------------------
-.PHONY: vsock
-vsock:
-	@echo "Starting vsock-proxy..."
-	vsock-proxy 8101 dynamodb.us-east-1.amazonaws.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
-	vsock-proxy 8102 kms.us-east-1.amazonaws.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
-	vsock-proxy 8103 www.googleapis.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
-	vsock-proxy 8104 api.github.com 443 --config /etc/nitro_enclaves/vsock-proxy.yaml &
-	@echo "Vsock-proxy started"
-
 # Clean targets -------------------------------------------------
 .PHONY: clean
 clean:
@@ -91,11 +81,6 @@ clean:
 
 .PHONY: update
 update:
-	cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -rf out
-
-
-	.PHONY: updgrade
-update:
-	cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -rf out
+	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
 	$(MAKE) image
 	$(MAKE) eif

@@ -53,6 +53,19 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
   } = useUserState();
 
   useEffect(() => {
+    const fetchStats = async () => {
+      if (!teeStatus) {
+        return;
+      }
+      const stats = await getStats();
+      if (stats.success && stats.data) {
+        setTeeStatus({ ...teeStatus, stats: stats.data });
+      }
+    };
+    fetchStats();
+  }, [userState]);
+
+  useEffect(() => {
     const fetchTeeData = async () => {
       if (isFetchingTee || !isLoadingTee) {
         return;

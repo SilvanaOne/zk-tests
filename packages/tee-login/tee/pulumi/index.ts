@@ -145,46 +145,6 @@ export = async () => {
     }
   );
 
-  //Create ACM certificate for HTTPS
-  const certificate = new aws.acm.Certificate("silvana-tee-certificate", {
-    domainName: "tee.silvana.dev",
-    validationMethod: "DNS",
-    tags: {
-      Name: "silvana-tee-certificate",
-      Project: "silvana-tee-login",
-    },
-  });
-
-  //Create IAM policy for ACM certificate access
-  const acmPolicy = new aws.iam.Policy("silvana-tee-acm-policy", {
-    description: "Policy for ACM certificate access from Nitro Enclave",
-    policy: pulumi.all([certificate.arn]).apply(([certArn]) =>
-      JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "acm:GetCertificate",
-              "acm:DescribeCertificate",
-              "acm:ListCertificates",
-            ],
-            Resource: certArn,
-          },
-        ],
-      })
-    ),
-  });
-
-  //Attach ACM policy to API user
-  const acmPolicyAttachment = new aws.iam.UserPolicyAttachment(
-    "acm-policy-attachment",
-    {
-      user: api.name,
-      policyArn: acmPolicy.arn,
-    }
-  );
-
   // Create Elastic IP
   const elasticIp = new aws.ec2.Eip("silvana-tee-login-ip", {
     domain: "vpc",
@@ -285,15 +245,6 @@ export = async () => {
     }
   );
 
-  // Attach ACM policy to EC2 role
-  const ec2AcmPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    "ec2-acm-policy-attachment",
-    {
-      role: ec2Role.name,
-      policyArn: acmPolicy.arn,
-    }
-  );
-
   const s3images = "silvana-tee-images";
 
   // Get existing S3 bucket
@@ -345,34 +296,40 @@ export = async () => {
   // Create EC2 Instance
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   // c6a.xlarge - min Intel, 4 cpu, 16gb ram
-  const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
-    ami: amiId,
-    instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
-    keyName: keyPairName,
-    vpcSecurityGroupIds: [securityGroup.id],
-    iamInstanceProfile: instanceProfile.name,
+  const instance = new aws.ec2.Instance(
+    "silvana-tee-login-instance",
+    {
+      ami: amiId,
+      instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
+      keyName: keyPairName,
+      vpcSecurityGroupIds: [securityGroup.id],
+      iamInstanceProfile: instanceProfile.name,
 
-    // Enable Nitro Enclaves
-    enclaveOptions: {
-      enabled: true,
+      // Enable Nitro Enclaves
+      enclaveOptions: {
+        enabled: true,
+      },
+
+      rootBlockDevice: {
+        volumeSize: 30,
+        volumeType: "gp3",
+        deleteOnTermination: true,
+      },
+
+      // User data script loaded from user-data.sh file
+      userData: fs.readFileSync("./user-data.sh", "utf8"),
+      userDataReplaceOnChange: false,
+
+      tags: {
+        Name: "silvana-tee-login-instance",
+        Project: "silvana-tee-login",
+        "instance-script": "true",
+      },
     },
-
-    rootBlockDevice: {
-      volumeSize: 30,
-      volumeType: "gp3",
-      deleteOnTermination: true,
-    },
-
-    // User data script loaded from user-data.sh file
-    userData: fs.readFileSync("./user-data.sh", "utf8"),
-    userDataReplaceOnChange: false,
-
-    tags: {
-      Name: "silvana-tee-login-instance",
-      Project: "silvana-tee-login",
-      "instance-script": "true",
-    },
-  });
+    {
+      ignoreChanges: ["userData"],
+    }
+  );
 
   // Associate Elastic IP with the instance
   const eipAssociation = new aws.ec2.EipAssociation(
@@ -383,6 +340,54 @@ export = async () => {
     }
   );
 
+  // Create another Elastic IP for arm instance
+  const armElasticIp = new aws.ec2.Eip("silvana-tee-login-arm-ip", {
+    domain: "vpc",
+    tags: {
+      Name: "silvana-tee-login-arm-ip",
+      Project: "silvana-tee-login",
+    },
+  });
+
+  // Create arm EC2 Instance with ARM64 and larger disk
+  const armInstance = new aws.ec2.Instance("silvana-tee-login-arm-instance", {
+    ami: amiIdArm64,
+    instanceType: "c6g.large",
+    keyName: keyPairName,
+    vpcSecurityGroupIds: [securityGroup.id],
+    iamInstanceProfile: instanceProfile.name,
+
+    // Enable Nitro Enclaves
+    enclaveOptions: {
+      enabled: true,
+    },
+
+    rootBlockDevice: {
+      volumeSize: 10,
+      volumeType: "gp3",
+      deleteOnTermination: true,
+    },
+
+    // User data script loaded from user-data.sh file
+    userData: fs.readFileSync("./user-data.sh", "utf8"),
+    userDataReplaceOnChange: true,
+
+    tags: {
+      Name: "silvana-tee-login-arm-instance",
+      Project: "silvana-tee-login",
+      "instance-script": "true",
+    },
+  });
+
+  // Associate arm Elastic IP with the arm instance
+  const armEipAssociation = new aws.ec2.EipAssociation(
+    "silvana-tee-login-arm-eip-association",
+    {
+      instanceId: armInstance.id,
+      allocationId: armElasticIp.allocationId,
+    }
+  );
+
   // Return all outputs
   return {
     bucketName: bucket.id,
@@ -390,14 +395,12 @@ export = async () => {
     apiAccessKeyId: apiAccessKey.id,
     apiSecretKey: apiAccessKey.secret,
     kmsKeyArn: pulumi.output(kmsKey).apply((k) => k.targetKeyArn),
-    certificateArn: certificate.arn,
     elasticIpId: elasticIp.id,
     elasticIpAddress: elasticIp.publicIp,
     elasticIpAllocationId: elasticIp.allocationId,
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
-    acmPolicyArn: acmPolicy.arn,
     amiIdX86: amiId,
     amiIdArm64: amiIdArm64,
     instanceId: instance.id,
@@ -407,5 +410,10 @@ export = async () => {
     instanceProfileArn: instanceProfile.arn,
     s3imagesBucketName: s3imagesBucket.id,
     s3imagesBucketArn: s3imagesBucket.arn,
+    // arm instance outputs
+    armElasticIpAddress: armElasticIp.publicIp,
+    armInstanceId: armInstance.id,
+    armInstancePublicIp: armElasticIp.publicIp,
+    armInstancePrivateIp: armInstance.privateIp,
   };
 };

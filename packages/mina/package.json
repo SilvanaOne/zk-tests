@@ -12,6 +12,8 @@
     "keys": "npm run test test/keys.test.ts",
     "faucet:zeko": "CHAIN=zeko npm run test test/faucet.test.ts",
     "faucet:devnet": "CHAIN=devnet npm run test test/faucet.test.ts",
+    "nft-faucet:zeko": "CHAIN=zeko npm run test test/nft-faucet.test.ts",
+    "nft-faucet:devnet": "CHAIN=devnet npm run test test/nft-faucet.test.ts",
     "verify": "npm run test test/verify.test.ts",
     "info": "npm run test test/info.test.ts",
     "based": "CHAIN=zeko npm run test test/based.test.ts",
@@ -40,8 +42,8 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@silvana-one/api": "^1.0.17",
-    "@silvana-one/mina-utils": "^1.0.17",
+    "@silvana-one/api": "^1.0.21",
+    "@silvana-one/mina-utils": "^1.0.21",
     "blakejs": "^1.2.1",
     "bs58": "^6.0.0",
     "jose": "^6.0.11",
