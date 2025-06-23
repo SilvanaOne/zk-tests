@@ -24,9 +24,7 @@ $(EIF_NAME): image
 	mkdir -p $(OUT_DIR)
 	nitro-cli build-enclave \
 		--docker-uri $(IMAGE_NAME) \
-		--output-file $(EIF_NAME) \
-		--cpu-count $(CPU_COUNT) \
-		--memory $(MEMORY)
+		--output-file $(EIF_NAME)
 
 # Create the EIF with debug symbols enabled --------------------
 .PHONY: eif-debug
@@ -36,8 +34,6 @@ eif-debug: image
 	nitro-cli build-enclave \
 		--docker-uri $(IMAGE_NAME) \
 		--output-file $(EIF_DEBUG_NAME) \
-		--cpu-count $(CPU_COUNT) \
-		--memory $(MEMORY) \
 		--debug-mode
 
 # Run the enclave ----------------------------------------------
