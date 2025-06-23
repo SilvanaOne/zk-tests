@@ -334,19 +334,19 @@ export = async () => {
     }
   );
 
-  // Create another Elastic IP for dev instance
-  const devElasticIp = new aws.ec2.Eip("silvana-tee-login-dev-ip", {
+  // Create another Elastic IP for arm instance
+  const armElasticIp = new aws.ec2.Eip("silvana-tee-login-arm-ip", {
     domain: "vpc",
     tags: {
-      Name: "silvana-tee-login-dev-ip",
+      Name: "silvana-tee-login-arm-ip",
       Project: "silvana-tee-login",
     },
   });
 
-  // Create dev EC2 Instance with ARM64 and larger disk
-  const devInstance = new aws.ec2.Instance("silvana-tee-login-dev-instance", {
+  // Create arm EC2 Instance with ARM64 and larger disk
+  const armInstance = new aws.ec2.Instance("silvana-tee-login-arm-instance", {
     ami: amiIdArm64,
-    instanceType: "c7g.4xlarge",
+    instanceType: "c6g.large",
     keyName: keyPairName,
     vpcSecurityGroupIds: [securityGroup.id],
     iamInstanceProfile: instanceProfile.name,
@@ -357,7 +357,7 @@ export = async () => {
     },
 
     rootBlockDevice: {
-      volumeSize: 200,
+      volumeSize: 20,
       volumeType: "gp3",
       deleteOnTermination: true,
     },
@@ -367,18 +367,18 @@ export = async () => {
     userDataReplaceOnChange: false,
 
     tags: {
-      Name: "silvana-tee-login-dev-instance",
+      Name: "silvana-tee-login-arm-instance",
       Project: "silvana-tee-login",
       "instance-script": "true",
     },
   });
 
-  // Associate dev Elastic IP with the dev instance
-  const devEipAssociation = new aws.ec2.EipAssociation(
-    "silvana-tee-login-dev-eip-association",
+  // Associate arm Elastic IP with the arm instance
+  const armEipAssociation = new aws.ec2.EipAssociation(
+    "silvana-tee-login-arm-eip-association",
     {
-      instanceId: devInstance.id,
-      allocationId: devElasticIp.allocationId,
+      instanceId: armInstance.id,
+      allocationId: armElasticIp.allocationId,
     }
   );
 
@@ -404,10 +404,10 @@ export = async () => {
     instanceProfileArn: instanceProfile.arn,
     s3imagesBucketName: s3imagesBucket.id,
     s3imagesBucketArn: s3imagesBucket.arn,
-    // Dev instance outputs
-    devElasticIpAddress: devElasticIp.publicIp,
-    devInstanceId: devInstance.id,
-    devInstancePublicIp: devElasticIp.publicIp,
-    devInstancePrivateIp: devInstance.privateIp,
+    // arm instance outputs
+    armElasticIpAddress: armElasticIp.publicIp,
+    armInstanceId: armInstance.id,
+    armInstancePublicIp: armElasticIp.publicIp,
+    armInstancePrivateIp: armInstance.privateIp,
   };
 };

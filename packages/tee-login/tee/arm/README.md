@@ -1,10 +1,12 @@
 cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -rf out && make
 
-curl -H 'Content-Type: application/json' -X GET http://35.174.157.43:3000/health_check
+curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/health_check
 
-curl -H 'Content-Type: application/json' -X GET http://35.174.157.43:3000/stats
+curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/stats
 
-curl -H 'Content-Type: application/json' -X GET http://35.174.157.43:3000/get_attestation
+curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/get_attestation
+
+ssh -i "TEE.pem" ec2-user@35.175.45.79
 
 copy image to s3 and back:
 

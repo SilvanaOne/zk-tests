@@ -58,7 +58,7 @@ aws ec2 describe-instance-types --region "$REGION" \
  "Name=processor-info.supported-architecture,Values=arm64" \
  "Name=hypervisor,Values=nitro" \
  --query 'InstanceTypes[].InstanceType' \
- --output text | tr '\t' '\n' > arm64.txt
+ --output text | tr '\t' '\n' > arm64-2.txt
 
 ## Python
 
