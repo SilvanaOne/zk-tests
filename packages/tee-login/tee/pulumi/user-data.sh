@@ -23,7 +23,7 @@ ALLOCATOR_YAML=/etc/nitro_enclaves/allocator.yaml
 MEM_KEY=memory_mib
 DEFAULT_MEM=4096
 CPU_KEY=cpu_count
-DEFAULT_CPU=2
+DEFAULT_CPU=4
 sudo sed -i "s/^${MEM_KEY}:.*/${MEM_KEY}: ${DEFAULT_MEM}/" "$ALLOCATOR_YAML"
 sudo sed -i "s/^${CPU_KEY}:.*/${CPU_KEY}: ${DEFAULT_CPU}/" "$ALLOCATOR_YAML"
 
