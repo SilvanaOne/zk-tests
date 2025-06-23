@@ -4,7 +4,8 @@
 
 # Tunables ----------------------------------------------------
 IMAGE_NAME ?= tee-arm:latest
-EIF_NAME ?= tee-arm.eif
+OUT_DIR ?= out
+EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
 CPU_COUNT ?= 2
 MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
@@ -20,6 +21,7 @@ image:
 
 # Create the Enclave Image File (EIF) ---------------------------
 $(EIF_NAME): image
+	mkdir -p $(OUT_DIR)
 	nitro-cli build-enclave \
 		--docker-uri $(IMAGE_NAME) \
 		--output-file $(EIF_NAME) \
@@ -28,8 +30,9 @@ $(EIF_NAME): image
 
 # Create the EIF with debug symbols enabled --------------------
 .PHONY: eif-debug
-EIF_DEBUG_NAME := $(basename $(EIF_NAME))-debug.eif
+EIF_DEBUG_NAME := $(OUT_DIR)/tee-arm-debug.eif
 eif-debug: image
+	mkdir -p $(OUT_DIR)
 	nitro-cli build-enclave \
 		--docker-uri $(IMAGE_NAME) \
 		--output-file $(EIF_DEBUG_NAME) \
@@ -70,4 +73,4 @@ run-debug-console: eif-debug
 # Clean targets -------------------------------------------------
 .PHONY: clean
 clean:
-	rm -f $(EIF_NAME) $(EIF_DEBUG_NAME) 
+	rm -rf $(OUT_DIR) 
