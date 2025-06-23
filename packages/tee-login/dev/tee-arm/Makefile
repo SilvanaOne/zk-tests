@@ -11,16 +11,18 @@ MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
 
 # Default target ------------------------------------------------
+.DEFAULT_GOAL :=
 .PHONY: default
 default: $(EIF_NAME)
 
 # Build the container image ------------------------------------
-.PHONY: build
-build:
+.PHONY: image
+image:
+	mkdir -p out
 	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
-
 # Create the Enclave Image File (EIF) ---------------------------
-$(EIF_NAME): image
+.PHONY: eif
+eif: $(EIF_NAME)
 	mkdir -p $(OUT_DIR)
 	nitro-cli build-enclave \
 		--docker-uri $(IMAGE_NAME) \
@@ -55,4 +57,4 @@ clean:
 .PHONY: update
 update:
 	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
-	$(MAKE) build
+	$(MAKE) image
