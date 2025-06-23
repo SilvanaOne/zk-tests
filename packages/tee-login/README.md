@@ -4,7 +4,7 @@
 
 ### tee
 
-#### x86
+#### tee/x86
 
 - TEE deployment code for x86 (used in https://login.silvana.dev/)
 - main rust repo: src/server
@@ -12,11 +12,11 @@
 - connected with KMS for key management
 - connected with DynamoDB for encrypted state storage
 
-#### arm
+#### tee/arm
 
 - TEE deployment code for arm64 (WIP)
 
-#### pulumi
+#### tee/pulumi
 
 - AWS deployment script
 
