@@ -24,7 +24,7 @@ RUN cargo build --release --target aarch64-unknown-linux-musl
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
-FROM --platform=linux/arm64 alpine:3.19 AS runtime
+FROM --platform=linux/arm64 alpine:3.22 AS runtime
 
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app

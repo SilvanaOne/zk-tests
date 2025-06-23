@@ -51,6 +51,29 @@ run-debug:
 		--attach-console
 
 
+# List running enclaves -----------------------------------------
+.PHONY: list
+list:
+	nitro-cli describe-enclaves
+
+# Stop all enclaves and cleanup ---------------------------------
+.PHONY: stop
+stop:
+	sudo nitro-cli terminate-enclave --all
+	sudo killall socat || true
+
+# Expose enclave ports via socat --------------------------------
+.PHONY: expose
+expose:
+	@ENCLAVE_ID=$$(nitro-cli describe-enclaves | jq -r ".[0].EnclaveID"); \
+	ENCLAVE_CID=$$(nitro-cli describe-enclaves | jq -r ".[0].EnclaveCID"); \
+	echo "Enclave ID: $$ENCLAVE_ID"; \
+	echo "Enclave CID: $$ENCLAVE_CID"; \
+	echo "Sending env.json to enclave..."; \
+	cat env.json | socat - VSOCK-CONNECT:$$ENCLAVE_CID:7777; \
+	echo "Setting up port forwarding: localhost:3000 -> enclave:3000"; \
+	socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:$$ENCLAVE_CID:3000 &
+
 # Clean targets -------------------------------------------------
 .PHONY: clean
 clean:
