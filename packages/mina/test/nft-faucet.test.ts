@@ -17,9 +17,9 @@ import { GASTANKS } from "./helpers/env.js";
 let keys: { privateKey: string; publicKey: string }[] = [];
 const tanks: { privateKey: string; publicKey: string }[] = [];
 const chain = process.env.CHAIN;
-const MINIMUM_AMOUNT = 100;
+const MINIMUM_AMOUNT = 1000;
 const keysToTopup: string[] = [];
-const MAX_KEYS_TO_TOPUP = 50;
+const MAX_KEYS_TO_TOPUP = 200;
 
 describe("Topup", async () => {
   it("should check balances", async () => {

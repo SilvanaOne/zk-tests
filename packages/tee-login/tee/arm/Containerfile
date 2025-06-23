@@ -35,6 +35,9 @@ RUN cd forwarder && cargo build --release --target aarch64-unknown-linux-musl
 # Use a minimal Alpine image for the final enclave rootfs.
 FROM --platform=linux/arm64 alpine:3.22 AS runtime
 
+# Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing)
+RUN apk add --no-cache socat jq
+
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app
 
