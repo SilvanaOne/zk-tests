@@ -2,7 +2,7 @@
 # Use the official Rust Alpine image for the arm64 architecture as the
 # builder stage. This already contains a musl-based toolchain which lets us
 # build statically-linked binaries that are ideal for Nitro Enclaves.
-FROM --platform=linux/arm64 rust:1.77-alpine AS builder
+FROM --platform=linux/arm64 rust:1.87-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache build-base musl-dev
