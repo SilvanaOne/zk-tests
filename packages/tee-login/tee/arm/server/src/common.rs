@@ -165,7 +165,7 @@ pub async fn health_check(
         .map_err(|e| EnclaveError::GenericError(format!("Failed to create HTTP client: {}", e)))?;
 
     // Load allowed endpoints from YAML file
-    let endpoints_status = match std::fs::read_to_string("allowed_endpoints.yaml") {
+    let endpoints_status = match std::fs::read_to_string("/app/allowed_endpoints.yaml") {
         Ok(yaml_content) => {
             match serde_yaml::from_str::<serde_yaml::Value>(&yaml_content) {
                 Ok(yaml_value) => {
