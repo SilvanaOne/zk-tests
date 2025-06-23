@@ -32,7 +32,7 @@ eif: $(EIF_NAME)
 
 # Run the enclave ----------------------------------------------
 .PHONY: run
-run
+run:
 	nitro-cli run-enclave \
 		--eif-path $(EIF_NAME) \
 		--cpu-count $(CPU_COUNT) \
