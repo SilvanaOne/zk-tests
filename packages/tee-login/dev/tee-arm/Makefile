@@ -11,12 +11,12 @@ MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
 
 # Default target ------------------------------------------------
-.PHONY: all
-all: $(EIF_NAME)
+.PHONY: default
+default: $(EIF_NAME)
 
 # Build the container image ------------------------------------
-.PHONY: image
-image:
+.PHONY: build
+build:
 	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
 
 # Create the Enclave Image File (EIF) ---------------------------
@@ -52,7 +52,7 @@ run-debug: $(EIF_NAME)
 clean:
 	rm -rf $(OUT_DIR) 
 
-	.PHONY: clean
+.PHONY: update
 update:
 	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
-	$(MAKE) image
+	$(MAKE) build
