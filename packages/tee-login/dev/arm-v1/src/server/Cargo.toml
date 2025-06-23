@@ -1,0 +1,56 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+authors = ["DFST"]
+license = "Apache-2.0"
+
+[workspace]
+
+[dependencies]
+serde_json = "1.0.140"
+serde_bytes = "0.11"
+serde = "1.0"
+serde_repr = "0.1"
+tokio = { version = "1.45", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = { version = "0.7", features = ["macros"] }
+rand = "0.8.5"
+anyhow = "1.0"
+serde_yaml = "0.9.34"
+tower-http = { version = "0.6.0", features = ["cors"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9", features = ["aes","copy_key"] }
+shared_crypto = { git = "https://github.com/mystenlabs/sui", rev = "574e17b5ef3b96146aebcd23f3e8b1d20b14e6ae", package = "shared-crypto"}
+mina-signer = { git = "https://github.com/o1-labs/proof-systems", branch = "master", package = "mina-signer" }
+nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev = "8ec7eac72bbb2097f1058ee32c13e1ff232f13e8", package="aws-nitro-enclaves-nsm-api", optional = false }
+bcs = "0.1.6"
+futures-util = "0.3"
+chrono = { version = "0.4.41", features = ["clock", "serde"] }
+bytes = "1"
+num_cpus = "1.16.0"
+sys-info = "0.9.1"
+libc = "0.2.172"
+bc-shamir = "0.8.0"
+bc-rand = "0.4.0"
+aws-sdk-dynamodb = "1.80.0"
+aws-sdk-kms = "1.76.0"
+aws-config = "1.8.0"
+aes-gcm = "0.10"
+bincode = "1.3"
+ed25519-dalek = "2.1"
+bs58 = "0.5.0"
+base64 = "0.22.1"
+rsa = "0.9.8"
+sha2 = "0.10.9"
+bip39 = { version = "2", features = ["zeroize", "rand", "std"] }
+hex = "0.4"
+zeroize = "1.8.1"
+der = "0.7"
+aes = "0.8"
+cbc = "0.1"
+ethers-core = "2.0.14"
+secp256k1  = { version = "0.30", features = ["recovery"] }
+jsonwebtoken = "9.3.1"
+once_cell = "1.21.3"
+reqwest = { version = "0.12.20", features = ["json"] }

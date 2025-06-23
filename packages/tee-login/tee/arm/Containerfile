@@ -1,184 +1,54 @@
-# Copyright (c), Mysten Labs, Inc.
-# SPDX-License-Identifier: Apache-2.0
+### Stage 1 – Build ########################################################
+# Use the official Rust Alpine image for the arm64 architecture as the
+# builder stage. This already contains a musl-based toolchain which lets us
+# build statically-linked binaries that are ideal for Nitro Enclaves.
+FROM --platform=linux/arm64 rust:1.87-alpine AS builder
 
-FROM alpine:3.18 AS builder
-RUN apk add --no-cache build-base cmake ninja linux-headers git \
-    musl-dev libc-dev libffi-dev openssl-dev openssl-libs-static zlib-dev libseccomp-dev \
-    linux-tools util-linux coreutils tar xz curl ca-certificates
+# Install build dependencies
+RUN apk add --no-cache build-base musl-dev
 
-ENV RUSTUP_HOME=/root/.rustup \
-    CARGO_HOME=/root/.cargo \
-    PATH=$PATH:/root/.cargo/bin
-RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
-    rustup target add aarch64-unknown-linux-musl
+# Workdir inside the container
+WORKDIR /app
 
-RUN cargo install eif_build --locked --target aarch64-unknown-linux-musl
+# Pre-add the musl target (the default on Alpine, but be explicit)
+RUN rustup target add aarch64-unknown-linux-musl
 
-# ------------------------------------------------------------------
-# Build the enclave kernel and NSM driver on ARM64
-# ------------------------------------------------------------------
-FROM alpine:3.18 AS kernel-build
-RUN apk add --no-cache build-base bc flex bison openssl-dev elfutils-dev git \
-    ncurses-dev bash tar xz perl findutils
-WORKDIR /src
-RUN git clone --depth=1 -b v6.10 https://github.com/torvalds/linux.git .
-# Configure a minimal kernel with Nitro Enclaves support
-RUN make ARCH=arm64 defconfig && \
-    scripts/config -e NITRO_ENCLAVES && \
-    scripts/config -e VIRTIO_VSOCK && \
-    scripts/config -e VIRTIO_MMIO && \
-    scripts/config -d DRM && \
-    scripts/config -d DRM_PANEL -d GPU_HOST1X -d TEGRA_HOST1X -d STAGING -d FB -d FRAMEBUFFER_CONSOLE && \
-    scripts/config -d BTRFS_FS
-# Disable NFS and its RPC stack
-RUN scripts/config -d NFS_FS -d NFS_V4 -d NFS_V4_1 -d NFS_V4_2 -d PNFS_FILE_LAYOUT -d PNFS_FLEXFILE_LAYOUT -d SUNRPC -d RPCSEC_GSS_KRB5
-# Disable all remaining video / framebuffer / console-graphics support
-RUN scripts/config \
-        -d VIDEO_OUTPUT_CONTROL -d HDMI -d FB -d FBDEV -d FRAMEBUFFER_CONSOLE \
-        -d VT -d VGA_CONSOLE -d DUMMY_CONSOLE -d CONSOLE_TRANSLATIONS
-# Disable USB, media, sound, input, and other subsystems unnecessary for Nitro Enclave
-RUN scripts/config \
-        -d USB -d USB_SUPPORT -d USB_COMMON -d USB_XHCI_HCD -d USB_EHCI_HCD \
-        -d USB_OHCI_HCD -d USB_DWC3 -d USB_CHIPIDEA -d USB_GADGET \
-        -d MEDIA_SUPPORT -d DVB_CORE -d VIDEO_DEV -d V4L_TEST_DRIVERS \
-        -d SOUND -d SND -d SND_SOC -d AC97_BUS \
-        -d INPUT -d INPUT_MOUSE -d INPUT_KEYBOARD -d INPUT_MISC \
-        -d I2C -d SPI -d PINCTRL -d PHYLIB \
-        -d POWER_SUPPLY -d POWER_RESET
+# Copy the Rust sources into the build context.
+# We copy the Cargo.toml/Cargo.lock first so that dependency layers are
+# cached when only application code changes.
+RUN mkdir -p server
+RUN mkdir -p forwarder
+COPY server/Cargo.toml server/Cargo.lock ./server
+COPY server/src ./server/src
+COPY forwarder/Cargo.toml forwarder/Cargo.lock ./forwarder
+COPY forwarder/src ./forwarder/src
 
-# Disable optional subsystems that are not needed inside the enclave
-RUN scripts/config \
-        -d MHI -d MHI_BUS_HOST -d MHI_PCI_GENERIC \
-        -d TEGRA_ACONNECT \
-        -d GPIOLIB \
-        -d PWM \
-        -d PCI
-
-# Keep the config minimal and ensure NSM & dependencies are enabled then build everything once
-RUN scripts/config -m NSM -e CBOR -e HW_RANDOM && \
-    scripts/config -e NSM -e CBOR -e HW_RANDOM && \
-    yes "" | make olddefconfig && \
-    make -j$(nproc) ARCH=arm64 Image modules
-# Export the kernel and config for later stages
-RUN mkdir /out && \
-    cp arch/arm64/boot/Image /out/Image && \
-    cp .config /out/linux.config
-
-FROM alpine:3.19 AS runtime
-RUN apk add --no-cache curl build-base tar xz
-COPY --from=builder /root/.cargo/bin/eif_build /usr/local/bin/
-ENTRYPOINT ["eif_build", "--help"]
-
-# BusyBox: use Alpine's pre‑built static binary instead of compiling
-RUN apk add --no-cache busybox-static && \
-    mkdir -p /out && cp /bin/busybox /out/busybox
-
-FROM scratch as base
-ENV TARGET=aarch64-unknown-linux-musl
-ENV RUSTFLAGS="-C target-feature=+crt-static"
-ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
-ENV OPENSSL_STATIC=true
-
-# Build Linux kernel + NSM
-WORKDIR /root
-
-FROM alpine:3.18 AS alpine-runtime
-RUN apk add --no-cache \
-        musl \
-        libseccomp \
-        ca-certificates \
-        jq \
-        socat \
-        curl \
-        build-base
+# Build in release mode for arm64 musl target
+RUN cd server && cargo build --release --target aarch64-unknown-linux-musl
+RUN cd forwarder && cargo build --release --target aarch64-unknown-linux-musl
 
 
-FROM builder as build
-# environment for Rust static builds
-ENV TARGET=aarch64-unknown-linux-musl \
-    RUSTFLAGS="-C target-feature=+crt-static" \
-    CARGOFLAGS="--locked --no-default-features --release --target=${TARGET}" \
-    OPENSSL_STATIC=true
-COPY . .
-RUN cargo build --workspace --locked --no-default-features --release --target ${TARGET}
+### Stage 2 – Runtime ######################################################
+# Use a minimal Alpine image for the final enclave rootfs.
+FROM --platform=linux/arm64 alpine:3.22 AS runtime
 
-WORKDIR /src/forwarder
-# ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-ENV LIBCLANG_PATH=/usr/lib
-RUN cargo build --locked --no-default-features --release --target ${TARGET}
+# Create a non-root user (optional but recommended)
+RUN addgroup -S app && adduser -S app -G app
 
-WORKDIR /src/server
-# ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-ENV LIBCLANG_PATH=/usr/lib
-RUN cargo build --locked --no-default-features --release --target ${TARGET}
+# Application directory
+WORKDIR /app
 
+# Copy the statically-linked executable from the builder stage
+COPY --from=builder /app/server/target/aarch64-unknown-linux-musl/release/server /app/server
+COPY --from=builder /app/forwarder/target/aarch64-unknown-linux-musl/release/forwarder /app/forwarder
+COPY data/allowed_endpoints.yaml /app/allowed_endpoints.yaml
+COPY data/run.sh /app/run.sh
 
-WORKDIR /build_cpio
-ENV KBUILD_BUILD_TIMESTAMP=1
+# Ensure the binary is executable and owned by the non-root user
+RUN chmod +x /app/server && chown app:app /app/server
+RUN chmod +x /app/forwarder && chown app:app /app/forwarder
+RUN chmod +x /app/run.sh && chown app:app /app/run.sh
+USER app
 
-RUN mkdir initramfs/
-# musl runtime (dynamic linker + libc) – only needed if any binary is *not* fully static
-COPY --from=alpine-runtime /lib/ld-musl-aarch64.so.1 initramfs/lib/
-COPY --from=alpine-runtime /lib/libc.musl-*.so*          initramfs/lib/
-
-# libseccomp (only if your code or BusyBox was linked dynamically to it)
-COPY --from=alpine-runtime /usr/lib/libseccomp.so.*      initramfs/lib/
-
-# CA bundle for TLS
-COPY --from=alpine-runtime /etc/ssl/certs/ca-certificates.crt initramfs/etc/ssl/certs/
-
-# copy the statically-linked BusyBox we built earlier
-COPY --from=runtime /out/busybox initramfs/bin/busybox
-
-# BusyBox already gives you /bin/sh; create a link instead of copying from StageX
-RUN ln -s busybox initramfs/bin/sh
-
-# jq and socat binaries
-COPY --from=alpine-runtime /usr/bin/jq      initramfs/bin/
-COPY --from=alpine-runtime /usr/bin/socat   initramfs/bin/
-RUN mkdir initramfs/proc
-RUN mkdir initramfs/run
-RUN mkdir -p initramfs/dev && \
-    mknod -m 0666 initramfs/dev/console c 5 1 && \
-    mknod -m 0666 initramfs/dev/vsock c 10 63
-
-RUN cp /target/${TARGET}/release/init initramfs
-RUN cp /src/server/target/${TARGET}/release/server initramfs
-RUN cp /src/forwarder/target/${TARGET}/release/forwarder initramfs
-# RUN cp /src/server/traffic_forwarder.py initramfs/
-RUN cp /src/server/run.sh initramfs/
-RUN cp /src/server/allowed_endpoints.yaml initramfs/
-
-# NSM built-in now; no external module needed
-
-RUN <<-EOF
-    set -eux
-    cd initramfs
-    find . -exec touch -hcd "@0" "{}" +
-    find . -print0 \
-    | sort -z \
-    | cpio -o -0 -H newc -R 0:0 \
-    | gzip -9 \
-    > /build_cpio/rootfs.cpio
-EOF
-
-WORKDIR /build_eif
-
-# Bring in the freshly‑built ARM64 kernel and its config
-COPY --from=kernel-build /out/Image /Image
-COPY --from=kernel-build /out/linux.config /linux.config
-
-RUN eif_build \
-	--kernel /Image \
-	--kernel_config /linux.config \
-	--ramdisk /build_cpio/rootfs.cpio \
-	--output /nitro.eif \
-	--cmdline "init=/init reboot=k initrd=0x2000000,$(stat -c%s /build_cpio/rootfs.cpio) root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd"
-
-FROM base as install
-WORKDIR /rootfs
-COPY --from=build /nitro.eif .
-COPY --from=build /build_cpio/rootfs.cpio .
-
-FROM scratch as package
-COPY --from=install /rootfs .
+# The Nitro Enclave entrypoint is simply the application binary
+ENTRYPOINT ["/app/run.sh"] 
