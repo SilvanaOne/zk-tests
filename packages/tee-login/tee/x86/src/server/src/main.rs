@@ -12,17 +12,12 @@
 
 use anyhow::Result;
 use axum::{Router, routing::get, routing::post};
-use axum_server::tls_rustls::RustlsConfig;
-use rustls::{ServerConfig, pki_types::CertificateDer};
-use rustls_pemfile;
 use server::AppState;
 use server::app::{login, ping};
 use server::common::{get_attestation, health_check};
 use server::dynamodb::DynamoDB;
 use server::keys::Keys;
 use server::stats::stats;
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
@@ -65,9 +60,6 @@ async fn main() -> Result<()> {
     let aws_secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY")
         .expect("AWS_SECRET_ACCESS_KEY environment variable not set");
     debug!("AWS Secret Access Key: {}", aws_secret_access_key);
-    let acm_certificate = std::env::var("ACM_CERTIFICATE")
-        .expect("ACM_CERTIFICATE environment variable not set");
-    debug!("ACM Certificate: {}", acm_certificate);
     warn!("Sensitive credentials loaded - ensure secure environment");
 
     info!("Initializing database...");
@@ -103,105 +95,17 @@ async fn main() -> Result<()> {
         .with_state(state)
         .layer(cors);
 
-    // Configure TLS with ACM certificate
-    info!("Configuring HTTPS with ACM certificate...");
-    let tls_config = match configure_tls(&acm_certificate).await {
-        Ok(config) => {
-            info!("TLS configuration successful");
-            config
-        }
-        Err(e) => {
-            error!("Failed to configure TLS: {}", e);
-            error!("Make sure ACM for Nitro Enclaves is properly configured on the parent instance");
-            std::process::exit(1);
-        }
-    };
-
-    // Bind to both HTTP (3000) and HTTPS (443) ports
-    info!("Starting HTTPS server on port 443...");
-    let https_addr = "0.0.0.0:443";
-    info!("HTTPS server listening on {}", https_addr);
-    warn!("HTTPS server bound to 0.0.0.0:443 - accessible from all network interfaces");
-    
-    // Also start HTTP server on port 3000 for health checks and internal access
-    let http_app = app.clone();
-    let http_handle = tokio::spawn(async move {
-        info!("Starting HTTP server on port 3000 for health checks...");
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await
-            .map_err(|e| anyhow::anyhow!("Failed to bind HTTP server: {}", e))?;
-        info!("HTTP server listening on 0.0.0.0:3000");
-        axum::serve(listener, http_app.into_make_service())
-            .await
-            .map_err(|e| anyhow::anyhow!("HTTP server error: {}", e))
-    });
-
-    // Start HTTPS server
-    let https_future = axum_server::bind_rustls(https_addr.parse()?, tls_config)
-        .serve(app.into_make_service());
-
-    // Wait for either server to complete (or fail)
-    tokio::select! {
-        result = https_future => {
-            result.map_err(|e| anyhow::anyhow!("HTTPS server error: {}", e))
-        }
-        result = http_handle => {
-            match result {
-                Ok(inner_result) => inner_result,
-                Err(e) => Err(anyhow::anyhow!("HTTP server task error: {}", e))
-            }
-        }
-    }
+    info!("Binding to port 3000...");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    let addr = listener.local_addr().unwrap();
+    info!("Server listening on {}", addr);
+    warn!("Server bound to 0.0.0.0 - accessible from all network interfaces");
+    debug!("Ready to accept incoming connections");
+    axum::serve(listener, app.into_make_service())
+        .await
+        .map_err(|e| anyhow::anyhow!("Server error: {}", e))
 }
 
 async fn hello() -> &'static str {
     "Hello!"
-}
-
-/// Configure TLS using ACM certificate and private key files
-async fn configure_tls(acm_certificate_id: &str) -> Result<RustlsConfig> {
-    info!("Configuring TLS with ACM certificate: {}", acm_certificate_id);
-    
-    // Load certificate chain from the file provided by ACM for Nitro Enclaves
-    let cert_chain_path = "/opt/aws/acm/cert_chain.pem";
-    info!("Loading certificate chain from: {}", cert_chain_path);
-    
-    let cert_file = File::open(cert_chain_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open certificate chain file {}: {}", cert_chain_path, e))?;
-    let mut cert_reader = BufReader::new(cert_file);
-    
-    let cert_chain = rustls_pemfile::certs(&mut cert_reader)
-        .collect::<Result<Vec<CertificateDer>, _>>()
-        .map_err(|e| anyhow::anyhow!("Failed to parse certificate chain: {}", e))?;
-    
-    if cert_chain.is_empty() {
-        return Err(anyhow::anyhow!("No certificates found in certificate chain file"));
-    }
-    
-    info!("Loaded {} certificates from chain", cert_chain.len());
-    
-    // Load private key from the file provided by ACM for Nitro Enclaves
-    let private_key_path = "/opt/aws/acm/private_key.pem";
-    info!("Loading private key from: {}", private_key_path);
-    
-    // Try to read private key using the generic private key parser
-    let private_key = {
-        let key_file = File::open(private_key_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open private key file {}: {}", private_key_path, e))?;
-        let mut key_reader = BufReader::new(key_file);
-        
-        rustls_pemfile::private_key(&mut key_reader)
-            .map_err(|e| anyhow::anyhow!("Failed to parse private key: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("No private key found in key file"))?
-    };
-    
-    info!("Successfully loaded private key");
-    
-    // Build rustls server configuration
-    let config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(cert_chain, private_key)
-        .map_err(|e| anyhow::anyhow!("Failed to build TLS configuration: {}", e))?;
-    
-    info!("TLS configuration completed successfully");
-    Ok(RustlsConfig::from_config(Arc::new(config)))
 }

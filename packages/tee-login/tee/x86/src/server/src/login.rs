@@ -41,7 +41,9 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
         "Processing login request for chain: {}, wallet: {}, address: {}",
         login_request.chain, login_request.wallet, login_request.address
     );
-    if login_request.nonce > chrono::Utc::now().timestamp_millis() as u64 {
+    if login_request.nonce > (chrono::Utc::now().timestamp_millis() as u64 + 1000 * 60 * 60)
+    // 1 hour allowance
+    {
         return LoginResponse {
             success: false,
             data: None,
@@ -108,7 +110,10 @@ pub async fn process_login(login_request: LoginRequest, db: &DynamoDB) -> LoginR
                         log_database_error("update", &error_msg);
                     }
                 } else {
-                    error!("Nonce is less than the existing nonce, returning error, request nonce: {}, existing nonce: {}", request_nonce, nonce);
+                    error!(
+                        "Nonce is less than the existing nonce, returning error, request nonce: {}, existing nonce: {}",
+                        request_nonce, nonce
+                    );
                     return LoginResponse {
                         success: false,
                         data: None,
