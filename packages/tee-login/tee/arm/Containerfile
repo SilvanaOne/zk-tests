@@ -23,6 +23,10 @@ COPY server/src ./server/src
 COPY forwarder/Cargo.toml forwarder/Cargo.lock ./forwarder
 COPY forwarder/src ./forwarder/src
 
+ENV TARGET=aarch64-unknown-linux-musl
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
+ENV OPENSSL_STATIC=true
 # Build in release mode for arm64 musl target
 RUN cd server && cargo build --release --target aarch64-unknown-linux-musl
 RUN cd forwarder && cargo build --release --target aarch64-unknown-linux-musl
