@@ -40,13 +40,13 @@ echo "$JSON_RESPONSE" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /tmp/kvpair
 # Forwards traffic from 127.0.0.x -> Port 443 at CID 3 Listening on port 800x
 # There is a vsock-proxy that listens for this and forwards to the respective domains
 
-./forwarder 127.0.0.64 443 3 8101 &
-./forwarder 127.0.0.65 443 3 8102 &
-./forwarder 127.0.0.66 443 3 8103 &
-./forwarder 127.0.0.67 443 3 8104 &
+/app/forwarder 127.0.0.64 443 3 8101 &
+/app/forwarder 127.0.0.65 443 3 8102 &
+/app/forwarder 127.0.0.66 443 3 8103 &
+/app/forwarder 127.0.0.67 443 3 8104 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
 echo "Traffic forwarder started"
 echo "Starting Silvana TEE Login Server"
-./server
+/app/server
