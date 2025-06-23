@@ -5,6 +5,7 @@ sudo yum install -y aws-nitro-enclaves-cli-devel aws-nitro-enclaves-cli awscli d
 
 # Add the current user to the docker group (so you can run docker without sudo)
 sudo usermod -aG docker ec2-user
+sudo usermod -aG ne ec2-user
 
 # Start and enable Nitro Enclaves allocator and Docker services
 sudo systemctl start nitro-enclaves-allocator.service && sudo systemctl enable nitro-enclaves-allocator.service

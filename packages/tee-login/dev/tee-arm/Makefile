@@ -26,16 +26,6 @@ $(EIF_NAME): image
 		--docker-uri $(IMAGE_NAME) \
 		--output-file $(EIF_NAME)
 
-# Create the EIF with debug symbols enabled --------------------
-.PHONY: eif-debug
-EIF_DEBUG_NAME := $(OUT_DIR)/tee-arm-debug.eif
-eif-debug: image
-	mkdir -p $(OUT_DIR)
-	nitro-cli build-enclave \
-		--docker-uri $(IMAGE_NAME) \
-		--output-file $(EIF_DEBUG_NAME) \
-		--debug-mode
-
 # Run the enclave ----------------------------------------------
 .PHONY: run
 run: $(EIF_NAME)
@@ -47,26 +37,22 @@ run: $(EIF_NAME)
 
 # Run the enclave with debug mode enabled ----------------------
 .PHONY: run-debug
-run-debug: eif-debug
+run-debug: $(EIF_NAME)
 	nitro-cli run-enclave \
-		--eif-path $(EIF_DEBUG_NAME) \
+		--eif-path $(EIF_NAME) \
 		--cpu-count $(CPU_COUNT) \
 		--memory $(MEMORY) \
 		--enclave-cid $(ENCLAVE_CID) \
 		--debug-mode
-
-# Run the enclave with debug mode enabled and attach console ----------------------
-.PHONY: run-debug-console
-run-debug-console: eif-debug
-	nitro-cli run-enclave \
-		--eif-path $(EIF_DEBUG_NAME) \
-		--cpu-count $(CPU_COUNT) \
-		--memory $(MEMORY) \
-		--enclave-cid $(ENCLAVE_CID) \
-		--debug-mode \
 		--attach-console
+
 
 # Clean targets -------------------------------------------------
 .PHONY: clean
 clean:
 	rm -rf $(OUT_DIR) 
+
+	.PHONY: clean
+update:
+	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
+	$(MAKE) image
