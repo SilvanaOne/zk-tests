@@ -296,34 +296,40 @@ export = async () => {
   // Create EC2 Instance
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   // c6a.xlarge - min Intel, 4 cpu, 16gb ram
-  const instance = new aws.ec2.Instance("silvana-tee-login-instance", {
-    ami: amiId,
-    instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
-    keyName: keyPairName,
-    vpcSecurityGroupIds: [securityGroup.id],
-    iamInstanceProfile: instanceProfile.name,
+  const instance = new aws.ec2.Instance(
+    "silvana-tee-login-instance",
+    {
+      ami: amiId,
+      instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
+      keyName: keyPairName,
+      vpcSecurityGroupIds: [securityGroup.id],
+      iamInstanceProfile: instanceProfile.name,
 
-    // Enable Nitro Enclaves
-    enclaveOptions: {
-      enabled: true,
+      // Enable Nitro Enclaves
+      enclaveOptions: {
+        enabled: true,
+      },
+
+      rootBlockDevice: {
+        volumeSize: 30,
+        volumeType: "gp3",
+        deleteOnTermination: true,
+      },
+
+      // User data script loaded from user-data.sh file
+      userData: fs.readFileSync("./user-data.sh", "utf8"),
+      userDataReplaceOnChange: false,
+
+      tags: {
+        Name: "silvana-tee-login-instance",
+        Project: "silvana-tee-login",
+        "instance-script": "true",
+      },
     },
-
-    rootBlockDevice: {
-      volumeSize: 30,
-      volumeType: "gp3",
-      deleteOnTermination: true,
-    },
-
-    // User data script loaded from user-data.sh file
-    userData: fs.readFileSync("./user-data.sh", "utf8"),
-    userDataReplaceOnChange: false,
-
-    tags: {
-      Name: "silvana-tee-login-instance",
-      Project: "silvana-tee-login",
-      "instance-script": "true",
-    },
-  });
+    {
+      ignoreChanges: ["userData"],
+    }
+  );
 
   // Associate Elastic IP with the instance
   const eipAssociation = new aws.ec2.EipAssociation(
@@ -357,14 +363,14 @@ export = async () => {
     },
 
     rootBlockDevice: {
-      volumeSize: 20,
+      volumeSize: 10,
       volumeType: "gp3",
       deleteOnTermination: true,
     },
 
     // User data script loaded from user-data.sh file
     userData: fs.readFileSync("./user-data.sh", "utf8"),
-    userDataReplaceOnChange: false,
+    userDataReplaceOnChange: true,
 
     tags: {
       Name: "silvana-tee-login-arm-instance",

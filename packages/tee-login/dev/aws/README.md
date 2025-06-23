@@ -1,5 +1,8 @@
 # AWS EC2 Instance Finder
 
+c6g.large       4 GiB        $0.0680      AWS Graviton2 Processor
+
+
 ### x86
 
 Filtering instances by 4 vCPUs (limited to 59 instances from file)...
@@ -127,7 +130,7 @@ python3 aws_instance_finder.py 8 --limit 10
 Filter only instances from a specific file (one instance name per line):
 
 ```bash
-python3 aws_instance_finder.py 4 --instances-file instances.txt
+python3 aws_instance_finder.py 2 --instances-file instances.txt
 ```
 
 Use a custom data source URL:

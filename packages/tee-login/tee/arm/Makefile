@@ -3,12 +3,12 @@
 # ------------------------------------------------------------
 
 # Tunables ----------------------------------------------------
-IMAGE_NAME ?= tee-arm:latest
-OUT_DIR ?= out
-EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
-CPU_COUNT ?= 1
-MEMORY ?= 2096 # MiB
-ENCLAVE_CID ?= 16
+IMAGE_NAME := tee-arm:latest
+OUT_DIR := out
+EIF_NAME := $(OUT_DIR)/tee-arm.eif
+CPU_COUNT := 1
+MEMORY := 3072 # MiB
+ENCLAVE_CID := 16
 
 # Default target ------------------------------------------------
 .DEFAULT_GOAL :=

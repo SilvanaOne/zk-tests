@@ -7,6 +7,13 @@ curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/stats
 curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/get_attestation
 
 ssh -i "TEE.pem" ec2-user@35.175.45.79
+sudo less /var/log/cloud-init-output.log
+
+```sh
+git clone https://github.com/SilvanaOne/zk-tests
+cd zk-tests/packages/tee-login/tee/arm
+make
+```
 
 copy image to s3 and back:
 
@@ -16,3 +23,6 @@ aws s3 cp tee-arm.tar.gz s3://silvana-tee-images/tee-arm.tar.gz
 aws s3 cp s3://silvana-tee-images/tee-arm.tar.gz tee-arm.tar.gz
 tar -xzvf tee-arm.tar.gz
 ```
+
+Job for nitro-enclaves-allocator.service failed because the control process exited with error code.
+See "systemctl status nitro-enclaves-allocator.service" and "journalctl -xeu nitro-enclaves-allocator.service" for details.
