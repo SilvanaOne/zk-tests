@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::io::Read;
 use tracing::{error, info, warn};
 use vsock::VsockStream;
