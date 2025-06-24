@@ -18,7 +18,7 @@ RUN rustup target add aarch64-unknown-linux-musl
 # cached when only application code changes.
 COPY server/Cargo.toml server/Cargo.lock ./
 # Copy workspace configuration and vendored crates for reproducible offline build
-COPY server/.cargo ./
+COPY server/.cargo ./.cargo
 COPY server/vendor ./vendor
 # Application source
 COPY server/src ./src
