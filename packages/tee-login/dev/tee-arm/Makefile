@@ -20,7 +20,7 @@ default: $(EIF_NAME)
 .PHONY: image
 image:
 	mkdir -p out
-	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
+	docker buildx build --platform linux/arm64 --progress=plain -t $(IMAGE_NAME) -f Containerfile .
 
 # Create the Enclave Image File (EIF) ---------------------------
 $(EIF_NAME): image
