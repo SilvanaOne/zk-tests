@@ -61,14 +61,17 @@ pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
     let free_memory = sys_info::mem_info().map(|info| info.free).unwrap_or(0);
     let used_memory = memory.saturating_sub(available_memory);
 
-    let now = Utc::now();
-    // format as RFC3339 (ISO-8601) with exactly 3 fractional digits (milliseconds)
-    let timestamp = now.to_rfc3339_opts(SecondsFormat::Millis, false);
-    let current_timestamp = now.timestamp_millis() as u64;
+    let start = Utc::now();
     let (enclave_timestamp, enclave_timestamp_error) = match get_enclave_time() {
         Ok(t) => (Some(t), None),
         Err(e) => (None, Some(e.to_string())),
     };
+    let now = Utc::now();
+    let duration = now.signed_duration_since(start);
+    info!("VSOCK timestamp call duration: {:?}", duration);
+    // format as RFC3339 (ISO-8601) with exactly 3 fractional digits (milliseconds)
+    let timestamp = now.to_rfc3339_opts(SecondsFormat::Millis, false);
+    let current_timestamp = now.timestamp_millis() as u64;
     let timestamp_drift = match enclave_timestamp {
         Some(enclave_timestamp) => Some(enclave_timestamp as i128 - current_timestamp as i128),
         None => None,
