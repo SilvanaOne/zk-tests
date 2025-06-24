@@ -223,7 +223,7 @@ export function MinaWalletDashboard() {
   if (!isConnected) {
     return (
       <StatusCard
-        title="Mina Wallet"
+        title={chain === "zeko" ? "Zeko Wallet" : "Mina Wallet"}
         icon={Activity}
         description="Connect a wallet to manage your Mina assets via TEE."
         className="h-full"
