@@ -5,6 +5,7 @@ use crate::AppState;
 use crate::EnclaveError;
 use crate::common::IntentMessage;
 use crate::common::{IntentScope, ProcessedDataResponse, to_signed_response};
+use crate::time::get_enclave_time;
 use axum::Json;
 use axum::extract::State;
 use chrono::{SecondsFormat, Utc};
@@ -22,6 +23,10 @@ pub struct Stats {
     pub free_memory: u64,
     pub used_memory: u64,
     pub timestamp: String,
+    pub current_timestamp: u64,
+    pub enclave_timestamp: Option<u64>,
+    pub timestamp_drift: Option<i128>,
+    pub enclave_timestamp_error: Option<String>,
 }
 
 pub async fn stats(
@@ -35,6 +40,10 @@ pub async fn stats(
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
     info!("Current timestamp: {}", current_timestamp);
+    let enclave_timestamp = get_enclave_time().map_err(|e| {
+        EnclaveError::GenericError(format!("Failed to get enclave timestamp: {}", e))
+    })?;
+    info!("Enclave timestamp: {}", enclave_timestamp);
     Ok(Json(to_signed_response(
         &state.keys.sui_keypair,
         stats,
@@ -55,6 +64,15 @@ pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
     let now = Utc::now();
     // format as RFC3339 (ISO-8601) with exactly 3 fractional digits (milliseconds)
     let timestamp = now.to_rfc3339_opts(SecondsFormat::Millis, false);
+    let current_timestamp = now.timestamp_millis() as u64;
+    let (enclave_timestamp, enclave_timestamp_error) = match get_enclave_time() {
+        Ok(t) => (Some(t), None),
+        Err(e) => (None, Some(e.to_string())),
+    };
+    let timestamp_drift = match enclave_timestamp {
+        Some(enclave_timestamp) => Some(enclave_timestamp as i128 - current_timestamp as i128),
+        None => None,
+    };
 
     Ok(Stats {
         cpu_cores,
@@ -63,5 +81,9 @@ pub fn get_worker_stats() -> Result<Stats, EnclaveError> {
         free_memory,
         used_memory,
         timestamp,
+        current_timestamp,
+        enclave_timestamp,
+        timestamp_drift,
+        enclave_timestamp_error,
     })
 }
