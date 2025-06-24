@@ -6,9 +6,9 @@
 FROM --platform=linux/arm64 rust@sha256:126df0f2a57e675f9306fe180b833982ffb996e90a92a793bb75253cfeed5475 AS builder
 # Install build dependencies
 # from any Alpine 3.22 container
-apk info -e build-base
+RUN apk info -e build-base
 # → build-base-0.5-r3
-apk info -e musl-dev
+RUN apk info -e musl-dev
 # → musl-dev-1.2.4-r2
 RUN apk add --no-cache build-base musl-dev
 
