@@ -18,7 +18,7 @@ default: $(EIF_NAME)
 
 # Build the container image ------------------------------------
 .PHONY: image
-image
+image:
 	mkdir -p out
 	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
 
