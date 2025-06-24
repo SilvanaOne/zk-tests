@@ -17,10 +17,14 @@ RUN rustup target add aarch64-unknown-linux-musl
 # We copy the Cargo.toml/Cargo.lock first so that dependency layers are
 # cached when only application code changes.
 COPY server/Cargo.toml server/Cargo.lock ./
+# Copy workspace configuration and vendored crates for reproducible offline build
+COPY .cargo ./
+COPY vendor ./vendor
+# Application source
 COPY server/src ./src
 
 # Build in release mode for arm64 musl target
-RUN cargo build --release --target aarch64-unknown-linux-musl
+RUN cargo build --release --offline --target aarch64-unknown-linux-musl
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.

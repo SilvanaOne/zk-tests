@@ -9,6 +9,7 @@ EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
 CPU_COUNT ?= 1
 MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
+VENDOR_DIR ?= vendor
 
 # Default target ------------------------------------------------
 .DEFAULT_GOAL :=
@@ -17,9 +18,10 @@ default: $(EIF_NAME)
 
 # Build the container image ------------------------------------
 .PHONY: image
-image:
+image: vendor
 	mkdir -p out
 	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
+
 # Create the Enclave Image File (EIF) ---------------------------
 $(EIF_NAME): image
 	mkdir -p $(OUT_DIR)
@@ -84,3 +86,7 @@ update:
 	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
 	$(MAKE) image
 	$(MAKE) eif
+
+.PHONY: vendor
+vendor:
+	cargo vendor --manifest-path server/Cargo.toml $(VENDOR_DIR)
