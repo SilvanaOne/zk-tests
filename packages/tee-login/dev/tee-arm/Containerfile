@@ -6,7 +6,7 @@
 FROM --platform=linux/arm64 rust@sha256:126df0f2a57e675f9306fe180b833982ffb996e90a92a793bb75253cfeed5475 AS builder
 # Install build dependencies
 
-RUN apk add --no-cache build-base musl-dev
+RUN apk add --no-cache build-base=0.5-r3 musl-dev=1.2.4-r2
 # from any Alpine 3.22 container
 RUN apk info -e build-base
 # → build-base-0.5-r3
@@ -34,7 +34,8 @@ RUN cargo build --release --offline --target aarch64-unknown-linux-musl
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
-FROM --platform=linux/arm64 alpine:3.22 AS runtime
+#FROM --platform=linux/arm64 alpine:3.22 AS runtime
+FROM --platform=linux/arm64 alpine@sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715 AS runtime
 
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app
