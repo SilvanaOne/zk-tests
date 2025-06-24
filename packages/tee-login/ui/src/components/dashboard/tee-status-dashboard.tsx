@@ -18,8 +18,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const formatBytes = (bytes: number, decimals = 2) => {
-  if (bytes === 0) return "0 Bytes";
+const formatBytes = (kbytes: number, decimals = 2) => {
+  if (kbytes === 0) return "0 Bytes";
+  const bytes = kbytes * 1024;
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
