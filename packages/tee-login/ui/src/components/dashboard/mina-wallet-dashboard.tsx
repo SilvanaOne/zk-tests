@@ -24,7 +24,10 @@ import {
   faucet,
   preparePayment,
   broadcastPayment,
+  explorerUrl,
 } from "@/lib/mina";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 export function MinaWalletDashboard() {
   const { state: userState, apiFunctions } = useUserState();
@@ -43,22 +46,34 @@ export function MinaWalletDashboard() {
   const [faucetStatus, setFaucetStatus] = useState<{
     status: "idle" | "loading" | "success" | "error";
     txHash?: string;
+    url?: string;
     error?: string;
   }>({ status: "idle" });
   const [transferStatus, setTransferStatus] = useState<{
     status: "idle" | "loading" | "success" | "error";
     txHash?: string;
+    url?: string;
     error?: string;
   }>({ status: "idle" });
   const [signStatus, setSignStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
+  const [chain, setChain] = useState<"zeko" | "devnet">("zeko");
 
   useEffect(() => {
-    const fetchBalance = async () => {
+    const fetchBalance = async (showLoading = true) => {
       if (isConnected && publicKey) {
-        const balanceAmount = await getBalance(publicKey);
+        if (showLoading) {
+          setBalanceLoading(true);
+        }
+        const balanceAmount = await getBalance({
+          address: publicKey,
+          chain,
+        });
         setBalance((BigInt(balanceAmount) / 1_000_000n / 1000n).toString());
+        if (showLoading) {
+          setBalanceLoading(false);
+        }
       } else {
         setBalance("0.00");
       }
@@ -66,20 +81,26 @@ export function MinaWalletDashboard() {
     fetchBalance();
 
     // Set up interval to refresh balance every 30 seconds
-    const interval = setInterval(() => {
-      if (isConnected && publicKey) {
-        fetchBalance();
-      }
-    }, 30000);
+    const interval = setInterval(
+      () => {
+        if (isConnected && publicKey) {
+          fetchBalance(false);
+        }
+      },
+      chain === "zeko" ? 5000 : 30000
+    );
 
     // Cleanup interval on unmount or dependency change
     return () => clearInterval(interval);
-  }, [isConnected, publicKey]);
+  }, [isConnected, publicKey, chain]);
 
   const refreshBalance = async () => {
     if (isConnected && publicKey) {
       setBalanceLoading(true);
-      const balanceAmount = await getBalance(publicKey);
+      const balanceAmount = await getBalance({
+        address: publicKey,
+        chain,
+      });
       setBalance((BigInt(balanceAmount) / 1_000_000n / 1000n).toString());
     } else {
       setBalance("0.00");
@@ -109,13 +130,27 @@ export function MinaWalletDashboard() {
   const handleFaucet = async () => {
     if (!publicKey) return;
     setFaucetStatus({ status: "loading" });
-    const txHash = await faucet(publicKey);
-    if (txHash) {
-      setFaucetStatus({ status: "success", txHash });
+    const faucetResult = await faucet({
+      address: publicKey,
+      chain,
+    });
+    if (
+      faucetResult &&
+      faucetResult.success &&
+      faucetResult.txHash &&
+      typeof faucetResult.txHash === "string"
+    ) {
+      setFaucetStatus({
+        status: "success",
+        txHash: faucetResult.txHash,
+        url: await explorerUrl({ chain, txHash: faucetResult.txHash }),
+      });
     } else {
       setFaucetStatus({
         status: "error",
-        error: "Faucet request failed. Please try again later.",
+        error:
+          ("error" in faucetResult && faucetResult.error) ||
+          "Faucet request failed. Please try again later.",
       });
     }
   };
@@ -137,6 +172,7 @@ export function MinaWalletDashboard() {
       amount: BigInt(amount * 1_000) * 1_000_000n,
       fee: BigInt(100_000_000n),
       memo: "Silvana TEE transfer",
+      chain,
     });
     if (!payment) {
       setTransferStatus({
@@ -158,18 +194,28 @@ export function MinaWalletDashboard() {
       });
       return;
     }
-    const txHash = await broadcastPayment({
+    const broadcastResult = await broadcastPayment({
       payment: signedPayment.signature,
+      chain,
     });
-    if (!txHash) {
+    if (
+      !broadcastResult ||
+      broadcastResult?.success === false ||
+      !broadcastResult.txHash
+    ) {
       setTransferStatus({
         status: "error",
         error:
+          ("error" in broadcastResult && broadcastResult.error) ||
           "Transfer failed - cannot broadcast payment. Try again later when previous transactions will be included in the block.",
       });
       return;
     }
-    setTransferStatus({ status: "success", txHash });
+    setTransferStatus({
+      status: "success",
+      txHash: broadcastResult.txHash,
+      url: await explorerUrl({ chain, txHash: broadcastResult.txHash }),
+    });
     setTransferRecipient("");
     setTransferAmount("");
   };
@@ -201,6 +247,27 @@ export function MinaWalletDashboard() {
       className="h-full"
     >
       <div className="space-y-4">
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-semibold text-foreground">Chain:</span>
+          <RadioGroup
+            value={chain}
+            onValueChange={(value) => setChain(value as "zeko" | "devnet")}
+            className="flex items-center space-x-4"
+          >
+            <div className="flex items-center space-x-1">
+              <RadioGroupItem value="zeko" id="chain-zeko" />
+              <Label htmlFor="chain-zeko" className="text-xs">
+                Zeko Devnet
+              </Label>
+            </div>
+            <div className="flex items-center space-x-1">
+              <RadioGroupItem value="devnet" id="chain-devnet" />
+              <Label htmlFor="chain-devnet" className="text-xs">
+                Mina Devnet
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
         <DataRow label="Mina Public Key" value={publicKey} truncate={false} />
 
         {/* Balance Section */}
@@ -320,7 +387,7 @@ export function MinaWalletDashboard() {
               <AlertDescription className="text-xs">
                 View Transaction
                 <a
-                  href={`https://minascan.io/devnet/tx/${faucetStatus.txHash}`}
+                  href={faucetStatus.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-primary flex items-center"
@@ -387,7 +454,7 @@ export function MinaWalletDashboard() {
               <AlertDescription className="text-xs">
                 View Transaction
                 <a
-                  href={`https://minascan.io/devnet/tx/${transferStatus.txHash}`}
+                  href={transferStatus.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-primary flex items-center"

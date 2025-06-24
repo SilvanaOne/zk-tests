@@ -12,21 +12,29 @@ const client = new Client({
   network: "testnet",
 });
 const apiKey = process.env.MINATOKENS_JWT_KEY;
-if (!apiKey) {
-  throw new Error("MINATOKENS_JWT_KEY is not set");
-}
-config({
-  apiKey,
-  chain: "devnet",
-});
 
-export async function balance(address: string): Promise<number> {
+function setChain(chain: "zeko" | "devnet") {
+  if (!apiKey) {
+    throw new Error("MINATOKENS_JWT_KEY is not set");
+  }
+  config({
+    apiKey,
+    chain,
+  });
+}
+
+export async function balance(params: {
+  address: string;
+  chain: "zeko" | "devnet";
+}): Promise<number> {
+  const { address, chain } = params;
   try {
+    setChain(chain);
     const reply = (
       await getTokenBalance({
         body: { address },
       })
-    ).data;
+    )?.data;
     if (reply && reply.balance && typeof reply.balance === "number") {
       return reply.balance;
     }
@@ -37,22 +45,49 @@ export async function balance(address: string): Promise<number> {
   }
 }
 
-export async function faucet(address: string): Promise<string | undefined> {
-  try {
-    const reply = (await faucetApi({ body: { address } })).data;
-    if (reply && reply.hash && typeof reply.hash === "string") {
-      return reply.hash;
+export async function faucet(params: {
+  address: string;
+  chain: "zeko" | "devnet";
+}): Promise<
+  | {
+      success: boolean;
+      txHash: string;
     }
-    return undefined;
+  | { success: false; error: string }
+> {
+  const { address, chain } = params;
+  try {
+    setChain(chain);
+    const reply = (await faucetApi({ body: { address } }))?.data;
+    if (
+      reply &&
+      reply.success &&
+      reply.hash &&
+      typeof reply.hash === "string"
+    ) {
+      return { success: true, txHash: reply.hash };
+    }
+    return { success: false, error: reply?.error ?? "Faucet request failed" };
   } catch (error: any) {
-    console.error("Error getting funds in faucet", error?.message);
-    return undefined;
+    console.error("faucet error", error);
+    const serializedError = serializeError(error);
+    return {
+      success: false,
+      error: `Error while getting funds in faucet: ${
+        serializedError ?? "error E305"
+      }`,
+    };
   }
 }
 
-export async function getNonce(address: string): Promise<number | undefined> {
+export async function getNonce(params: {
+  address: string;
+  chain: "zeko" | "devnet";
+}): Promise<number | undefined> {
+  const { address, chain } = params;
   try {
-    const reply = (await getNonceApi({ body: { address } })).data;
+    setChain(chain);
+    const reply = (await getNonceApi({ body: { address } }))?.data;
     console.log("getNonce reply:", reply);
     if (reply && reply.nonce && typeof reply.nonce === "number") {
       return reply.nonce;
@@ -79,9 +114,10 @@ export async function preparePayment(params: {
   amount: bigint;
   fee: bigint;
   memo: string;
+  chain: "zeko" | "devnet";
 }): Promise<string | undefined> {
-  const { from, to, amount, fee, memo } = params;
-  const nonce = await getNonce(from);
+  const { from, to, amount, fee, memo, chain } = params;
+  const nonce = await getNonce({ address: from, chain });
   if (nonce === undefined) {
     return undefined;
   }
@@ -112,11 +148,22 @@ export async function signPayment(params: {
 
 export async function broadcastPayment(params: {
   payment: string;
-}): Promise<string | undefined> {
+  chain: "zeko" | "devnet";
+}): Promise<
+  | {
+      success: boolean;
+      txHash: string;
+    }
+  | { success: false; error: string }
+> {
   try {
-    const { payment } = params;
+    const { payment, chain } = params;
+    setChain(chain);
     const { data, signature } = JSON.parse(payment);
-    const DEVNET_GRAPHQL = "https://api.minascan.io/node/devnet/v1/graphql"; //Use a public GraphQL to broadcast or your local one
+    const DEVNET_GRAPHQL =
+      chain === "zeko"
+        ? "https://devnet.zeko.io/graphql"
+        : "https://api.minascan.io/node/devnet/v1/graphql"; //Use a public GraphQL to broadcast or your local one
     const SEND_PAYMENT = `
     mutation SendPayment($input: SendPaymentInput!, $signature: SignatureInput!) {
       sendPayment(input: $input, signature: $signature) {
@@ -138,23 +185,79 @@ export async function broadcastPayment(params: {
         response.status,
         response.statusText
       );
-      return undefined;
+      return {
+        success: false,
+        error: `Error broadcasting payment: ${response.status} ${response.statusText}`,
+      };
     }
 
     const json = await response.json();
     const txHash = json?.data?.sendPayment?.payment?.hash;
     if (txHash) {
       console.log("Payment broadcasted with tx hash:", txHash);
-      return txHash;
+      return { success: true, txHash };
     } else {
       console.error(
         "Error broadcasting payment:",
         JSON.stringify(json, null, 2)
       );
-      return undefined;
+      return {
+        success: false,
+        error: `Error broadcasting payment: ${serializeError(json)}`,
+      };
     }
   } catch (error: any) {
-    console.error("Error broadcasting payment", error?.message);
-    return undefined;
+    console.error("Error broadcasting payment", error);
+    const serializedError = serializeError(error);
+    return {
+      success: false,
+      error: `Error broadcasting payment: ${serializedError ?? "error E306"}`,
+    };
   }
+}
+
+export async function explorerUrl(params: {
+  chain: "zeko" | "devnet";
+  txHash: string;
+}): Promise<string> {
+  const { chain, txHash } = params;
+  return chain === "zeko"
+    ? `https://zekoscan.io/testnet/tx/${txHash}`
+    : `https://minascan.io/devnet/tx/${txHash}`;
+}
+
+/**
+ * Helper function to serialize error objects to strings
+ * Handles various error formats including nested objects
+ */
+function serializeError(error: any): string | undefined {
+  console.log("serializeError: error", error);
+  if (!error) return undefined;
+
+  // If it's already a string, return it
+  if (typeof error === "string") return error;
+
+  // If it has a message property, use that
+  if (error.message && typeof error.message === "string") {
+    return error.message;
+  }
+
+  // If it has an error property, recursively serialize it
+  if (error.error) {
+    const serialized = serializeError(error.error);
+    if (serialized) return serialized;
+  }
+
+  // If it's an object, try to stringify it
+  if (typeof error === "object") {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      // If JSON.stringify fails, fall back to toString
+      return error.toString();
+    }
+  }
+
+  // For other types, convert to string
+  return String(error);
 }
