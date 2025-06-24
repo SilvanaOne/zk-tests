@@ -225,14 +225,25 @@ export function MinaWalletDashboard() {
       <StatusCard
         title={chain === "zeko" ? "Zeko Wallet" : "Mina Wallet"}
         icon={Activity}
-        description="Connect a wallet to manage your Mina assets via TEE."
+        description={
+          chain === "zeko"
+            ? "Connect a wallet to manage your Zeko assets via TEE."
+            : "Connect a wallet to manage your Mina assets via TEE."
+        }
         className="h-full"
       >
         <div className="text-center py-4">
-          <StatusPill status="info" text="Mina Wallet Not Active" />
+          <StatusPill
+            status="info"
+            text={
+              chain === "zeko"
+                ? "Zeko Wallet Not Active"
+                : "Mina Wallet Not Active"
+            }
+          />
           <p className="text-sm text-muted-foreground mt-2">
-            Please connect a primary wallet to activate Mina TEE
-            functionalities.
+            Please connect a primary wallet to activate{" "}
+            {chain === "zeko" ? "Zeko" : "Mina"} TEE functionalities.
           </p>
         </div>
       </StatusCard>
@@ -241,9 +252,15 @@ export function MinaWalletDashboard() {
 
   return (
     <StatusCard
-      title="Mina Wallet (via TEE)"
+      title={
+        chain === "zeko" ? "Zeko Wallet (via TEE)" : "Mina Wallet (via TEE)"
+      }
       icon={Activity}
-      description="Manage your Mina assets securely through Silvana TEE."
+      description={
+        chain === "zeko"
+          ? "Manage your Zeko assets securely through Silvana TEE."
+          : "Manage your Mina assets securely through Silvana TEE."
+      }
       className="h-full"
     >
       <div className="space-y-4">
@@ -268,7 +285,11 @@ export function MinaWalletDashboard() {
             </div>
           </RadioGroup>
         </div>
-        <DataRow label="Mina Public Key" value={publicKey} truncate={false} />
+        <DataRow
+          label={chain === "zeko" ? "Zeko Public Key" : "Mina Public Key"}
+          value={publicKey}
+          truncate={false}
+        />
 
         {/* Balance Section */}
         <div className="p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
@@ -363,7 +384,7 @@ export function MinaWalletDashboard() {
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
           <h4 className="text-sm font-semibold text-foreground flex items-center">
             <Download className="w-4 h-4 mr-2" />
-            Mina Faucet
+            {chain === "zeko" ? "Zeko Faucet" : "Mina Faucet"}
           </h4>
           <Button
             onClick={handleFaucet}
