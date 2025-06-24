@@ -140,7 +140,7 @@ sudo systemctl enable --now certbot-renew.timer
 
 echo "Cloning zk-tests repository as ec2-user into /home/ec2-user..."
 sudo -u ec2-user -i bash -c 'git clone --quiet --no-progress --depth 1 https://github.com/SilvanaOne/zk-tests'
-sudo -u ec2-user -i bash -c 'cd /home/ec2-user/zk-tests/packages/tee-login/tee/arm && aws s3 cp s3://silvana-tee-images/tee-arm.tar.gz tee-arm.tar.gz --no-progress && tar -xzvf tee-arm.tar.gz'
+sudo -u ec2-user -i bash -c 'cd /home/ec2-user/zk-tests/packages/tee-login/tee/arm && aws s3 cp s3://silvana-tee-images/tee-arm-v2.tar.gz tee-arm-v2.tar.gz --no-progress && tar -xzvf tee-arm-v2.tar.gz'
 
 
 

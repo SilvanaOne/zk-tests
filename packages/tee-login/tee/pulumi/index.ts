@@ -88,7 +88,7 @@ export = async () => {
     user: api.name,
   });
 
-  const amiId = "ami-085ad6ae776d8f09c"; // x86_64
+  //const amiId = "ami-085ad6ae776d8f09c"; // x86_64
   const amiIdArm64 = (
     await aws.ssm.getParameter({
       name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
@@ -146,10 +146,10 @@ export = async () => {
   );
 
   // Create Elastic IP
-  const elasticIp = new aws.ec2.Eip("silvana-tee-login-ip", {
+  const devElasticIp = new aws.ec2.Eip("silvana-tee-login-dev-ip", {
     domain: "vpc",
     tags: {
-      Name: "silvana-tee-login-ip",
+      Name: "silvana-tee-login-dev-ip",
       Project: "silvana-tee-login",
     },
   });
@@ -296,11 +296,11 @@ export = async () => {
   // Create EC2 Instance
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   // c6a.xlarge - min Intel, 4 cpu, 16gb ram
-  const instance = new aws.ec2.Instance(
-    "silvana-tee-login-instance",
+  const devInstance = new aws.ec2.Instance(
+    "silvana-tee-login-dev-instance",
     {
-      ami: amiId,
-      instanceType: "c6a.xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
+      ami: amiIdArm64,
+      instanceType: "c7g.4xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
       keyName: keyPairName,
       vpcSecurityGroupIds: [securityGroup.id],
       iamInstanceProfile: instanceProfile.name,
@@ -311,7 +311,7 @@ export = async () => {
       },
 
       rootBlockDevice: {
-        volumeSize: 30,
+        volumeSize: 100,
         volumeType: "gp3",
         deleteOnTermination: true,
       },
@@ -321,7 +321,7 @@ export = async () => {
       userDataReplaceOnChange: false,
 
       tags: {
-        Name: "silvana-tee-login-instance",
+        Name: "silvana-tee-login-dev-instance",
         Project: "silvana-tee-login",
         "instance-script": "true",
       },
@@ -335,8 +335,8 @@ export = async () => {
   const eipAssociation = new aws.ec2.EipAssociation(
     "silvana-tee-login-eip-association",
     {
-      instanceId: instance.id,
-      allocationId: elasticIp.allocationId,
+      instanceId: devInstance.id,
+      allocationId: devElasticIp.allocationId,
     }
   );
 
@@ -350,34 +350,40 @@ export = async () => {
   });
 
   // Create arm EC2 Instance with ARM64 and larger disk
-  const armInstance = new aws.ec2.Instance("silvana-tee-login-arm-instance", {
-    ami: amiIdArm64,
-    instanceType: "c6g.large",
-    keyName: keyPairName,
-    vpcSecurityGroupIds: [securityGroup.id],
-    iamInstanceProfile: instanceProfile.name,
+  const armInstance = new aws.ec2.Instance(
+    "silvana-tee-login-arm-instance",
+    {
+      ami: amiIdArm64,
+      instanceType: "c6g.large",
+      keyName: keyPairName,
+      vpcSecurityGroupIds: [securityGroup.id],
+      iamInstanceProfile: instanceProfile.name,
 
-    // Enable Nitro Enclaves
-    enclaveOptions: {
-      enabled: true,
+      // Enable Nitro Enclaves
+      enclaveOptions: {
+        enabled: true,
+      },
+
+      rootBlockDevice: {
+        volumeSize: 9,
+        volumeType: "gp3",
+        deleteOnTermination: true,
+      },
+
+      // User data script loaded from user-data.sh file
+      userData: fs.readFileSync("./user-data.sh", "utf8"),
+      userDataReplaceOnChange: true,
+
+      tags: {
+        Name: "silvana-tee-login-arm-instance",
+        Project: "silvana-tee-login",
+        "instance-script": "true",
+      },
     },
-
-    rootBlockDevice: {
-      volumeSize: 10,
-      volumeType: "gp3",
-      deleteOnTermination: true,
-    },
-
-    // User data script loaded from user-data.sh file
-    userData: fs.readFileSync("./user-data.sh", "utf8"),
-    userDataReplaceOnChange: true,
-
-    tags: {
-      Name: "silvana-tee-login-arm-instance",
-      Project: "silvana-tee-login",
-      "instance-script": "true",
-    },
-  });
+    {
+      ignoreChanges: ["userData"],
+    }
+  );
 
   // Associate arm Elastic IP with the arm instance
   const armEipAssociation = new aws.ec2.EipAssociation(
@@ -395,17 +401,17 @@ export = async () => {
     apiAccessKeyId: apiAccessKey.id,
     apiSecretKey: apiAccessKey.secret,
     kmsKeyArn: pulumi.output(kmsKey).apply((k) => k.targetKeyArn),
-    elasticIpId: elasticIp.id,
-    elasticIpAddress: elasticIp.publicIp,
-    elasticIpAllocationId: elasticIp.allocationId,
+    devElasticIpId: devElasticIp.id,
+    devElasticIpAddress: devElasticIp.publicIp,
+    devElasticIpAllocationId: devElasticIp.allocationId,
     securityGroupId: securityGroup.id,
     securityGroupName: securityGroup.name,
     kmsPolicyArn: kmsPolicy.arn,
-    amiIdX86: amiId,
+    //amiIdX86: amiId,
     amiIdArm64: amiIdArm64,
-    instanceId: instance.id,
-    instancePublicIp: elasticIp.publicIp,
-    instancePrivateIp: instance.privateIp,
+    devInstanceId: devInstance.id,
+    devInstancePublicIp: devElasticIp.publicIp,
+    devInstancePrivateIp: devInstance.privateIp,
     ec2RoleArn: ec2Role.arn,
     instanceProfileArn: instanceProfile.arn,
     s3imagesBucketName: s3imagesBucket.id,
