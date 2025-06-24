@@ -40,6 +40,7 @@ describe("Topup", async () => {
         publicKey
       );
       const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
+      console.log(`${publicKey}: ${balance} MINA`);
       if (balance < MINIMUM_AMOUNT && keysToTopup.length < MAX_KEYS_TO_TOPUP) {
         keysToTopup.push(publicKey);
         console.log(`${publicKey}: ${balance} MINA`);
@@ -47,23 +48,29 @@ describe("Topup", async () => {
     }
     console.log(`Accounts to topup: ${keysToTopup.length}`);
   });
-  it("should topup accounts on zeko", { skip: chain !== "zeko" }, async () => {
-    for (const publicKey of keysToTopup) {
-      const response = await faucet({
-        publicKey,
-        explorerUrl: Zeko.explorerAccountUrl ?? "",
-        network: "devnet",
-        faucetUrl: "https://zeko-faucet-a1ct.onrender.com/",
-      });
-      if (response.result !== "Successfully sent") {
-        console.log("faucet error:", response);
-        await sleep(180_000);
+  it.skip(
+    "should topup accounts on zeko",
+    { skip: chain !== "zeko" },
+    async () => {
+      for (const publicKey of keysToTopup) {
+        const response = await faucet({
+          publicKey,
+          explorerUrl: Zeko.explorerAccountUrl ?? "",
+          network: "devnet",
+          faucetUrl: "https://zeko-faucet-a1ct.onrender.com/",
+        });
+        if (response.result !== "Successfully sent") {
+          console.log("faucet error:", response);
+          await sleep(180_000);
+        }
+        await sleep(5_000);
+        const balance = await accountBalanceMina(
+          PublicKey.fromBase58(publicKey)
+        );
+        console.log(`${publicKey}: ${balance} MINA`);
       }
-      await sleep(5_000);
-      const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
-      console.log(`${publicKey}: ${balance} MINA`);
     }
-  });
+  );
   it(
     "should topup accounts on devnet",
     { skip: chain !== "devnet" },
