@@ -89,4 +89,4 @@ update:
 
 .PHONY: vendor
 vendor:
-	cargo vendor --manifest-path server/Cargo.toml $(VENDOR_DIR)
+	cd server && cargo vendor $(VENDOR_DIR)
