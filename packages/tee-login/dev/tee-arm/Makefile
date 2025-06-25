@@ -6,9 +6,10 @@
 IMAGE_NAME ?= tee-arm:latest
 OUT_DIR ?= out
 EIF_NAME ?= $(OUT_DIR)/tee-arm.eif
-CPU_COUNT ?= 2
+CPU_COUNT ?= 1
 MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
+VENDOR_DIR ?= vendor
 
 # Default target ------------------------------------------------
 .DEFAULT_GOAL :=
@@ -19,7 +20,8 @@ default: $(EIF_NAME)
 .PHONY: image
 image:
 	mkdir -p out
-	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
+	docker buildx build --platform linux/arm64 --progress=plain -t $(IMAGE_NAME) -f Containerfile .
+
 # Create the Enclave Image File (EIF) ---------------------------
 $(EIF_NAME): image
 	mkdir -p $(OUT_DIR)
@@ -84,3 +86,7 @@ update:
 	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
 	$(MAKE) image
 	$(MAKE) eif
+
+.PHONY: vendor
+vendor:
+	cd server && cargo vendor $(VENDOR_DIR)

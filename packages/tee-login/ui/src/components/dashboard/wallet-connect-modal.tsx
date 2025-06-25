@@ -7,7 +7,9 @@ import Image from "next/image";
 import { WalletButtonProps, WalletOption, walletOptions } from "@/lib/wallet";
 import { useSession, getSession } from "next-auth/react";
 import { SocialLoginData, WalletType } from "@/lib/types";
+import type { Session } from "next-auth";
 import { useSocialLogin } from "@/hooks/use-social-login";
+import { useLogger } from "@logtail/next";
 
 function WalletButton({
   wallet,
@@ -149,7 +151,9 @@ export function WalletConnectModal({
   const { data: session, update } = useSession();
   const [processSocialLogin, setProcessSocialLogin] =
     useState<WalletOption | null>(null); // trying to refresh the session due to next-auth bug https://github.com/nextauthjs/next-auth/issues/9504
-
+  const log = useLogger({
+    source: "WalletConnectModal",
+  });
   const [counter, setCounter] = useState<number>(0);
 
   useEffect(() => {
@@ -188,7 +192,9 @@ export function WalletConnectModal({
       console.log("handleWalletClick: connecting", wallet.id, wallet.name);
       const walletInfo = walletOptions.find((w) => w.id === wallet.id);
       if (!walletInfo) {
-        console.error("Wallet not found", wallet.id);
+        log.error("Wallet not found T101", {
+          walletId: wallet.id,
+        });
         return;
       }
       if (walletInfo.type === "social") {
@@ -197,11 +203,15 @@ export function WalletConnectModal({
           walletInfo.provider,
           session
         );
-        const newSession = await getSession();
+        const newSession = (await getSession()) as Session & {
+          provider?: string;
+          accessToken?: string;
+          idToken?: string;
+        };
         console.log("newSession", newSession);
         if (newSession?.provider !== walletInfo.provider) {
-          console.log("ERROR: wrong provider", {
-            sessionProvider: session?.provider,
+          log.error("ERROR: wrong provider T102", {
+            sessionProvider: (session as any)?.provider,
             requestedProvider: walletInfo.provider,
           });
           if (counter < 5) {
@@ -215,14 +225,16 @@ export function WalletConnectModal({
           return;
         }
         if (!newSession) {
-          console.error("Session not found");
+          log.error("Session not found T103", {
+            walletId: wallet.id,
+          });
           setConnectionFailed(wallet.id);
           return;
         }
         const socialLoginData: SocialLoginData = {
-          id: newSession.user.id ?? walletInfo.provider,
-          name: newSession.user.name || undefined,
-          email: newSession.user.email || undefined,
+          id: newSession.user?.id ?? walletInfo.provider,
+          name: newSession.user?.name || undefined,
+          email: newSession.user?.email || undefined,
           idToken: newSession.idToken,
           accessToken: newSession.accessToken,
           expires: newSession.expires,
@@ -240,8 +252,11 @@ export function WalletConnectModal({
         console.log("handleWalletClick: connected", wallet.id, wallet.name);
         return true;
       }
-    } catch (error) {
-      console.error("handleWalletClick: Connection failed:", error);
+    } catch (error: any) {
+      log.error("handleWalletClick: Connection failed T104", {
+        error: error?.message,
+        walletId: wallet.id,
+      });
       setConnectionFailed(wallet.id);
       return false;
     }

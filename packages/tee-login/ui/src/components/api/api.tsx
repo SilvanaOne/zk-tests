@@ -1,5 +1,5 @@
 "use client";
-
+import { useLogger } from "@logtail/next";
 import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 
 // ---------- types the parent will see ----------
@@ -92,6 +92,9 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
   const pending = useRef<
     Record<string, { resolve: (v: any) => void; reject: (e: Error) => void }>
   >({});
+  const log = useLogger({
+    source: "api",
+  });
 
   // listen for replies
   useEffect(() => {
@@ -129,13 +132,16 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
       } else if (ev.data.type === "error") {
         pendingRequest.reject(new Error(ev.data.reason));
       } else {
+        log.error("Unknown response type", {
+          ev,
+        });
         pendingRequest.reject(new Error("Unknown response type"));
       }
     }
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, []);
+  }, [log]);
 
   // expose the sign() method to parent via ref
   useImperativeHandle(
@@ -144,9 +150,9 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
       signMessage(msg, publicKey) {
         return new Promise<string>((resolve, reject) => {
           // Wait for iframe to be ready
-          const attemptSend = () => {
+          const attemptSignMessage = () => {
             if (!isReady.current) {
-              setTimeout(attemptSend, 50);
+              setTimeout(attemptSignMessage, 1000);
               return;
             }
 
@@ -164,11 +170,17 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
             setTimeout(() => {
               if (pending.current[id]) {
                 delete pending.current[id];
+                log.error("signMessage Request timeout", {
+                  id,
+                });
                 reject(new Error("Request timeout"));
               }
             }, 5000);
 
             if (!frameRef.current?.contentWindow) {
+              log.error("signMessage Iframe not available", {
+                id,
+              });
               reject(new Error("Iframe not available"));
               return;
             }
@@ -176,15 +188,15 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
             frameRef.current.contentWindow.postMessage(req, "*");
           };
 
-          attemptSend();
+          attemptSignMessage();
         });
       },
       signPayment(payment, publicKey) {
         return new Promise<string>((resolve, reject) => {
           // Wait for iframe to be ready
-          const attemptSend = () => {
+          const attemptSignPayment = () => {
             if (!isReady.current) {
-              setTimeout(attemptSend, 50);
+              setTimeout(attemptSignPayment, 1000);
               return;
             }
 
@@ -202,11 +214,17 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
             setTimeout(() => {
               if (pending.current[id]) {
                 delete pending.current[id];
+                log.error("signPayment Request timeout", {
+                  id,
+                });
                 reject(new Error("Request timeout"));
               }
             }, 5000);
 
             if (!frameRef.current?.contentWindow) {
+              log.error("signPayment Iframe not available", {
+                id,
+              });
               reject(new Error("Iframe not available"));
               return;
             }
@@ -214,84 +232,132 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
             frameRef.current.contentWindow.postMessage(req, "*");
           };
 
-          attemptSend();
+          attemptSignPayment();
         });
       },
       privateKeyId() {
         return new Promise<{ privateKeyId: string; publicKey: string }>(
           (resolve, reject) => {
-            const id = uuid();
-            const req: PrivateKeyIdRequest = { id, type: "private_key_id" };
-            pending.current[id] = { resolve, reject };
-
-            setTimeout(() => {
-              if (pending.current[id]) {
-                delete pending.current[id];
-                reject(new Error("Request timeout"));
+            // Wait for iframe to be ready
+            const attemptPrivateKeyId = () => {
+              if (!isReady.current) {
+                setTimeout(attemptPrivateKeyId, 1000);
+                return;
               }
-            }, 5000);
 
-            if (!frameRef.current?.contentWindow) {
-              reject(new Error("Iframe not available"));
-              return;
-            }
+              const id = uuid();
+              const req: PrivateKeyIdRequest = { id, type: "private_key_id" };
+              pending.current[id] = { resolve, reject };
 
-            frameRef.current?.contentWindow?.postMessage(req, "*");
+              setTimeout(() => {
+                if (pending.current[id]) {
+                  delete pending.current[id];
+                  log.error("privateKeyId Request timeout", {
+                    id,
+                  });
+                  reject(new Error("Request timeout"));
+                }
+              }, 5000);
+
+              if (!frameRef.current?.contentWindow) {
+                log.error("privateKeyId Iframe not available", {
+                  id,
+                });
+                reject(new Error("Iframe not available"));
+                return;
+              }
+
+              frameRef.current.contentWindow.postMessage(req, "*");
+            };
+
+            attemptPrivateKeyId();
           }
         );
       },
       decryptShares(data, privateKeyId) {
         return new Promise<string>((resolve, reject) => {
-          const id = uuid();
-          const req: DecryptSharesRequest = {
-            id,
-            type: "decrypt_shares",
-            data,
-            privateKeyId,
+          // Wait for iframe to be ready
+          const attemptDecryptShares = () => {
+            if (!isReady.current) {
+              setTimeout(attemptDecryptShares, 1000);
+              return;
+            }
+
+            const id = uuid();
+            const req: DecryptSharesRequest = {
+              id,
+              type: "decrypt_shares",
+              data,
+              privateKeyId,
+            };
+
+            pending.current[id] = { resolve, reject };
+
+            setTimeout(() => {
+              if (pending.current[id]) {
+                delete pending.current[id];
+                log.error("decryptShares Request timeout", {
+                  id,
+                });
+                reject(new Error("Request timeout"));
+              }
+            }, 10000);
+
+            if (!frameRef.current?.contentWindow) {
+              log.error("decryptShares Iframe not available", {
+                id,
+              });
+              reject(new Error("Iframe not available"));
+              return;
+            }
+
+            frameRef.current.contentWindow.postMessage(req, "*");
           };
 
-          pending.current[id] = { resolve, reject };
-
-          setTimeout(() => {
-            if (pending.current[id]) {
-              delete pending.current[id];
-              reject(new Error("Request timeout"));
-            }
-          }, 10000);
-
-          if (!frameRef.current?.contentWindow) {
-            reject(new Error("Iframe not available"));
-            return;
-          }
-
-          frameRef.current?.contentWindow?.postMessage(req, "*");
+          attemptDecryptShares();
         });
       },
       verifyAttestation(attestation) {
         return new Promise<string>((resolve, reject) => {
-          const id = uuid();
-          console.log("verifyAttestation called", id);
-          const req: VerifyAttestationRequest = {
-            id,
-            type: "verify_attestation",
-            attestation,
-          };
-          pending.current[id] = { resolve, reject };
-          setTimeout(() => {
-            if (pending.current[id]) {
-              delete pending.current[id];
-              reject(new Error(`Request timeout verifyAttestation ${id}`));
+          // Wait for iframe to be ready
+          const attemptVerifyAttestation = () => {
+            if (!isReady.current) {
+              setTimeout(attemptVerifyAttestation, 1000);
+              return;
             }
-          }, 5000);
-          if (!frameRef.current?.contentWindow) {
-            reject(new Error("Iframe not available"));
-            return;
-          }
-          frameRef.current?.contentWindow?.postMessage(req, "*");
+
+            const id = uuid();
+            console.log("verifyAttestation called", id);
+            const req: VerifyAttestationRequest = {
+              id,
+              type: "verify_attestation",
+              attestation,
+            };
+            pending.current[id] = { resolve, reject };
+            setTimeout(() => {
+              if (pending.current[id]) {
+                delete pending.current[id];
+                log.error("verifyAttestation Request timeout", {
+                  id,
+                });
+                reject(new Error(`Request timeout verifyAttestation ${id}`));
+              }
+            }, 5000);
+            if (!frameRef.current?.contentWindow) {
+              log.error("verifyAttestation Iframe not available", {
+                id,
+              });
+              reject(new Error("Iframe not available"));
+              return;
+            }
+            frameRef.current.contentWindow.postMessage(req, "*");
+          };
+
+          attemptVerifyAttestation();
         });
       },
     }),
-    []
+    [log]
   );
 
   return (

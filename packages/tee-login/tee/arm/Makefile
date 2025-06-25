@@ -91,11 +91,10 @@ clean:
 
 .PHONY: update
 update:
-	cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -rf out
+	git pull origin main && rm -rf out
 
-
-	.PHONY: updgrade
-update:
-	cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -rf out
+.PHONY: upgrade
+upgrade:
+	git pull origin main && rm -rf out
 	$(MAKE) image
 	$(MAKE) eif

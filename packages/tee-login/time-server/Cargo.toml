@@ -1,0 +1,13 @@
+[package]
+name = "time-server"
+version = "0.1.0"
+edition = "2024"
+authors = ["DFST"]
+license = "Apache 2.0"
+
+[dependencies]
+anyhow = "1.0.98"
+vsock = "0.5.1"
+log = "0.4"
+simplelog = "0.12"
+signal-hook = "0.3"
