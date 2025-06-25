@@ -13,11 +13,6 @@ RUN set -eux; \
     apk add --no-cache --update-cache \
         build-base=0.5-r3 \
         musl-dev=1.2.5-r10
-# from any Alpine 3.22 container
-RUN apk info -e build-base
-# → build-base-0.5-r3
-RUN apk info -e musl-dev
-# → musl-dev-1.2.4-r2
 
 # Workdir inside the container
 WORKDIR /app
@@ -55,6 +50,42 @@ COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/tee-arm /app/
 # Ensure the binary is executable and owned by the non-root user
 RUN chmod +x /app/tee-arm && chown app:app /app/tee-arm
 USER app
+
+
+########################################################################
+# Stage 3 – Build the deterministic EIF ################################
+# We install a *pinned* version of nitro‑cli (1.4.8) on a frozen
+# Amazon Linux 2023 base, then call `nitro-cli build-enclave`.
+########################################################################
+FROM --platform=linux/arm64 public.ecr.aws/amazonlinux/amazonlinux:2023@sha256:39ba4d54c9805f781646dea291e93a566d677a430ee77dc9e2fd733b0bf4e40a
+
+ARG NITRO_CLI_VER=1.4.8
+# SHA256 for nitro-cli‑1.4.8-1.amzn2023.aarch64.rpm — freeze against future rebuilds
+ARG NITRO_CLI_SHA256=9269b0f4e0b8a18bc941c03b6424f2c2919e94543d189f76f6227bdb76386a62
+
+# 1. install yum-utils for clean metadata handling
+RUN --mount=type=cache,target=/var/cache/yum \
+    yum install -y yum-utils && \
+    yum clean all
+
+# 2. download the exact rpm (architecture‑specific) and verify hash
+RUN curl -L -o /tmp/nitro-cli.rpm \
+        "https://aws-nitro-enclaves-cli.s3.amazonaws.com/arm64/${NITRO_CLI_VER}/nitro-cli-${NITRO_CLI_VER}-1.aarch64.rpm" && \
+    echo "${NITRO_CLI_SHA256}  /tmp/nitro-cli.rpm" | sha256sum -c -
+
+# 3. install nitro‑cli and the bootstrap rpm (needed to build EIF)
+RUN curl -L -o /tmp/bootstrap.rpm \
+        "https://aws-nitro-enclaves-cli.s3.amazonaws.com/arm64/${NITRO_CLI_VER}/nitro-enclaves-bootstrap-${NITRO_CLI_VER}-1.aarch64.rpm" && \
+    rpm -i /tmp/nitro-cli.rpm /tmp/bootstrap.rpm && \
+    rm -f /tmp/*.rpm
+
+# 4. Copy in the *runtime* image rootfs and build the EIF reproducibly
+COPY --from=runtime / /rootfs
+RUN nitro-cli build-enclave \
+        --docker-dir /rootfs \
+        --output-file /opt/tee-arm.eif
+
+# Nothing is run in this stage; the EIF is the artefact
 
 # The Nitro Enclave entrypoint is simply the application binary
 ENTRYPOINT ["/app/tee-arm"]

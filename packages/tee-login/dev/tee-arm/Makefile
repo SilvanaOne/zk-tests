@@ -28,12 +28,12 @@ image-no-cache:
 	mkdir -p out
 	docker buildx build --platform linux/arm64 --no-cache --progress=plain -t $(IMAGE_NAME) -f Containerfile .
 
-# Create the Enclave Image File (EIF) ---------------------------
-$(EIF_NAME): image
-	mkdir -p $(OUT_DIR)
-	nitro-cli build-enclave \
-		--docker-uri $(IMAGE_NAME) \
-		--output-file $(EIF_NAME)
+# # Create the Enclave Image File (EIF) ---------------------------
+# $(EIF_NAME): image
+# 	mkdir -p $(OUT_DIR)
+# 	nitro-cli build-enclave \
+# 		--docker-uri $(IMAGE_NAME) \
+# 		--output-file $(EIF_NAME)
 
 .PHONY: eif
 eif: $(EIF_NAME)
