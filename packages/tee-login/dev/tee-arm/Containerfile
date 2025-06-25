@@ -78,9 +78,10 @@ RUN --mount=type=cache,target=/var/cache/dnf \
 
 # 4. Copy in the *runtime* image rootfs and build the EIF reproducibly
 COPY --from=runtime / /rootfs
+# Provide a minimal Dockerfile so nitro-cli can build an image from the extracted rootfs
+RUN printf 'FROM scratch\nCOPY . /\nENTRYPOINT ["/app/tee-arm"]\n' > /rootfs/Dockerfile
 RUN nitro-cli build-enclave \
         --docker-dir /rootfs \
-        --docker-uri tee-arm-runtime:local \
         --output-file /opt/tee-arm.eif
 
 # Nothing is run in this stage; the EIF is the artefact
