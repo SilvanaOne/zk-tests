@@ -66,7 +66,7 @@ COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/tee-arm /app/
 RUN chmod +x /app/tee-arm && chown app:app /app/tee-arm
 # Normalise mtimes of all files touched/created in this layer so that the
 # rootfs is byte-for-byte identical across builds.
-RUN find / -exec touch -hcd @${SOURCE_DATE_EPOCH} {} +
+RUN find / -exec touch -h -t 202506252209.51 {} +
 ENTRYPOINT ["/app/tee-arm"]
 USER app
 
