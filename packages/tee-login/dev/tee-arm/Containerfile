@@ -80,6 +80,7 @@ RUN --mount=type=cache,target=/var/cache/dnf \
 COPY --from=runtime / /rootfs
 RUN nitro-cli build-enclave \
         --docker-dir /rootfs \
+        --docker-uri tee-arm-runtime:local \
         --output-file /opt/tee-arm.eif
 
 # Nothing is run in this stage; the EIF is the artefact
