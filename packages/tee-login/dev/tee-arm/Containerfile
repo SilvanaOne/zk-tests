@@ -17,6 +17,17 @@ RUN set -eux; \
 # Workdir inside the container
 WORKDIR /app
 
+# --------------------------- reproducibility tweaks ---------------------------
+# Pass a fixed SOURCE_DATE_EPOCH (injected by Makefile) so that file mtimes in
+# BuildKit layers are deterministic. Also remap absolute paths out of the debug
+# info and disable GNU build-id hashes so that the binary is identical no
+# matter where it was built.
+ARG SOURCE_DATE_EPOCH
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+# Rust-specific flags
+ENV RUSTFLAGS="--remap-path-prefix=/app=/usr/src -C link-arg=-Wl,--build-id=none"
+# ------------------------------------------------------------------------------
+
 # Pre-add the musl target (the default on Alpine, but be explicit)
 RUN rustup target add aarch64-unknown-linux-musl
 
@@ -31,7 +42,8 @@ COPY server/vendor ./vendor
 COPY server/src ./src
 
 # Build in release mode for arm64 musl target
-RUN cargo build --release --offline --target aarch64-unknown-linux-musl
+RUN cargo build --release --offline --target aarch64-unknown-linux-musl \
+    && strip -s target/aarch64-unknown-linux-musl/release/tee-arm
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.

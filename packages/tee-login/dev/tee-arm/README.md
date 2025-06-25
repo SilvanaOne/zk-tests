@@ -17,10 +17,11 @@ Enclave Image successfully created.
 {
   "Measurements": {
     "HashAlgorithm": "Sha384 { ... }",
-    "PCR0": "6f3704356f8f2f9bdc01970f816d1dd0b9b2f0454c4bfeb19fed323659b1fad4dfc352feaf3a38b6f51d4b010dc9c97b",
+    "PCR0": "a17b694705348238d184438eca2038a96ab12c0fb916a441160194cdfc777feefe2a4cee97f0b043eb6417a94ee90a8b",
     "PCR1": "3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03",
-    "PCR2": "ac911228c1e4e43528f9b5f3aeb2790b2ad47295dd495e333a740a561ae931f8dbfdad0a9a8e54b2ce4e2a5ff5cfc1f4"
+    "PCR2": "6d820212d2854ad1e99b52788070df8b53b2a895001e66bafb499d212997e0c3f92d6a03105c18ad0f5c72be617ea7ee"
   }
 }
+
 
 ```
