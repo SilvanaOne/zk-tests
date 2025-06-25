@@ -22,6 +22,12 @@ image:
 	mkdir -p out
 	docker buildx build --platform linux/arm64 --progress=plain -t $(IMAGE_NAME) -f Containerfile .
 
+# Build the container image without cache ---------------------
+.PHONY: image-no-cache
+image-no-cache:
+	mkdir -p out
+	docker buildx build --platform linux/arm64 --no-cache --progress=plain -t $(IMAGE_NAME) -f Containerfile .
+
 # Create the Enclave Image File (EIF) ---------------------------
 $(EIF_NAME): image
 	mkdir -p $(OUT_DIR)

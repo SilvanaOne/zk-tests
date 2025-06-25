@@ -1,7 +1,6 @@
 # AWS EC2 Instance Finder
 
-c6g.large       4 GiB        $0.0680      AWS Graviton2 Processor
-
+c6g.large 4 GiB $0.0680 AWS Graviton2 Processor
 
 ### x86
 
@@ -57,11 +56,11 @@ aws ec2 describe-instance-types --region "$REGION" \
 
 aws ec2 describe-instance-types --region "$REGION" \
  --filters \
- "Name=vcpu-info.default-vcpus,Values=2" \
+ "Name=vcpu-info.default-vcpus,Values=4" \
  "Name=processor-info.supported-architecture,Values=arm64" \
  "Name=hypervisor,Values=nitro" \
  --query 'InstanceTypes[].InstanceType' \
- --output text | tr '\t' '\n' > arm64-2.txt
+ --output text | tr '\t' '\n' > arm64-4.txt
 
 ## Python
 
