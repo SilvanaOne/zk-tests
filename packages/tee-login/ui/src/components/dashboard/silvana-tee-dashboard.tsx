@@ -26,7 +26,11 @@ import Image from "next/image";
 import type { ApiFrameHandle } from "@/components/api/api";
 import { useUserState, UserStateProvider } from "@/context/userState";
 import { sleep } from "@/lib/utils";
-import { useLogger } from "@logtail/next";
+import { Logger } from "@logtail/next";
+
+const log = new Logger({
+  source: "SilvanaTeeDashboard",
+});
 
 const Api = dynamic(() => import("@/components/api/api").then((m) => m.Api), {
   ssr: false,
@@ -39,9 +43,6 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoadingTee, setIsLoadingTee] = useState(true);
   const [isFetchingTee, setIsFetchingTee] = useState(false);
-  const log = useLogger({
-    source: "SilvanaTeeDashboardInternal",
-  });
 
   // Get state and methods from context
   const {
@@ -63,7 +64,12 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       }
       const stats = await getStats();
       if (stats.success && stats.data) {
-        setTeeStatus({ ...teeStatus, stats: stats.data });
+        setTeeStatus((prevTeeStatus) => {
+          if (!prevTeeStatus) {
+            return null;
+          }
+          return { ...prevTeeStatus, stats: stats.data! };
+        });
       } else {
         log.error("Error fetching stats", {
           stats,
@@ -71,7 +77,8 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       }
     };
     fetchStats();
-  }, [userState, teeStatus, log]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userState]);
 
   useEffect(() => {
     const fetchTeeData = async () => {
@@ -285,9 +292,6 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
 // Main wrapper component with provider
 export default function SilvanaTeeDashboard() {
   const apiRef = useRef<ApiFrameHandle>(null);
-  const log = useLogger({
-    source: "SilvanaTeeDashboard",
-  });
   async function signMessage(params: {
     publicKey: string;
     message: string;
