@@ -11,8 +11,14 @@ MEMORY ?= 512 # MiB
 ENCLAVE_CID ?= 16
 VENDOR_DIR ?= vendor
 
+# Runtime stage image -------------------------------------------------
+RUNTIME_IMAGE ?= tee-arm-runtime:local
+
+# CLI image
+CLI_IMAGE ?= nitro-cli:1.4.2
+
 # Default target ------------------------------------------------
-.DEFAULT_GOAL :=
+.DEFAULT_GOAL := $(EIF_NAME)
 .PHONY: default
 default: $(EIF_NAME)
 
@@ -28,12 +34,20 @@ image-no-cache:
 	mkdir -p out
 	docker buildx build --platform linux/arm64 --no-cache  -t $(IMAGE_NAME) -f Containerfile .
 
-# # Create the Enclave Image File (EIF) ---------------------------
-# $(EIF_NAME): image
-# 	mkdir -p $(OUT_DIR)
-# 	nitro-cli build-enclave \
-# 		--docker-uri $(IMAGE_NAME) \
-# 		--output-file $(EIF_NAME)
+# Build pinned nitro-cli container ------------------------------------
+.PHONY: cli-image
+cli-image:
+	docker buildx build --platform linux/arm64 -f cli.Dockerfile -t $(CLI_IMAGE) .
+
+# Create the Enclave Image File (EIF) --------------------------------
+$(EIF_NAME): runtime-image cli-image
+	mkdir -p $(OUT_DIR)
+	docker run --rm --privileged \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(PWD)/$(OUT_DIR):/out \
+		$(CLI_IMAGE) build-enclave \
+			--docker-uri $(RUNTIME_IMAGE) \
+			--output-file /out/$(notdir $(EIF_NAME))
 
 .PHONY: eif
 eif: $(EIF_NAME)
@@ -96,3 +110,7 @@ update:
 .PHONY: vendor
 vendor:
 	cd server && cargo vendor $(VENDOR_DIR)
+
+.PHONY: runtime-image
+runtime-image:
+	docker buildx build --platform linux/arm64 --target runtime -t $(RUNTIME_IMAGE) -f Containerfile .
