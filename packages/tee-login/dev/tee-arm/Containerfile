@@ -50,8 +50,10 @@ RUN cargo build --release --offline --target aarch64-unknown-linux-musl \
 #FROM --platform=linux/arm64 alpine:3.22 AS runtime
 FROM --platform=linux/arm64 alpine@sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715 AS runtime
 
-# Create a non-root user (optional but recommended)
-RUN addgroup -S app && adduser -S app -G app
+# Create a non-root user with fixed shadow date for reproducibility (set last
+# password change date to 0 days since epoch so the file content is stable)
+RUN addgroup -S app && adduser -S app -G app \
+    && sed -i -E 's/^(app:[^:]*:)[0-9]+:/\10:/' /etc/shadow
 
 # Application directory
 WORKDIR /app

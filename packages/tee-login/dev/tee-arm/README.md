@@ -17,10 +17,23 @@ Enclave Image successfully created.
 {
   "Measurements": {
     "HashAlgorithm": "Sha384 { ... }",
-    "PCR0": "814526ee9cc1a4a681ba50cf32276781aa73aa2281bba7fb392d4ead7e19acdd1d0c52a0c26210ef45bfed59dd444b57",
+    "PCR0": "25877d6c4f524650d1c2ea65ca3dbba519c9c0123aebf1c4be5572f91ca9d3e641bd1125d30a35137d46fbd8377fbcb7",
     "PCR1": "3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03",
-    "PCR2": "d94b9a034b87a42a09f60033cfe147a84532f5368a2c688c6e58701a625518d9b523fdc05c182575f0718fe45e0c1ce4"
+    "PCR2": "b4a931992afdfd637710119c8372561645f6c2c50712a0a7b112883458789faade6ba9fe736f46493f8e64c8c9cd61f5"
   }
 }
+
+Start building the Enclave Image...
+Using the locally available Docker image...
+Enclave Image successfully created.
+{
+  "Measurements": {
+    "HashAlgorithm": "Sha384 { ... }",
+    "PCR0": "f7c625578db6b8f0161a5e39900a98898f8ade65ae5670af293819bba2fa0cec50c5a97769ed61a83dbe3272b14a59c6",
+    "PCR1": "3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03",
+    "PCR2": "1e5d429ba31b0ac75156ccebd0a3a329ce429af8f3568b51d6f3618f11f2c144b72832a0173afd24c1eac84267e2b8d9"
+  }
+}
+
 
 ```
