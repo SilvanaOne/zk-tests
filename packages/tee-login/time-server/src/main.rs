@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{Log, error, info, warn};
+use log::{error, info, warn};
 use signal_hook::{consts::signal::*, iterator::Signals};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
 use std::{
