@@ -1,4 +1,8 @@
 "use server";
+import { Logger } from "@logtail/next";
+const log = new Logger({
+  source: "mina",
+});
 
 import {
   config,
@@ -40,7 +44,7 @@ export async function balance(params: {
     }
     return 0;
   } catch (error: any) {
-    console.error("Error getting balance", error?.message);
+    log.error("Error getting balance", error?.message);
     return 0;
   }
 }
@@ -69,7 +73,7 @@ export async function faucet(params: {
     }
     return { success: false, error: reply?.error ?? "Faucet request failed" };
   } catch (error: any) {
-    console.error("faucet error", error);
+    log.error("faucet error", error);
     const serializedError = serializeError(error);
     return {
       success: false,
@@ -88,13 +92,13 @@ export async function getNonce(params: {
   try {
     setChain(chain);
     const reply = (await getNonceApi({ body: { address } }))?.data;
-    console.log("getNonce reply:", reply);
+    log.info("getNonce reply:", reply);
     if (reply && reply.nonce && typeof reply.nonce === "number") {
       return reply.nonce;
     }
     return 0;
   } catch (error: any) {
-    console.error("Error getting nonce", error?.message);
+    log.error("Error getting nonce", error?.message);
     return undefined;
   }
 }
@@ -141,7 +145,7 @@ export async function signPayment(params: {
     const payment: PaymentParams = JSON.parse(params.payment);
     return JSON.stringify(client.signPayment(payment, privateKey));
   } catch (error: any) {
-    console.error("Error signing payment", error?.message);
+    log.error("Error signing payment", error?.message);
     return undefined;
   }
 }
@@ -180,11 +184,10 @@ export async function broadcastPayment(params: {
       }),
     });
     if (!response.ok) {
-      console.error(
-        "Error broadcasting payment:",
-        response.status,
-        response.statusText
-      );
+      log.error("Error broadcasting payment:", {
+        status: response.status,
+        statusText: response.statusText,
+      });
       return {
         success: false,
         error: `Error broadcasting payment: ${response.status} ${response.statusText}`,
@@ -194,20 +197,19 @@ export async function broadcastPayment(params: {
     const json = await response.json();
     const txHash = json?.data?.sendPayment?.payment?.hash;
     if (txHash) {
-      console.log("Payment broadcasted with tx hash:", txHash);
+      log.info("Payment broadcasted with tx hash:", txHash);
       return { success: true, txHash };
     } else {
-      console.error(
-        "Error broadcasting payment:",
-        JSON.stringify(json, null, 2)
-      );
+      log.error("Error broadcasting payment:", {
+        json: JSON.stringify(json, null, 2),
+      });
       return {
         success: false,
         error: `Error broadcasting payment: ${serializeError(json)}`,
       };
     }
   } catch (error: any) {
-    console.error("Error broadcasting payment", error);
+    log.error("Error broadcasting payment", error);
     const serializedError = serializeError(error);
     return {
       success: false,
@@ -231,7 +233,7 @@ export async function explorerUrl(params: {
  * Handles various error formats including nested objects
  */
 function serializeError(error: any): string | undefined {
-  console.log("serializeError: error", error);
+  log.info("serializeError: error", error);
   if (!error) return undefined;
 
   // If it's already a string, return it

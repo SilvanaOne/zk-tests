@@ -43,14 +43,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session({ session, token }) {
       // Send properties to the client
+      const extendedSession = session as any;
       if (token) {
-        session.accessToken = token.accessToken as string;
-        session.refreshToken = token.refreshToken as string;
-        session.idToken = token.idToken as string;
-        session.provider = token.provider as string;
-        session.userId = token.userId as string;
+        extendedSession.accessToken = token.accessToken as string;
+        extendedSession.refreshToken = token.refreshToken as string;
+        extendedSession.idToken = token.idToken as string;
+        extendedSession.provider = token.provider as string;
+        extendedSession.userId = token.userId as string;
       }
-      return session;
+      return extendedSession;
     },
   },
 });

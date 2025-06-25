@@ -26,6 +26,7 @@ import Image from "next/image";
 import type { ApiFrameHandle } from "@/components/api/api";
 import { useUserState, UserStateProvider } from "@/context/userState";
 import { sleep } from "@/lib/utils";
+import { useLogger } from "@logtail/next";
 
 const Api = dynamic(() => import("@/components/api/api").then((m) => m.Api), {
   ssr: false,
@@ -38,6 +39,9 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoadingTee, setIsLoadingTee] = useState(true);
   const [isFetchingTee, setIsFetchingTee] = useState(false);
+  const log = useLogger({
+    source: "SilvanaTeeDashboardInternal",
+  });
 
   // Get state and methods from context
   const {
@@ -60,10 +64,14 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       const stats = await getStats();
       if (stats.success && stats.data) {
         setTeeStatus({ ...teeStatus, stats: stats.data });
+      } else {
+        log.error("Error fetching stats", {
+          stats,
+        });
       }
     };
     fetchStats();
-  }, [userState]);
+  }, [userState, teeStatus, log]);
 
   useEffect(() => {
     const fetchTeeData = async () => {
@@ -81,6 +89,10 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       ) {
         setIsLoadingTee(false);
         setIsFetchingTee(false);
+        log.error("Error fetching stats or attestation", {
+          stats,
+          attestation,
+        });
         return;
       }
       await sleep(1000);
@@ -109,6 +121,9 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       ) {
         setIsLoadingTee(false);
         setIsFetchingTee(false);
+        log.error("Error parsing attestation data", {
+          error: verifiedAttestation?.error,
+        });
         return;
       }
       let attestationData: { result: Attestation; error: string | null };
@@ -117,7 +132,9 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
           verifiedAttestation.verifiedAttestation
         ) as { result: Attestation; error: string | null };
       } catch (error) {
-        console.error("Error parsing attestation data", error);
+        log.error("Error parsing attestation data", {
+          error,
+        });
         setIsLoadingTee(false);
         setIsFetchingTee(false);
         return;
@@ -125,9 +142,16 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
       if (!attestationData.result) {
         setIsLoadingTee(false);
         setIsFetchingTee(false);
+        log.error("Error parsing attestation data T104", {
+          error: attestationData?.error,
+        });
         return;
       }
       setTeeStatus({
+        stats: stats.data,
+        attestation: attestationData.result,
+      });
+      log.info("Tee status fetched T105", {
         stats: stats.data,
         attestation: attestationData.result,
       });
@@ -261,16 +285,24 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
 // Main wrapper component with provider
 export default function SilvanaTeeDashboard() {
   const apiRef = useRef<ApiFrameHandle>(null);
-
+  const log = useLogger({
+    source: "SilvanaTeeDashboard",
+  });
   async function signMessage(params: {
     publicKey: string;
     message: string;
   }): Promise<{ signature: string | null; error: string | null }> {
     try {
       const { publicKey, message } = params;
-      console.log("signMessage button clicked", params);
+      log.info("signMessage button clicked T107", {
+        publicKey,
+        message,
+      });
       if (!apiRef.current || !publicKey || !message) {
-        console.log("signMessage Api or publicKey or message not found");
+        log.error("signMessage Api or publicKey or message not found T106", {
+          publicKey,
+          message,
+        });
         return {
           signature: null,
           error: "Api or publicKey or message not found",
@@ -285,7 +317,10 @@ export default function SilvanaTeeDashboard() {
       console.log("signature:", signature);
       return { signature, error: null };
     } catch (error: any) {
-      console.error("signMessage error:", error?.message);
+      log.error("signMessage error T108", {
+        publicKey: params.publicKey,
+        error: error?.message,
+      });
       return {
         signature: null,
         error: error?.message || "Error E101 signing message",
@@ -299,9 +334,15 @@ export default function SilvanaTeeDashboard() {
   }): Promise<{ signature: string | null; error: string | null }> {
     try {
       const { publicKey, payment } = params;
-      console.log("signPayment button clicked", params);
+      log.info("signPayment button clicked T109", {
+        publicKey,
+        payment,
+      });
       if (!apiRef.current || !publicKey || !payment) {
-        console.log("signPayment Api or publicKey or payment not found");
+        log.error("signPayment Api or publicKey or payment not found T110", {
+          publicKey,
+          payment,
+        });
         return {
           signature: null,
           error: "Api or publicKey or payment not found",
@@ -309,13 +350,19 @@ export default function SilvanaTeeDashboard() {
       }
 
       const signature = await apiRef.current.signPayment(payment, publicKey);
-      console.log("signature:", signature);
       if (!signature) {
+        log.error("signPayment error T111", {
+          publicKey,
+          payment,
+        });
         return { signature: null, error: "Error E102 signing payment" };
       }
       return { signature, error: null };
     } catch (error: any) {
-      console.error("signPayment error:", error?.message);
+      log.error("signPayment error T112", {
+        publicKey: params.publicKey,
+        error: error?.message,
+      });
       return {
         signature: null,
         error: error?.message || "Error E103 signing payment",
@@ -366,7 +413,9 @@ export default function SilvanaTeeDashboard() {
 
       return { verifiedAttestation, error: null };
     } catch (error: any) {
-      console.error("verifyAttestation error:", error?.message);
+      log.error("verifyAttestation error T113", {
+        error: error?.message,
+      });
       return { verifiedAttestation: null, error: error?.message };
     }
   }
@@ -378,7 +427,10 @@ export default function SilvanaTeeDashboard() {
     try {
       console.log("decryptShares called");
       if (!apiRef.current) {
-        console.log("Api not found");
+        log.error("decryptShares Api not found T114", {
+          data,
+          privateKeyId,
+        });
         return null;
       }
       console.log("decryptShares called with", data, privateKeyId);
@@ -386,7 +438,9 @@ export default function SilvanaTeeDashboard() {
       console.log("publicKey:", publicKey);
       return publicKey;
     } catch (error: any) {
-      console.error("decryptShares error:", error?.message);
+      log.error("decryptShares error T115", {
+        error: error?.message,
+      });
       return null;
     }
   }

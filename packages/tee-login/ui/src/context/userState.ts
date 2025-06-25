@@ -19,6 +19,11 @@ import type {
   SocialLoginData,
   WalletType,
 } from "@/lib/types";
+import { Logger } from "@logtail/next";
+
+const log = new Logger({
+  source: "UserState",
+});
 
 // Mock attestation response for addresses
 const mockAttestationResponse = {
@@ -204,7 +209,9 @@ export const UserStateProvider: React.FC<{
       // Get wallet information from the wallet registry
       const walletInfo = getWalletById(walletId);
       if (!walletInfo) {
-        console.error(`Wallet with id ${walletId} not found`);
+        log.error("Wallet not found T101", {
+          walletId,
+        });
         return;
       }
 
@@ -224,9 +231,10 @@ export const UserStateProvider: React.FC<{
           console.log("social login data", socialLoginData);
 
           if (!socialLoginData) {
-            console.error(
-              `Social login ${walletInfo.provider} is not completed`
-            );
+            log.error("Social login not completed T102", {
+              walletId,
+              provider: walletInfo.provider,
+            });
             dispatch({
               type: "SET_CONNECTION_FAILED",
               payload: { walletId },
@@ -237,7 +245,9 @@ export const UserStateProvider: React.FC<{
         } else {
           address = await connectWallet(walletId);
           if (!address) {
-            console.log(`Connection rejected for ${walletId}`);
+            log.error("Connection rejected T103", {
+              walletId,
+            });
             dispatch({
               type: "SET_CONNECTION_FAILED",
               payload: { walletId },
@@ -295,6 +305,9 @@ export const UserStateProvider: React.FC<{
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
               });
+              log.error("No access token found T104", {
+                walletId,
+              });
               return;
             }
             const loginRequest: LoginRequest = {
@@ -340,6 +353,10 @@ export const UserStateProvider: React.FC<{
                 type: "SET_SOCIAL_CONNECTED",
                 payload: { walletId, connection: newConnection },
               });
+              log.info("Social login connected T103", {
+                walletId,
+                address,
+              });
               return;
             }
           } else {
@@ -357,6 +374,10 @@ export const UserStateProvider: React.FC<{
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
               });
+              log.error("Failed to login T105", {
+                walletId,
+                address,
+              });
               return;
             }
 
@@ -366,6 +387,10 @@ export const UserStateProvider: React.FC<{
               dispatch({
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
+              });
+              log.error("Failed to login T106", {
+                walletId,
+                address,
               });
               return;
             }
@@ -380,6 +405,10 @@ export const UserStateProvider: React.FC<{
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
               });
+              log.error("Login error T107", {
+                walletId,
+                address,
+              });
               return;
             }
 
@@ -392,6 +421,10 @@ export const UserStateProvider: React.FC<{
               dispatch({
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
+              });
+              log.error("Failed to decrypt shares T108", {
+                walletId,
+                address,
               });
               return;
             }
@@ -415,6 +448,10 @@ export const UserStateProvider: React.FC<{
               type: "SET_WALLET_CONNECTED",
               payload: { walletId, connection: newConnection },
             });
+            log.info("Wallet connection created T109", {
+              walletId,
+              address,
+            });
             return;
           }
 
@@ -425,9 +462,16 @@ export const UserStateProvider: React.FC<{
             type: "SET_CONNECTION_FAILED",
             payload: { walletId },
           });
+          log.error("No API functions provided T110", {
+            walletId,
+          });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Wallet connection error for ${walletId}:`, error);
+        log.error("Wallet connection error T111", {
+          walletId,
+          error: error?.message,
+        });
         dispatch({
           type: "SET_CONNECTION_FAILED",
           payload: { walletId },

@@ -1,6 +1,9 @@
 "use client";
-
+import { Logger } from "@logtail/next";
 import { teeApiCall } from "./tee";
+const log = new Logger({
+  source: "login",
+});
 
 export interface UnsignedLoginRequest {
   login_type: "wallet" | "social";
@@ -106,6 +109,9 @@ export async function login(
       request,
     });
     if (!response.success) {
+      log.error("Login error T102:", {
+        response,
+      });
       return {
         success: false,
         data: null,
@@ -127,6 +133,9 @@ export async function login(
     ) {
       return data;
     } else {
+      log.error("Login error T103:", {
+        response: data.error,
+      });
       return {
         success: false,
         data: null,
@@ -135,7 +144,9 @@ export async function login(
       };
     }
   } catch (error: any) {
-    console.error("Login error:", error);
+    log.error("Login error T104:", {
+      error,
+    });
     return {
       success: false,
       data: null,
