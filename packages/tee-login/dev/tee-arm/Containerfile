@@ -6,7 +6,11 @@
 FROM --platform=linux/arm64 rust@sha256:126df0f2a57e675f9306fe180b833982ffb996e90a92a793bb75253cfeed5475 AS builder
 # Install build dependencies
 
-RUN apk add --no-cache \
+# Pin repository URLs so the exact package versions remain available
+RUN set -eux; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /etc/apk/repositories; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /etc/apk/repositories; \
+    apk add --no-cache --update-cache \
         build-base=0.5-r3 \
         musl-dev=1.2.5-r10
 # from any Alpine 3.22 container
@@ -53,4 +57,4 @@ RUN chmod +x /app/tee-arm && chown app:app /app/tee-arm
 USER app
 
 # The Nitro Enclave entrypoint is simply the application binary
-ENTRYPOINT ["/app/tee-arm"] 
+ENTRYPOINT ["/app/tee-arm"]
