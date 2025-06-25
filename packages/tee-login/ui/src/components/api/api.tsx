@@ -1,6 +1,10 @@
 "use client";
-import { useLogger } from "@logtail/next";
+import { Logger } from "@logtail/next";
 import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
+
+const log = new Logger({
+  source: "Api",
+});
 
 // ---------- types the parent will see ----------
 export interface ApiFrameHandle {
@@ -92,9 +96,6 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
   const pending = useRef<
     Record<string, { resolve: (v: any) => void; reject: (e: Error) => void }>
   >({});
-  const log = useLogger({
-    source: "api",
-  });
 
   // listen for replies
   useEffect(() => {
@@ -141,7 +142,7 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [log]);
+  }, []);
 
   // expose the sign() method to parent via ref
   useImperativeHandle(
@@ -357,7 +358,7 @@ export const Api = forwardRef<ApiFrameHandle>(function Api(_props, ref) {
         });
       },
     }),
-    [log]
+    []
   );
 
   return (

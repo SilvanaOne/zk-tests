@@ -9,7 +9,11 @@ import { useSession, getSession } from "next-auth/react";
 import { SocialLoginData, WalletType } from "@/lib/types";
 import type { Session } from "next-auth";
 import { useSocialLogin } from "@/hooks/use-social-login";
-import { useLogger } from "@logtail/next";
+import { Logger } from "@logtail/next";
+
+const log = new Logger({
+  source: "WalletConnectModal",
+});
 
 function WalletButton({
   wallet,
@@ -151,9 +155,6 @@ export function WalletConnectModal({
   const { data: session, update } = useSession();
   const [processSocialLogin, setProcessSocialLogin] =
     useState<WalletOption | null>(null); // trying to refresh the session due to next-auth bug https://github.com/nextauthjs/next-auth/issues/9504
-  const log = useLogger({
-    source: "WalletConnectModal",
-  });
   const [counter, setCounter] = useState<number>(0);
 
   useEffect(() => {
