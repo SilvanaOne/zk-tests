@@ -28,7 +28,7 @@ default: $(EIF_NAME)
 .PHONY: image
 image:
 	mkdir -p out
-	docker buildx build --platform linux/arm64 --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -t $(IMAGE_NAME) -f Containerfile .
+	docker buildx build --platform linux/arm64 --no-cache --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -t $(IMAGE_NAME) -f Containerfile .
 
 # Build the container image without cache ---------------------
 .PHONY: image-no-cache
@@ -39,7 +39,7 @@ image-no-cache:
 # Build pinned nitro-cli container ------------------------------------
 .PHONY: cli-image
 cli-image:
-	docker buildx build --platform linux/arm64 --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -f cli.Dockerfile -t $(CLI_IMAGE) .
+	docker buildx build --platform linux/arm64 --no-cache --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -f cli.Dockerfile -t $(CLI_IMAGE) .
 
 # Create the Enclave Image File (EIF) --------------------------------
 $(EIF_NAME): runtime-image cli-image
@@ -105,7 +105,7 @@ clean:
 
 .PHONY: update
 update:
-	cd ../../../.. && git pull origin main && cd packages/tee-login/dev/tee-arm && rm -rf out
+	git pull origin main && rm -rf out
 	$(MAKE) image
 	$(MAKE) eif
 
@@ -115,4 +115,4 @@ vendor:
 
 .PHONY: runtime-image
 runtime-image:
-	docker buildx build --platform linux/arm64 --target runtime --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -t $(RUNTIME_IMAGE) -f Containerfile .
+	docker buildx build --platform linux/arm64 --target runtime --no-cache --build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) -t $(RUNTIME_IMAGE) -f Containerfile .
