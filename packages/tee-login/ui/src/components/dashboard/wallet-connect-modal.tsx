@@ -363,6 +363,11 @@ export function WalletConnectModal({
                               onClose();
                               setSuccessWallet(null);
                             }, 900);
+                          } else {
+                            log.error("Social login failed T102", {
+                              walletId: wallet.id,
+                              result,
+                            });
                           }
                         });
                       }

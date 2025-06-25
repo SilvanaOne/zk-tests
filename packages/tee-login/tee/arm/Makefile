@@ -33,7 +33,7 @@ eif: $(EIF_NAME)
 # Run the enclave ----------------------------------------------
 .PHONY: run
 run:
-	nitro-cli run-enclave \
+	sudo nitro-cli run-enclave \
 		--eif-path $(EIF_NAME) \
 		--cpu-count $(CPU_COUNT) \
 		--memory $(MEMORY) \
@@ -42,7 +42,7 @@ run:
 # Run the enclave with debug mode enabled ----------------------
 .PHONY: run-debug
 run-debug:
-	nitro-cli run-enclave \
+	sudo nitro-cli run-enclave \
 		--eif-path $(EIF_NAME) \
 		--cpu-count $(CPU_COUNT) \
 		--memory $(MEMORY) \
