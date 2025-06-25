@@ -43,7 +43,8 @@ COPY server/src ./src
 
 # Build in release mode for arm64 musl target
 RUN cargo build --release --offline --target aarch64-unknown-linux-musl \
-    && strip -s target/aarch64-unknown-linux-musl/release/tee-arm
+    && strip -s target/aarch64-unknown-linux-musl/release/tee-arm \
+    && touch -h -d @${SOURCE_DATE_EPOCH} target/aarch64-unknown-linux-musl/release/tee-arm
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
