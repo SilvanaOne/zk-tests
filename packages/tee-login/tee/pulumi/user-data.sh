@@ -140,8 +140,32 @@ sudo systemctl enable --now certbot-renew.timer
 
 echo "Cloning zk-tests repository as ec2-user into /home/ec2-user..."
 sudo -u ec2-user -i bash -c 'git clone --quiet --no-progress --depth 1 https://github.com/SilvanaOne/zk-tests'
-sudo -u ec2-user -i bash -c 'cd /home/ec2-user/zk-tests/packages/tee-login/tee/arm && aws s3 cp s3://silvana-tee-images/tee-arm-v2.tar.gz tee-arm-v2.tar.gz --no-progress && tar -xzvf tee-arm-v2.tar.gz'
+sudo -u ec2-user -i bash -c 'cd /home/ec2-user/zk-tests/packages/tee-login/tee/arm && aws s3 cp s3://silvana-tee-images/tee-arm-v4.tar.gz tee-arm-v4.tar.gz --no-progress && tar -xzvf tee-arm-v4.tar.gz'
+sudo -u ec2-user -i bash -c 'cd /home/ec2-user/zk-tests/packages/tee-login/tee/arm && aws s3 cp s3://silvana-tee-images/time-server-v1.tar.gz time-server-v1.tar.gz --no-progress && tar -xzvf time-server-v1.tar.gz'
 
+# Make the time-server binary executable and create a systemd service to keep it running
+sudo chmod +x /home/ec2-user/zk-tests/packages/tee-login/tee/arm/time-server
+
+cat <<'EOF' | sudo tee /etc/systemd/system/time-server.service
+[Unit]
+Description=Time Server
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/zk-tests/packages/tee-login/tee/arm
+ExecStart=/home/ec2-user/zk-tests/packages/tee-login/tee/arm/time-server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd, enable and start the time-server service
+sudo systemctl daemon-reload
+sudo systemctl enable --now time-server.service
 
 
 

@@ -23,8 +23,10 @@ copy image to s3 and back:
 ```sh
 tar -czvf tee-arm-v4.tar.gz out
 aws s3 cp tee-arm-v4.tar.gz s3://silvana-tee-images/tee-arm-v4.tar.gz
+aws s3 cp time-server-v1.tar.gz s3://silvana-tee-images/time-server-v1.tar.gz
 aws s3 cp s3://silvana-tee-images/tee-arm-v4.tar.gz tee-arm-v4.tar.gz
-tar -xzvf tee-arm-v4.tar.gz
+aws s3 cp s3://silvana-tee-images/time-server-v1.tar.gz time-server-v1.tar.gz
+tar -xzvf time-server-v1.tar.gz
 ```
 
 Job for nitro-enclaves-allocator.service failed because the control process exited with error code.
