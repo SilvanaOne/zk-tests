@@ -39,11 +39,6 @@ pub async fn stats(
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
         .as_millis() as u64;
-    info!("Current timestamp: {}", current_timestamp);
-    let enclave_timestamp = get_enclave_time().map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to get enclave timestamp: {}", e))
-    })?;
-    info!("Enclave timestamp: {}", enclave_timestamp);
     Ok(Json(to_signed_response(
         &state.keys.sui_keypair,
         stats,

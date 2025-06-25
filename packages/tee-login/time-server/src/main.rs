@@ -1,5 +1,6 @@
 use anyhow::Result;
-use log::{error, info, warn};
+use log::{Log, error, info, warn};
+use signal_hook::{consts::signal::*, iterator::Signals};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
 use std::{
     fs::OpenOptions,
@@ -88,6 +89,12 @@ fn main() {
             e
         );
     });
+
+    // Register signal handlers to log and exit gracefully
+    if let Err(e) = setup_signal_handlers() {
+        // If registering signals fails, log and continue without it.
+        warn!("Failed to set up signal handlers: {}", e);
+    }
 
     info!("Starting VSOCK time server...");
 
@@ -202,6 +209,32 @@ fn handle_connection(stream: &mut dyn Write) -> Result<()> {
         TimeResponse::ClockError => info!("Sent clock error response"),
         TimeResponse::InternalError => info!("Sent internal error response"),
     }
+
+    Ok(())
+}
+
+/// Register handlers for termination signals so we can log when the process is asked to stop.
+fn setup_signal_handlers() -> Result<()> {
+    // We create a signal iterator over common termination signals.
+    let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
+
+    // Spawn a thread dedicated to waiting for signals.
+    thread::spawn(move || {
+        for sig in signals.forever() {
+            match sig {
+                SIGTERM => info!("Received SIGTERM. Shutting down."),
+                SIGINT => info!("Received SIGINT (Ctrl+C). Shutting down."),
+                SIGQUIT => info!("Received SIGQUIT. Shutting down."),
+                other => info!("Received signal {}. Shutting down.", other),
+            }
+
+            // Flush any buffered log records before exiting.
+            log::logger().flush();
+
+            // Exit with success status so supervisor can handle restarts as needed.
+            std::process::exit(0);
+        }
+    });
 
     Ok(())
 }
