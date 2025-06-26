@@ -25,19 +25,8 @@ const log = new Logger({
   source: "UserState",
 });
 
-// Mock attestation response for addresses
-const mockAttestationResponse = {
-  addresses: {
-    solana_address: "AUJTAeQFrVEoRjKjsKRHaW1aiJG2A5BceSTvGZfpcP1S",
-    sui_address:
-      "0xa9785af780b16b646041d260c19b2087cac4ffeff636b0347f0b07eee8b0d8f1",
-    mina_address: "B62qqngPFeyNniTX8yaTA8S5MxuM2FZrFb2VEsZ3oZ3HudKLBCs4Em3",
-    ethereum_address: "0x0ea8643911f36cc73b473735ca2578bb070598b0",
-  },
-};
-
 const initialUserState: UnifiedUserState = {
-  connections: {},
+  connections: {} as { [key: string]: UserConnectionStatus },
   selectedAuthMethod: null,
 };
 
@@ -68,6 +57,9 @@ type UserStateAction =
     }
   | {
       type: "RESET_ALL_CONNECTIONS";
+    }
+  | {
+      type: "RESET_FAILED_CONNECTIONS";
     };
 
 const userStateReducer = (
@@ -85,6 +77,7 @@ const userStateReducer = (
             walletId: action.payload.walletId,
             isConnected: false,
             isConnecting: true,
+            isConnectionFailed: false,
             address: undefined,
           } as UserConnectionStatus,
         },
@@ -119,6 +112,7 @@ const userStateReducer = (
             ...state.connections[action.payload.walletId],
             isConnected: false,
             isConnecting: false,
+            isConnectionFailed: true,
           },
         },
       };
@@ -142,6 +136,15 @@ const userStateReducer = (
       };
     }
 
+    case "RESET_FAILED_CONNECTIONS":
+      return {
+        ...state,
+        connections: Object.fromEntries(
+          Object.entries(state.connections).filter(
+            ([_, conn]) => !conn.isConnectionFailed
+          )
+        ),
+      };
     case "RESET_ALL_CONNECTIONS":
       return initialUserState;
 
@@ -164,6 +167,7 @@ interface UserStateContextType {
   setConnecting: (walletId: string, walletType: WalletType) => void;
   setConnectionFailed: (walletId: string) => void;
   resetConnection: (walletId: string) => void;
+  resetFailedConnections: () => void;
   setSelectedAuthMethod: (connection: UserConnectionStatus | null) => void;
   getWalletConnections: () => UserWalletStatus[];
   getSocialConnections: () => UserSocialLoginStatus[];
@@ -186,6 +190,7 @@ const UserStateContext = createContext<UserStateContextType>({
   setConnecting: (walletId: string, walletType: WalletType) => {},
   setConnectionFailed: (walletId: string) => {},
   resetConnection: () => {},
+  resetFailedConnections: () => {},
   setSelectedAuthMethod: () => {},
   getWalletConnections: () => [],
   getSocialConnections: () => [],
@@ -337,6 +342,7 @@ export const UserStateProvider: React.FC<{
                 provider: walletInfo.provider,
                 walletId,
                 isConnected: true,
+                isConnectionFailed: false,
                 isConnecting: false,
                 address: address,
                 minaPublicKey: publicKey,
@@ -437,6 +443,7 @@ export const UserStateProvider: React.FC<{
               wallet: walletInfo.name,
               walletId,
               isConnected: true,
+              isConnectionFailed: false,
               isConnecting: false,
               address,
               minaPublicKey: publicKey,
@@ -493,6 +500,8 @@ export const UserStateProvider: React.FC<{
           ? "connecting"
           : connection.isConnected
           ? "connected"
+          : connection.isConnectionFailed
+          ? "error"
           : "idle",
         address: connection.address,
         shamirShares: connection.shamirShares?.map(String),
@@ -510,6 +519,12 @@ export const UserStateProvider: React.FC<{
     },
     [dispatch]
   );
+
+  const resetFailedConnections = useCallback(() => {
+    dispatch({
+      type: "RESET_FAILED_CONNECTIONS",
+    });
+  }, [dispatch]);
 
   const setSelectedAuthMethod = useCallback(
     (connection: UserConnectionStatus | null) => {
@@ -573,6 +588,7 @@ export const UserStateProvider: React.FC<{
     setConnecting,
     setConnectionFailed,
     resetConnection,
+    resetFailedConnections,
     setSelectedAuthMethod,
     getWalletConnections,
     getSocialConnections,

@@ -18,6 +18,7 @@ export interface UserStatus {
   walletId?: string;
   address?: string;
   isConnected: boolean;
+  isConnectionFailed: boolean;
   isConnecting: boolean;
   minaPublicKey?: string;
   shamirShares?: number[]; // Array of share numbers used (1-16)
