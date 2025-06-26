@@ -16,7 +16,7 @@ describe("Generate keys", async () => {
         publicKey: publicKey.toBase58(),
       });
     }
-    await writeFile("./data/keys.json", JSON.stringify({ keys }, null, 2));
+    await writeFile("./data/keys-1.json", JSON.stringify({ keys }, null, 2));
   });
   it("should print x and isOdd of empty PublicKey", async () => {
     const key = PublicKey.empty();

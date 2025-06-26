@@ -15,3 +15,4 @@ dist/
 .vscode/
 .zkcloudworker/
 test/helpers/env.ts
+ZEKO.md
