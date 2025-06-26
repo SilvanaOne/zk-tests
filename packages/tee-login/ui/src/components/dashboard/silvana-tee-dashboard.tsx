@@ -55,6 +55,7 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
     getWalletConnections,
     getSocialConnections,
     getConnectedMethods,
+    resetFailedConnections,
   } = useUserState();
 
   useEffect(() => {
@@ -283,6 +284,7 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
           getConnectionState={getConnectionState}
           setConnecting={setConnecting}
           setConnectionFailed={setConnectionFailed}
+          resetFailedConnections={resetFailedConnections}
         />
       </div>
     </>

@@ -18,6 +18,7 @@
     "info": "npm run test test/info.test.ts",
     "based": "CHAIN=zeko npm run test test/based.test.ts",
     "based:devnet": "CHAIN=devnet npm run test test/based.devnet.test.ts",
+    "status": "CHAIN=zeko npm run test test/status.test.ts",
     "vk": "npm run test test/vk.test.ts",
     "poseidon": "npm run test test/poseidon.test.ts",
     "nonce": "npm run test test/nonce.test.ts",

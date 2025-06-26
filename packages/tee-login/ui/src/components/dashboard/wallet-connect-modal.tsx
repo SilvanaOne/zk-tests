@@ -19,6 +19,7 @@ function WalletButton({
   wallet,
   connected,
   loading,
+  failed,
   onClick,
 }: WalletButtonProps) {
   const getChainColor = (chain: string) => {
@@ -72,6 +73,8 @@ function WalletButton({
                  ${
                    connected
                      ? "bg-gradient-to-br from-brand-green/60 via-brand-green/40 to-brand-green/20 border-brand-green text-white shadow-xl shadow-brand-green/40"
+                     : failed
+                     ? "bg-gradient-to-br from-red-500/60 via-red-500/40 to-red-500/20 border-red-500 text-white shadow-xl shadow-red-500/40"
                      : `bg-gradient-to-br ${getChainGradient(
                          wallet.type === "wallet" ? wallet.chain : "social"
                        )} border-white/50 text-foreground hover:border-brand-pink hover:shadow-xl hover:shadow-brand-purple/30`
@@ -99,8 +102,8 @@ function WalletButton({
           />
         </div>
 
-        {/* Loading spinner overlay */}
-        {loading && (
+        {/* Loading spinner overlay - only show if loading and not failed */}
+        {loading && !failed && (
           <div className="absolute inset-0 flex items-center justify-center bg-brand-purple/20 rounded backdrop-blur-sm">
             <div className="w-8 h-8 border-4 border-transparent border-t-brand-pink border-l-brand-purple rounded-full animate-spin" />
           </div>
@@ -124,6 +127,13 @@ function WalletButton({
         </div>
       )}
 
+      {/* Failed Indicator */}
+      {failed && !connected && (
+        <div className="absolute top-1 right-1 w-6 h-6 bg-gradient-to-br from-red-500 via-red-500 to-red-500/80 rounded-full flex items-center justify-center border-2 border-white shadow-xl shadow-red-500/50">
+          <X className="w-3 h-3 text-white" strokeWidth={3} />
+        </div>
+      )}
+
       {/* Bright shine effect on hover */}
       <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity  pointer-events-none bg-gradient-to-r from-transparent via-white/30 to-transparent transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[100%] duration-1000" />
     </motion.button>
@@ -140,6 +150,7 @@ interface WalletConnectModalProps {
   getConnectionState: (walletId: string) => any;
   setConnecting: (walletId: string, walletType: WalletType) => void;
   setConnectionFailed: (walletId: string) => void;
+  resetFailedConnections: () => void;
 }
 
 export function WalletConnectModal({
@@ -149,6 +160,7 @@ export function WalletConnectModal({
   getConnectionState,
   setConnecting,
   setConnectionFailed,
+  resetFailedConnections,
 }: WalletConnectModalProps) {
   const [successWallet, setSuccessWallet] = useState<string | null>(null);
   const openSocialLogin = useSocialLogin();
@@ -169,13 +181,24 @@ export function WalletConnectModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processSocialLogin]);
 
+  const closeModal = () => {
+    resetFailedConnections();
+    onClose();
+  };
+
   const isConnected = (walletId: string) => {
     const state = getConnectionState(walletId);
     return state.state === "connected" || successWallet === walletId;
   };
 
   const isLoading = (walletId: string) => {
-    return getConnectionState(walletId).state === "connecting";
+    const state = getConnectionState(walletId);
+    return state.state === "connecting";
+  };
+
+  const isFailed = (walletId: string) => {
+    const state = getConnectionState(walletId);
+    return state.state === "error";
   };
 
   async function handleWalletClick(
@@ -274,7 +297,7 @@ export function WalletConnectModal({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 bg-gradient-to-br from-brand-pink/20 via-brand-purple/30 to-brand-blue/20 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={closeModal}
           />
 
           {/* Modal */}
@@ -324,7 +347,7 @@ export function WalletConnectModal({
                     </p>
                   </div>
                   <button
-                    onClick={onClose}
+                    onClick={closeModal}
                     className="absolute top-4 right-4 p-2 text-pink-500/80 hover:text-foreground transition-all duration-200 rounded-xl hover:bg-white/20 hover:shadow-lg hover:scale-110"
                   >
                     <X className="w-5 h-5" />
@@ -344,6 +367,7 @@ export function WalletConnectModal({
                     wallet={wallet}
                     connected={isConnected(wallet.id)}
                     loading={isLoading(wallet.id)}
+                    failed={isFailed(wallet.id)}
                     onClick={async () => {
                       setConnecting(wallet.id, wallet.type);
                       if (wallet.type === "social") {
@@ -357,15 +381,7 @@ export function WalletConnectModal({
                         return;
                       } else {
                         setProcessSocialLogin(null);
-                        handleWalletClick(wallet).then((result) => {
-                          if (result === true) {
-                            setSuccessWallet(wallet.id);
-                            setTimeout(() => {
-                              onClose();
-                              setSuccessWallet(null);
-                            }, 900);
-                          }
-                        });
+                        handleWalletClick(wallet);
                       }
                     }}
                   />

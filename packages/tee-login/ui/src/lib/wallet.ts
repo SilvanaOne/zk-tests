@@ -103,6 +103,7 @@ export interface WalletButtonProps {
   wallet: WalletOption;
   connected?: boolean;
   loading?: boolean;
+  failed?: boolean;
   onClick: () => void;
 }
 

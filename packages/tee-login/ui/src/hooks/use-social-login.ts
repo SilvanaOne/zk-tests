@@ -1,5 +1,5 @@
 "use client";
-import { signIn, useSession } from "next-auth/react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { useCallback } from "react";
 import { WalletProvider } from "@/lib/types";
 
@@ -8,6 +8,10 @@ export function useSocialLogin() {
 
   return useCallback(
     async (provider: WalletProvider) => {
+      // Ensure any existing NextAuth session cookie is cleared so that we
+      // always obtain a completely fresh OAuth response (new id_token etc.)
+      await signOut({ redirect: false });
+
       const popup = window.open(
         "about:blank",
         `${provider}OAuth`,
@@ -45,4 +49,3 @@ export function useSocialLogin() {
     [update]
   );
 }
-

@@ -162,7 +162,11 @@ pub fn verify_google_jwt(token: &str, jwks: &Value) -> Result<GoogleAccount, Str
     // 6. Check expiration.
     let now = chrono::Utc::now().timestamp() as u64;
     if (claims.exp + 60 * 60) < now {
-        return Err("Token has expired".into());
+        return Err(format!(
+            "Token has expired: claim.iat:{} claim.exp:{} now:{}",
+            claims.iat, claims.exp, now
+        )
+        .into());
     }
 
     // 7. Enforce a maximum TTL: Google ID tokens typically have 1 hour (3600s) TTL.

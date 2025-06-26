@@ -21,13 +21,16 @@ make
 copy image to s3 and back:
 
 ```sh
-tar -czvf tee-arm-v4.tar.gz out
-aws s3 cp tee-arm-v4.tar.gz s3://silvana-tee-images/tee-arm-v4.tar.gz
+tar -czvf tee-arm-v5.tar.gz out
+aws s3 cp tee-arm-v5.tar.gz s3://silvana-tee-images/tee-arm-v5.tar.gz
 aws s3 cp time-server-v1.tar.gz s3://silvana-tee-images/time-server-v1.tar.gz
-aws s3 cp s3://silvana-tee-images/tee-arm-v4.tar.gz tee-arm-v4.tar.gz
+aws s3 cp s3://silvana-tee-images/tee-arm-v5.tar.gz tee-arm-v5.tar.gz
+tar -xzvf tee-arm-v5.tar.gz
 aws s3 cp s3://silvana-tee-images/time-server-v1.tar.gz time-server-v1.tar.gz
 tar -xzvf time-server-v1.tar.gz
 ```
 
 Job for nitro-enclaves-allocator.service failed because the control process exited with error code.
 See "systemctl status nitro-enclaves-allocator.service" and "journalctl -xeu nitro-enclaves-allocator.service" for details.
+
+"Token has expired: claim.iat:1750893282 claim.exp:1750896882 now:1750917839"

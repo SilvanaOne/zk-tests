@@ -6,17 +6,27 @@
 FROM --platform=linux/arm64 rust@sha256:126df0f2a57e675f9306fe180b833982ffb996e90a92a793bb75253cfeed5475 AS builder
 # Install build dependencies
 
-RUN apk add --no-cache \
+# Pin repository URLs so the exact package versions remain available
+RUN set -eux; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /etc/apk/repositories; \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /etc/apk/repositories; \
+    apk add --no-cache --update-cache \
         build-base=0.5-r3 \
         musl-dev=1.2.5-r10
-# from any Alpine 3.22 container
-RUN apk info -e build-base
-# → build-base-0.5-r3
-RUN apk info -e musl-dev
-# → musl-dev-1.2.4-r2
 
 # Workdir inside the container
 WORKDIR /app
+
+# --------------------------- reproducibility tweaks ---------------------------
+# Pass a fixed SOURCE_DATE_EPOCH (injected by Makefile) so that file mtimes in
+# BuildKit layers are deterministic. Also remap absolute paths out of the debug
+# info and disable GNU build-id hashes so that the binary is identical no
+# matter where it was built.
+ARG SOURCE_DATE_EPOCH
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+# Rust-specific flags
+ENV RUSTFLAGS="--remap-path-prefix=/app=/usr/src -C link-arg=-Wl,--build-id=none"
+# ------------------------------------------------------------------------------
 
 # Pre-add the musl target (the default on Alpine, but be explicit)
 RUN rustup target add aarch64-unknown-linux-musl
@@ -32,15 +42,19 @@ COPY server/vendor ./vendor
 COPY server/src ./src
 
 # Build in release mode for arm64 musl target
-RUN cargo build --release --offline --target aarch64-unknown-linux-musl
+RUN cargo build --release --offline --target aarch64-unknown-linux-musl \
+    && strip -s target/aarch64-unknown-linux-musl/release/tee-arm \
+    && touch -h -d @${SOURCE_DATE_EPOCH} target/aarch64-unknown-linux-musl/release/tee-arm
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
 #FROM --platform=linux/arm64 alpine:3.22 AS runtime
 FROM --platform=linux/arm64 alpine@sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715 AS runtime
 
-# Create a non-root user (optional but recommended)
-RUN addgroup -S app && adduser -S app -G app
+# Create a non-root user with fixed shadow date for reproducibility (set last
+# password change date to 0 days since epoch so the file content is stable)
+RUN addgroup -S app && adduser -S app -G app \
+    && sed -i -E 's/^(app:[^:]*:)[0-9]+:/\10:/' /etc/shadow
 
 # Application directory
 WORKDIR /app
@@ -50,7 +64,48 @@ COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/tee-arm /app/
 
 # Ensure the binary is executable and owned by the non-root user
 RUN chmod +x /app/tee-arm && chown app:app /app/tee-arm
+# Normalise mtimes of all files touched/created in this layer so that the
+# rootfs is byte-for-byte identical across builds.
+RUN find / -xdev \( -type f -o -type d -o -type l \) -print0 \
+    | xargs -0 -r touch -t 202506252209.51 || true
+ENTRYPOINT ["/app/tee-arm"]
 USER app
 
+
+########################################################################
+# Stage 3 – Build the deterministic EIF ################################
+# We install a *pinned* version of nitro‑cli on a frozen
+# Amazon Linux 2023 base, then call `nitro-cli build-enclave`.
+########################################################################
+FROM --platform=linux/arm64 public.ecr.aws/amazonlinux/amazonlinux:2023@sha256:39ba4d54c9805f781646dea291e93a566d677a430ee77dc9e2fd733b0bf4e40a
+
+ARG NITRO_CLI_VER=1.4.2-0.amzn2023   # latest reproducible NEVRA in AL2023
+
+# 1. install yum-utils for clean metadata handling
+RUN --mount=type=cache,target=/var/cache/yum \
+    yum install -y yum-utils && \
+    yum clean all
+
+# 2. install nitro‑cli from AL2023 repo and lock its version
+RUN --mount=type=cache,target=/var/cache/dnf \
+    dnf install -y 'dnf-command(versionlock)' && \
+    dnf install -y aws-nitro-enclaves-cli-${NITRO_CLI_VER}.aarch64 \
+                   aws-nitro-enclaves-cli-devel-${NITRO_CLI_VER}.aarch64 && \
+    dnf versionlock add aws-nitro-enclaves-cli-${NITRO_CLI_VER}.aarch64 \
+                        aws-nitro-enclaves-cli-devel-${NITRO_CLI_VER}.aarch64 && \
+    rpm -V aws-nitro-enclaves-cli && \
+    dnf clean all
+
+# 4. Copy in the *runtime* image rootfs and build the EIF reproducibly
+COPY --from=runtime / /rootfs
+# Provide a minimal Dockerfile so nitro-cli can build an image from the extracted rootfs
+RUN printf 'FROM scratch\nCOPY . /\nENTRYPOINT ["/app/tee-arm"]\n' > /rootfs/Dockerfile
+RUN nitro-cli build-enclave \
+        --docker-dir /rootfs \
+        --docker-uri tee-arm-runtime:local \
+        --output-file /opt/tee-arm.eif
+
+# Nothing is run in this stage; the EIF is the artefact
+
 # The Nitro Enclave entrypoint is simply the application binary
-ENTRYPOINT ["/app/tee-arm"] 
+ENTRYPOINT ["/app/tee-arm"]
