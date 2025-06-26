@@ -234,10 +234,6 @@ export function WalletConnectModal({
         };
         console.log("newSession", newSession);
         if (newSession?.provider !== walletInfo.provider) {
-          log.error("ERROR: wrong provider T102", {
-            sessionProvider: (session as any)?.provider,
-            requestedProvider: walletInfo.provider,
-          });
           if (counter < 5) {
             setCounter(counter + 1);
             await update();
@@ -245,6 +241,11 @@ export function WalletConnectModal({
             setProcessSocialLogin(wallet); // trying to refresh the session due to next-auth bug 5 times
             return;
           }
+          log.error("ERROR: wrong provider T102", {
+            newSessionProvider: newSession?.provider,
+            requestedProvider: walletInfo.provider,
+            counter,
+          });
           setConnectionFailed(wallet.id);
           return;
         }
