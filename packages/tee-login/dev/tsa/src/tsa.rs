@@ -9,9 +9,13 @@ use der::{
 use once_cell::sync::Lazy;
 use rand::{RngCore, rng};
 use reqwest::Client;
-use rsa::{RsaPublicKey, pkcs1v15::VerifyingKey, pkcs8::DecodePublicKey, signature::Verifier};
+use rsa::{
+    BigUint, RsaPublicKey, pkcs1v15::VerifyingKey, pkcs8::DecodePublicKey, signature::Verifier,
+    traits::PublicKeyParts,
+};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use spki::AlgorithmIdentifierOwned;
+use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::debug;
 use x509_parser::certificate::X509Certificate;
@@ -96,6 +100,35 @@ impl std::fmt::Display for TsaVerifyError {
 }
 
 impl std::error::Error for TsaVerifyError {}
+
+/// Save certificates from TSA response to disk for analysis
+pub fn save_certificates_to_disk(
+    signed_data: &SignedData,
+    prefix: &str,
+) -> anyhow::Result<Vec<String>> {
+    let mut saved_files = Vec::new();
+
+    if let Some(certificates) = &signed_data.certificates {
+        for (i, cert) in certificates.0.iter().enumerate() {
+            let cert_der = cert.to_der()?;
+            let filename = format!("{}_cert_{}.der", prefix, i);
+
+            fs::write(&filename, &cert_der)?;
+            saved_files.push(filename.clone());
+
+            debug!("💾 Saved certificate {} to: {}", i, filename);
+
+            // Also try to parse and show basic info
+            if let Ok((_, parsed_cert)) =
+                x509_parser::certificate::X509Certificate::from_der(&cert_der)
+            {
+                debug!("   📄 Subject: {}", parsed_cert.subject());
+            }
+        }
+    }
+
+    Ok(saved_files)
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -197,6 +230,22 @@ pub async fn get_timestamp(data: &[u8], endpoint: &str) -> anyhow::Result<TsaRes
     // --- 6. Verify certificate chain ---------------------------------------
     let cert_verification = verify_certificates(&signed)?;
 
+    // --- 7. Optional: Save certificates to disk for analysis ------------
+    if std::env::var("TSA_SAVE_CERTS").is_ok() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let prefix = format!("tsa_response_{}", timestamp);
+
+        if let Ok(saved_files) = save_certificates_to_disk(&signed, &prefix) {
+            debug!("💾 Saved {} certificates for analysis:", saved_files.len());
+            for file in saved_files {
+                debug!("   📁 {}", file);
+            }
+        }
+    }
+
     let econtent = signed
         .encap_content_info
         .econtent
@@ -207,7 +256,7 @@ pub async fn get_timestamp(data: &[u8], endpoint: &str) -> anyhow::Result<TsaRes
     let octet_string = OctetString::from_der(econtent.to_der()?.as_slice())?;
     let tst_info = TstInfo::from_der(octet_string.as_bytes())?;
 
-    // --- 7. Analyze timing information -------------------------------------
+    // --- 8. Analyze timing information -------------------------------------
     let gen_time_der = tst_info.gen_time.to_der()?;
     // GeneralizedTime DER: tag(1) + length(1+) + content
     let time_content = if gen_time_der.len() > 2 {
@@ -357,10 +406,36 @@ fn verify_cert_chain(cert_ders: &[Vec<u8>]) -> Result<(), TsaVerifyError> {
 
     // Parse all certificates from the chain
     let mut certs = Vec::new();
-    for cert_der in cert_ders {
+    for (i, cert_der) in cert_ders.iter().enumerate() {
         let (_, cert) = X509Certificate::from_der(cert_der).map_err(|e| {
             TsaVerifyError::InvalidCertificate(format!("Failed to parse certificate: {}", e))
         })?;
+
+        // Inspect RSA public key in each certificate
+        debug!("🔍 Certificate {} RSA Key Analysis:", i);
+        debug!("   📄 Subject: {}", cert.subject());
+
+        if let Ok(public_key) = RsaPublicKey::from_public_key_der(cert.public_key().raw) {
+            debug!("   🔢 RSA Key Size: {} bits", public_key.size() * 8);
+            debug!("   🔢 Public Exponent (e): {}", public_key.e());
+            debug!(
+                "   🔢 Uses RSA-65537: {}",
+                public_key.e() == &BigUint::from(65537u32)
+            );
+
+            // Show modulus characteristics
+            let n_bytes = public_key.n().to_bytes_be();
+            debug!("   🔢 Modulus Size: {} bytes", n_bytes.len());
+            let n_hex: Vec<String> = n_bytes
+                .iter()
+                .take(8)
+                .map(|b| format!("{:02X}", b))
+                .collect();
+            debug!("   🔢 Modulus Start: {}", n_hex.join(""));
+        } else {
+            debug!("   ❌ Failed to parse RSA public key from certificate");
+        }
+
         certs.push(cert);
     }
 
@@ -572,6 +647,24 @@ fn verify_cms_signature(
     })?;
 
     debug!("✅ RSA public key parsed successfully");
+
+    // Display RSA parameters
+    debug!("🔍 RSA Key Parameters:");
+    debug!("   🔢 Modulus (n) bit size: {} bits", public_key.size() * 8);
+    debug!("   🔢 Public exponent (e): {}", public_key.e());
+    debug!(
+        "   🔢 Is e = 65537? {}",
+        public_key.e() == &BigUint::from(65537u32)
+    );
+
+    // Show first few bytes of modulus for identification
+    let n_bytes = public_key.n().to_bytes_be();
+    let n_preview: Vec<String> = n_bytes
+        .iter()
+        .take(16)
+        .map(|b| format!("{:02X}", b))
+        .collect();
+    debug!("   🔢 Modulus (n) preview: {}", n_preview.join(" "));
 
     // Ensure signature algorithm is RSA
     if sig_alg_oid != "1.2.840.113549.1.1.1" {

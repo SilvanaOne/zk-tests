@@ -1,0 +1,18 @@
+[package]
+name = "p2p"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio      = { version = "1.38", features = ["full"] }
+tonic      = "0.11"         # gRPC over HTTP/2 ➜ TCP
+tonic-reflection = "0.11"   # gRPC reflection for easier testing
+prost      = "0.12"         # Protobuf (auto pulled by tonic)
+serde      = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.98"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"                # For generating random data in tests
+
+[build-dependencies]
+tonic-build = "0.11"        # code-gen for *.proto

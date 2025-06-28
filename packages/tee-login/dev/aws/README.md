@@ -56,11 +56,11 @@ aws ec2 describe-instance-types --region "$REGION" \
 
 aws ec2 describe-instance-types --region "$REGION" \
  --filters \
- "Name=vcpu-info.default-vcpus,Values=4" \
+ "Name=vcpu-info.default-vcpus,Values=1" \
  "Name=processor-info.supported-architecture,Values=arm64" \
  "Name=hypervisor,Values=nitro" \
  --query 'InstanceTypes[].InstanceType' \
- --output text | tr '\t' '\n' > arm64-4.txt
+ --output text | tr '\t' '\n' > arm64-1.txt
 
 ## Python
 

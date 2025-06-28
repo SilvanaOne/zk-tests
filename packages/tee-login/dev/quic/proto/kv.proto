@@ -1,0 +1,15 @@
+syntax = "proto3";
+package kv;
+
+// an envelope so we can multiplex messages inside one QUIC stream
+message Envelope {
+  oneof kind {
+    Put       put    = 1;
+    Get       get    = 2;
+    GetReply  reply  = 3;
+  }
+}
+
+message Put      { string key = 1; bytes value = 2; }
+message Get      { string key = 1; }
+message GetReply { bytes value = 1; bool found = 2; }

@@ -5,7 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
+    "test": "NODE_NO_WARNINGS=1 node -r ./log.cjs --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
     "template": "npm run test test/template.test.ts",
     "signature": "npm run test test/signature.test.ts",
     "signature-rust": "npm run test test/signature-rust.test.ts",
@@ -39,6 +39,7 @@
     "@types/secp256k1": "^4.0.6",
     "c8": "^10.1.3",
     "dotenv": "^16.5.0",
+    "log-timestamp": "^0.3.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },

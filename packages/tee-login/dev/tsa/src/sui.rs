@@ -1,6 +1,30 @@
+use base64::prelude::*;
+use fastcrypto::traits::ToFromBytes;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sui_sdk::types::{
+    committee::Committee, crypto::Signature, messages_checkpoint::CheckpointDigest,
+};
+
+// Verify the signature that comes from sui_getCheckpoint.
+// pub fn verify_checkpoint_sig(
+//     digest: &CheckpointDigest, // already BCS-encoded + domain tag
+//     b64_sig: &str,
+//     committee: &Committee, // for the same epoch
+// ) -> anyhow::Result<()> {
+//     // 1. decode the 48-byte BLS signature
+//     let sig_bytes = BASE64_STANDARD.decode(b64_sig)?;
+//     anyhow::ensure!(sig_bytes.len() == 48, "checkpoint sig must be 48 bytes");
+//     let sig = Signature::from_bytes(&sig_bytes)?;
+
+//     // 2. obtain the group public key for that committee
+//     let pk = committee.threshold_public_key().clone();
+
+//     // 3. verify (hash-to-curve already done when digest was built)
+//     sig.fast_aggregate_verify_prehashed(digest.as_ref(), &pk)
+//         .map_err(|_| anyhow::anyhow!("BLS verify failed"))
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -104,4 +128,14 @@ pub async fn get_last_checkpoint(
 
     // Then get the checkpoint data for that sequence number
     get_checkpoint(sequence_number, full_node_url).await
+}
+
+pub async fn get_committee_info(
+    epoch: u64,
+    full_node_url: &str,
+) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    let response = get_request("suix_getLatestSuiSystemState", vec![], full_node_url).await?;
+
+    let committee_info = response["result"].clone();
+    Ok(committee_info)
 }
