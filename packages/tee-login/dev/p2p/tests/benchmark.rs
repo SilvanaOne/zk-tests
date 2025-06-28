@@ -11,8 +11,9 @@ pub mod kv {
 use kv::kv_client::KvClient;
 use kv::{GetRequest, PutRequest};
 
-const NUM_OPERATIONS: usize = 100000;
-const SERVER_ADDR: &str = "http://127.0.0.1:50051";
+const NUM_OPERATIONS: usize = 1000000;
+
+const SERVER_ADDR: &str = "http://127.0.0.1:50052"; //"http://54.82.214.64:80"; 
 
 #[tokio::test]
 async fn benchmark_kv_operations() {
