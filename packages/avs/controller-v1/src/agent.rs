@@ -1,16 +1,15 @@
 use crate::coordination;
 use crate::docker::{load_container, run_container};
 use bollard::Docker;
-use coordination::reply_to_request;
-use futures::future;
 use std::time::Instant;
+use sui_sdk::SuiClient;
 
 pub async fn agent(
-    key: &str,
+    sui_client: &SuiClient,
     docker: &Docker,
     last_nonce: u64,
 ) -> Result<u64, Box<dyn std::error::Error>> {
-    let request = coordination::get_request().await?;
+    let request = coordination::get_request(sui_client).await?;
 
     if request.nonce <= last_nonce {
         return Ok(last_nonce);
@@ -20,33 +19,7 @@ pub async fn agent(
     println!("Action: {:?}", request.action);
     println!("Request: {:?}", request.request);
     println!("Starting the agent...");
-
     let time_start = Instant::now();
-
-    // Number of parallel requests to run
-    let num_parallel_requests = 1000;
-
-    // Create futures for all parallel requests
-    let mut futures = Vec::new();
-    for _ in 0..num_parallel_requests {
-        futures.push(reply_to_request(
-            &key,
-            &request.agent,
-            &request.action,
-            &request.request,
-            5_000_000,
-        ));
-    }
-
-    // Run all requests in parallel
-    let results = futures::future::join_all(futures).await;
-
-    // Check all results for errors
-    for result in results {
-        result?;
-    }
-    println!("Executed in {:?} ms", time_start.elapsed().as_millis());
-    return Ok(request.nonce);
 
     // Parameters for container loading
     let use_local_image = false; // Set to false to use Docker Hub
@@ -71,6 +44,9 @@ pub async fn agent(
     let time_loaded = Instant::now();
     let duration = time_loaded.duration_since(time_start);
     println!("Container loaded in {:?}", duration);
+
+    // Get key from environment
+    let key = std::env::var("SUI_KEY").expect("SUI_KEY must be set in .env file");
 
     // Run container with 30 second timeout
     println!("Running container with 900 second timeout...");

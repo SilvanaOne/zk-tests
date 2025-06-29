@@ -15,7 +15,7 @@ use axum::{Router, routing::get, routing::post};
 use server::AppState;
 use server::app::{login, ping};
 use server::common::{get_attestation, health_check};
-use server::coordination::get_request_data;
+//use server::coordination::get_request_data;
 use server::dynamodb::DynamoDB;
 use server::keys::Keys;
 use server::stats::stats;
@@ -43,14 +43,14 @@ async fn main() -> Result<()> {
 
     info!("Starting Silvana TEE Login server...");
     debug!("Tracing initialized with all log levels: error, warn, info, debug, trace");
-    let request_data = match get_request_data().await {
-        Ok(data) => data,
-        Err(e) => {
-            error!("Failed to get request data: {}", e);
-            return Err(anyhow::anyhow!("Failed to get request data: {}", e));
-        }
-    };
-    info!("Request data: {:?}", request_data);
+    // let request_data = match get_request_data().await {
+    //     Ok(data) => data,
+    //     Err(e) => {
+    //         error!("Failed to get request data: {}", e);
+    //         return Err(anyhow::anyhow!("Failed to get request data: {}", e));
+    //     }
+    // };
+    // info!("Request data: {:?}", request_data);
     let keys = Keys::new();
     info!(
         "Generated ephemeral key pair for session: {:?}",

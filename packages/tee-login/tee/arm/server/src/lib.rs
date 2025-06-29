@@ -13,7 +13,7 @@ pub mod app;
 pub mod attestation;
 pub mod auth;
 pub mod common;
-pub mod coordination;
+//pub mod coordination;
 pub mod db;
 pub mod dynamodb;
 pub mod encrypt;
