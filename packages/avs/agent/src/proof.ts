@@ -1,4 +1,5 @@
 import { Field, ZkProgram, VerificationKey, Cache } from "o1js";
+import os from "node:os";
 
 const program = ZkProgram({
   name: "program",
@@ -25,6 +26,17 @@ export async function processRequest(request: string): Promise<string> {
     const value = Number(request.split("-")[1]);
     console.log("value", value);
     if (request.startsWith("proof-")) {
+      const usedMemoryBefore = os.totalmem() - os.freemem();
+      const info = {
+        cpuCores: os.cpus().length,
+        totalMemory: os.totalmem().toLocaleString(),
+        freeMemory: os.freemem().toLocaleString(),
+        usedMemory: usedMemoryBefore.toLocaleString(),
+        osVersion: os.version(),
+        nodeVersion: process.version,
+        architecture: os.arch(),
+      };
+      console.log("info", info);
       console.log("Proving...");
 
       if (!vk) {
@@ -36,6 +48,13 @@ export async function processRequest(request: string): Promise<string> {
       console.time("proved");
       const result = await program.add(Field(value));
       console.timeEnd("proved");
+      const usedMemoryAfter = os.totalmem() - os.freemem();
+      const infoAfter = {
+        freeMemory: os.freemem().toLocaleString(),
+        usedMemory: usedMemoryAfter.toLocaleString(),
+        additionalMemory: (usedMemoryAfter - usedMemoryBefore).toLocaleString(),
+      };
+      console.log("info after", infoAfter);
       return `proved result: ${
         result?.proof?.publicOutput?.toJSON() ?? "failed"
       }`;

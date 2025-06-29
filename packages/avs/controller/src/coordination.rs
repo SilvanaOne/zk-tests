@@ -2,8 +2,8 @@ use sui_sdk::rpc_types::{SuiMoveStruct, SuiMoveValue, SuiParsedData};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub async fn get_sui_client() -> Result<SuiClient, Box<dyn std::error::Error>> {
-    let sui_testnet = SuiClientBuilder::default().build_testnet().await?;
-    println!("Sui testnet version: {}", sui_testnet.api_version());
+    let sui_testnet = SuiClientBuilder::default().build_devnet().await?;
+    println!("Sui devnet version: {}", sui_testnet.api_version());
     Ok(sui_testnet)
 }
 
@@ -16,7 +16,8 @@ pub struct RequestData {
 }
 
 const REQUEST_OBJECT_ID: &str =
-    "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15";
+    "0x779c9b84d589ff2c9a70b1c9659b5900ccb3bdf84e04bbf86b6d3a7deb15c6bd"; // devnet
+// "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15"; testnet
 
 pub async fn get_request(
     sui_client: &SuiClient,

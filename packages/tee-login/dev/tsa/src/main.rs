@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting TSA checker");
 
     let endpoints = ["https://freetsa.org/tsr", "http://timestamp.digicert.com"];
-    let full_node_url = "https://fullnode.mainnet.sui.io"; //"https://rpc-testnet.suiscan.xyz"; // ;
+    let full_node_url = "https://rpc-testnet.suiscan.xyz"; // "https://fullnode.testnet.sui.io"; //"https://rpc-testnet.suiscan.xyz"; // ;
 
     for endpoint in &endpoints {
         info!("\n=== Testing TSA: {} ===", endpoint);

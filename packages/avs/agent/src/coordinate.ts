@@ -9,15 +9,25 @@ import { Transaction, TransactionArgument } from "@mysten/sui/transactions";
 // console.log("devnet", getFullnodeUrl("devnet"));
 // console.log("testnet", getFullnodeUrl("testnet"));
 // console.log("mainnet", getFullnodeUrl("mainnet"));
+// const suiClient = new SuiClient({
+//   url: getFullnodeUrl("testnet"),
+// });
+// const packageID =
+//   "0x083b05207706164149ba6cc263d799408e7018a77d5c68b3ae1caa6d1b650d93";
+// const requestObjectID =
+//   "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15";
+// const responseObjectID =
+//   "0x3a1e97787ee327749bffcae1609f797617fb8b6d7eb6e4f86cef51460c14a150";
+
 const suiClient = new SuiClient({
-  url: getFullnodeUrl("testnet"),
+  url: getFullnodeUrl("devnet"),
 });
 const packageID =
-  "0x083b05207706164149ba6cc263d799408e7018a77d5c68b3ae1caa6d1b650d93";
+  "0x2008a7902505db7f1a5f5ff5b0ed336f448331113037e43cf4c267c256b11a6f";
 const requestObjectID =
-  "0x904a847618f0a6724e3a8894286310190c4e53aa81d8ac61ddd1f073c6881a15";
+  "0x779c9b84d589ff2c9a70b1c9659b5900ccb3bdf84e04bbf86b6d3a7deb15c6bd";
 const responseObjectID =
-  "0x3a1e97787ee327749bffcae1609f797617fb8b6d7eb6e4f86cef51460c14a150";
+  "0xc60f243beda8efcba686ff247250dac117d223de78da4dd351a300aab6be356a";
 
 export async function coordination(params: {
   key: string;

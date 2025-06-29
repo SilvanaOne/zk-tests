@@ -24,8 +24,8 @@ pub async fn agent(
     // Parameters for container loading
     let use_local_image = false; // Set to false to use Docker Hub
     //let image_source = "../agent/out/testagent2.tar.gz";
-    let image_source = format!("dfstio/{}:flat-amd64", request.agent);
-    let image_name = format!("dfstio/{}:flat-amd64", request.agent);
+    let image_source = format!("dfstio/{}:latest", request.agent);
+    let image_name = format!("dfstio/{}:latest", request.agent);
     //let image_name = "dfstio/testagent2:latest";
 
     // Load the container image

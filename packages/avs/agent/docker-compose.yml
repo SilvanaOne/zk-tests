@@ -37,7 +37,7 @@ services:
         docker buildx create --name builder || true &&
         echo "${DOCKER_PASSWORD}" | docker login --username ${DOCKER_USERNAME} --password-stdin &&
         docker buildx use builder &&
-        docker buildx build --platform linux/amd64,linux/arm64 --push -t ${DOCKER_USERNAME}/${IMAGE_NAME}:latest . &&
+        docker buildx build --no-cache --platform linux/amd64,linux/arm64 --push -t ${DOCKER_USERNAME}/${IMAGE_NAME}:latest . &&
         echo 'Image pushed to Docker Hub'
       "
 

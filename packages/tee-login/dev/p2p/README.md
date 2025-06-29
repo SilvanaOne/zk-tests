@@ -22,3 +22,17 @@ grpcurl -plaintext -import-path ./proto -proto kv.proto \
 
 cargo run --release -- 127.0.0.1:50051
 cargo test benchmark_kv_operations --release -- --nocapture
+
+# Put a key-value pair
+
+curl -X POST http://localhost:51051/api/kv \
+ -H "Content-Type: application/json" \
+ -d '{"key": "hello", "value": "world"}'
+
+# Get a value
+
+curl http://localhost:51051/api/kv/hello
+
+# List all keys
+
+curl http://localhost:51051/api/keys

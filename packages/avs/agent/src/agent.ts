@@ -10,6 +10,7 @@ async function agent() {
   const action = process.argv[4];
   console.log("Agent arguments:", key.length, agent, action);
   const result = await processRequest(action);
+  console.log("Agent result:", result);
   await coordination({
     key,
     agent,
