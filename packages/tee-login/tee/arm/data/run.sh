@@ -22,6 +22,7 @@ echo "127.0.0.64   dynamodb.us-east-1.amazonaws.com" >> /etc/hosts
 echo "127.0.0.65   kms.us-east-1.amazonaws.com" >> /etc/hosts
 echo "127.0.0.66   www.googleapis.com" >> /etc/hosts
 echo "127.0.0.67   api.github.com" >> /etc/hosts
+echo "127.0.0.68   fullnode.devnet.sui.io" >> /etc/hosts
 
 
 cat /etc/hosts
@@ -44,6 +45,7 @@ echo "$JSON_RESPONSE" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /tmp/kvpair
 /app/forwarder 127.0.0.65 443 3 8102 &
 /app/forwarder 127.0.0.66 443 3 8103 &
 /app/forwarder 127.0.0.67 443 3 8104 &
+/app/forwarder 127.0.0.68 443 3 8105 &
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
