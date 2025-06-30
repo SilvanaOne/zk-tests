@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package silvana.events;
+
+// Common timestamp for all events
+message Timestamp {
+  uint64 timestamp = 1;
+}
+
+// Coordinator Events
+message CoordinatorStartedEvent {
+  string coordinator_id = 1;
+  string ethereum_address = 2;
+  string sui_ed25519_address = 3;
+  uint64 timestamp = 4;
+}
+
+message AgentStartedJobEvent {
+  string coordinator_id = 1;
+  string developer = 2;
+  string agent = 3;
+  string app = 4;
+  string job_id = 5;
+  uint64 timestamp = 6;
+}
+
+message AgentFinishedJobEvent {
+  string coordinator_id = 1;
+  string developer = 2;
+  string agent = 3;
+  string app = 4;
+  string job_id = 5;
+  uint64 duration = 6;
+  uint64 timestamp = 7;
+}
+
+message CoordinationTxEvent {
+  string coordinator_id = 1;
+  string developer = 2;
+  string agent = 3;
+  string app = 4;
+  string job_id = 5;
+  string memo = 6;
+  string tx_hash = 7;
+  uint64 timestamp = 8;
+}
+
+message CoordinatorErrorEvent {
+  string coordinator_id = 1;
+  string error = 2;
+  uint64 timestamp = 3;
+}
+
+message ClientTransactionEvent {
+  string coordinator_id = 1;
+  string developer = 2;
+  string agent = 3;
+  string app = 4;
+  string client_ip_address = 5;
+  string method = 6;
+  bytes data = 7;
+  string tx_hash = 8;
+  uint64 sequence = 9;
+  uint64 timestamp = 10;
+}
+
+// Union type for all coordinator events
+message CoordinatorEvent {
+  oneof event {
+    CoordinatorStartedEvent coordinator_started = 1;
+    AgentStartedJobEvent agent_started_job = 2;
+    AgentFinishedJobEvent agent_finished_job = 3;
+    CoordinationTxEvent coordination_tx = 4;
+    CoordinatorErrorEvent coordinator_error = 5;
+    ClientTransactionEvent client_transaction = 6;
+  }
+}
+
+// Agent Events
+message AgentMessageEvent {
+  string coordinator_id = 1;
+  string type = 2;
+  string developer = 3;
+  string agent = 4;
+  string app = 5;
+  string job_id = 6;
+  repeated uint64 sequences = 7;
+  uint64 timestamp = 8;
+  string message = 9;
+}
+
+message AgentErrorEvent {
+  string coordinator_id = 1;
+  string type = 2;
+  string developer = 3;
+  string agent = 4;
+  string app = 5;
+  string job_id = 6;
+  repeated uint64 sequences = 7;
+  uint64 timestamp = 8;
+  string error = 9;
+}
+
+message AgentTransactionEvent {
+  string coordinator_id = 1;
+  string type = 2;
+  string developer = 3;
+  string agent = 4;
+  string app = 5;
+  string job_id = 6;
+  repeated uint64 sequences = 7;
+  uint64 timestamp = 8;
+  string tx_hash = 9;
+  string chain = 10;
+  string network = 11;
+  string tx_type = 12;
+  string memo = 13;
+  string metadata = 14; // JSON string
+}
+
+// Union type for all agent events
+message AgentEvent {
+  oneof event {
+    AgentMessageEvent message = 1;
+    AgentErrorEvent error = 2;
+    AgentTransactionEvent transaction = 3;
+  }
+}
+
+// Main event wrapper
+message Event {
+  oneof event_type {
+    CoordinatorEvent coordinator = 1;
+    AgentEvent agent = 2;
+  }
+}
+
+// Batch events request
+message SubmitEventsRequest {
+  repeated Event events = 1;
+}
+
+message SubmitEventsResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 processed_count = 3;
+}
+
+// gRPC service definition
+service SilvanaEventsService {
+  rpc SubmitEvents(SubmitEventsRequest) returns (SubmitEventsResponse);
+  rpc SubmitEvent(Event) returns (SubmitEventsResponse);
+} 
