@@ -11,7 +11,7 @@ use events::*;
 
 // Configuration - easily changeable parameters
 const NUM_EVENTS: usize = 10000;
-const SERVER_ADDR: &str = "http://127.0.0.1:50051";
+const SERVER_ADDR: &str = "http://18.194.39.156:50051"; //"http://127.0.0.1:50051";
 const COORDINATOR_ID: &str = "test-coordinator-001";
 
 #[tokio::test]
@@ -33,22 +33,35 @@ async fn test_send_coordinator_and_agent_events() {
         }
     };
 
-    // Test coordinator events
-    println!("\n📋 Testing Coordinator Events...");
-    test_coordinator_events(&mut client).await;
+    // Clone clients for parallel execution
+    let mut client1 = client.clone();
+    let mut client2 = client.clone();
+    let mut client3 = client.clone();
 
-    // Test agent events
-    println!("\n🤖 Testing Agent Events...");
-    test_agent_events(&mut client).await;
+    println!("\n🚀 Running tests in parallel...");
+    
+    // Run all tests concurrently
+    let (coordinator_result, agent_result, batch_result) = tokio::join!(
+        async {
+            println!("📋 Starting Coordinator Events...");
+            test_coordinator_events(&mut client1).await
+        },
+        async {
+            println!("🤖 Starting Agent Events...");
+            test_agent_events(&mut client2).await
+        },
+        async {
+            println!("📦 Starting Batch Submission...");
+            test_batch_events(&mut client3).await
+        }
+    );
 
-    // Test batch submission
-    println!("\n📦 Testing Batch Submission...");
-    test_batch_events(&mut client).await;
+    println!("✅ All parallel tests completed!");
 
     let duration = start_time.elapsed();
     let duration_ms = duration.as_millis();
 
-    // Calculate total events dispatched
+    // Calculate total events dispatched (sent concurrently)
     let coordinator_event_types = 6; // 6 different coordinator event types
     let agent_event_types = 3; // 3 different agent event types
     let total_events =
@@ -59,20 +72,20 @@ async fn test_send_coordinator_and_agent_events() {
         0.0
     };
 
-    println!("\n🎉 All integration tests completed successfully!");
+    println!("\n🎉 All parallel integration tests completed successfully!");
     println!(
-        "📊 Total events dispatched: {} events ({} coordinator + {} agent + {} batch)",
+        "📊 Total events dispatched concurrently: {} events ({} coordinator + {} agent + {} batch)",
         total_events,
         coordinator_event_types * NUM_EVENTS,
         agent_event_types * NUM_EVENTS,
         NUM_EVENTS
     );
     println!(
-        "⏱️  Total test duration: {}ms ({:.2}s)",
+        "⏱️  Total parallel execution time: {}ms ({:.2}s)",
         duration_ms,
         duration.as_secs_f64()
     );
-    println!("🚀 Throughput: {:.1} events/second", events_per_second);
+    println!("🚀 Concurrent throughput: {:.1} events/second", events_per_second);
 }
 
 async fn test_coordinator_events(
@@ -89,44 +102,70 @@ async fn test_coordinator_events(
         ("client_transaction", create_client_transaction_event()),
     ];
 
-    for (event_type, event) in test_cases {
-        println!("  📤 Sending {} events of type: {}", NUM_EVENTS, event_type);
+    println!("  🚀 Sending {} event types concurrently with {} events each", test_cases.len(), NUM_EVENTS);
 
-        for i in 1..=NUM_EVENTS {
-            let mut test_event = event.clone();
-
-            // Add variation to make events unique
-            modify_coordinator_event_for_uniqueness(&mut test_event, i);
-
-            let request = Request::new(test_event);
-
-            match client.submit_event(request).await {
-                Ok(response) => {
-                    let resp = response.into_inner();
-                    if !resp.success {
-                        println!("    ⚠️  Event {}: {}", i, resp.message);
+    // Run all event types in parallel
+    let handles: Vec<_> = test_cases.into_iter().map(|(event_type, event)| {
+        let mut client_clone = client.clone();
+        let event_type = event_type.to_string();
+        
+        tokio::spawn(async move {
+            println!("  📤 Starting {} events of type: {}", NUM_EVENTS, event_type);
+            
+            // Send events in chunks of 100 concurrently for each type
+            const CHUNK_SIZE: usize = 100;
+            let chunks: Vec<_> = (1..=NUM_EVENTS).collect::<Vec<_>>().chunks(CHUNK_SIZE).map(|chunk| chunk.to_vec()).collect();
+            
+            for chunk in chunks {
+                let chunk_handles: Vec<_> = chunk.into_iter().map(|i| {
+                    let mut test_event = event.clone();
+                    modify_coordinator_event_for_uniqueness(&mut test_event, i);
+                    let mut client_clone2 = client_clone.clone();
+                    let event_type_clone = event_type.clone();
+                    
+                    tokio::spawn(async move {
+                        let request = Request::new(test_event);
+                        match client_clone2.submit_event(request).await {
+                            Ok(response) => {
+                                let resp = response.into_inner();
+                                if !resp.success {
+                                    println!("    ⚠️  {} Event {}: {}", event_type_clone, i, resp.message);
+                                }
+                                assert!(
+                                    resp.processed_count == 1,
+                                    "Expected 1 processed event, got {}",
+                                    resp.processed_count
+                                );
+                                Ok(())
+                            }
+                            Err(e) => {
+                                Err(format!("❌ Failed to send {} event {}: {}", event_type_clone, i, e))
+                            }
+                        }
+                    })
+                }).collect();
+                
+                // Wait for this chunk to complete
+                for handle in chunk_handles {
+                    if let Err(e) = handle.await.unwrap() {
+                        panic!("{}", e);
                     }
-                    assert!(
-                        resp.processed_count == 1,
-                        "Expected 1 processed event, got {}",
-                        resp.processed_count
-                    );
-                }
-                Err(e) => {
-                    panic!("❌ Failed to send {} event {}: {}", event_type, i, e);
                 }
             }
-        }
+            
+            println!("  ✅ Successfully sent {} {} events", NUM_EVENTS, event_type);
+            event_type
+        })
+    }).collect();
 
-        println!(
-            "  ✅ Successfully sent {} {} events",
-            NUM_EVENTS, event_type
-        );
+    // Wait for all event types to complete
+    for handle in handles {
+        handle.await.unwrap();
     }
 
     let duration = start_time.elapsed();
     println!(
-        "  ⏱️  Coordinator events duration: {}ms",
+        "  ⏱️  Coordinator events duration: {}ms (parallel execution)",
         duration.as_millis()
     );
 }
@@ -140,97 +179,161 @@ async fn test_agent_events(client: &mut SilvanaEventsServiceClient<tonic::transp
         ("agent_transaction", create_agent_transaction_event()),
     ];
 
-    for (event_type, event) in test_cases {
-        println!("  📤 Sending {} events of type: {}", NUM_EVENTS, event_type);
+    println!("  🚀 Sending {} agent event types concurrently with {} events each", test_cases.len(), NUM_EVENTS);
 
-        for i in 1..=NUM_EVENTS {
-            let mut test_event = event.clone();
-
-            // Add variation to make events unique
-            modify_agent_event_for_uniqueness(&mut test_event, i);
-
-            let request = Request::new(test_event);
-
-            match client.submit_event(request).await {
-                Ok(response) => {
-                    let resp = response.into_inner();
-                    if !resp.success {
-                        println!("    ⚠️  Event {}: {}", i, resp.message);
+    // Run all event types in parallel
+    let handles: Vec<_> = test_cases.into_iter().map(|(event_type, event)| {
+        let mut client_clone = client.clone();
+        let event_type = event_type.to_string();
+        
+        tokio::spawn(async move {
+            println!("  📤 Starting {} events of type: {}", NUM_EVENTS, event_type);
+            
+            // Send events in chunks of 100 concurrently for each type
+            const CHUNK_SIZE: usize = 100;
+            let chunks: Vec<_> = (1..=NUM_EVENTS).collect::<Vec<_>>().chunks(CHUNK_SIZE).map(|chunk| chunk.to_vec()).collect();
+            
+            for chunk in chunks {
+                let chunk_handles: Vec<_> = chunk.into_iter().map(|i| {
+                    let mut test_event = event.clone();
+                    modify_agent_event_for_uniqueness(&mut test_event, i);
+                    let mut client_clone2 = client_clone.clone();
+                    let event_type_clone = event_type.clone();
+                    
+                    tokio::spawn(async move {
+                        let request = Request::new(test_event);
+                        match client_clone2.submit_event(request).await {
+                            Ok(response) => {
+                                let resp = response.into_inner();
+                                if !resp.success {
+                                    println!("    ⚠️  {} Event {}: {}", event_type_clone, i, resp.message);
+                                }
+                                assert!(
+                                    resp.processed_count == 1,
+                                    "Expected 1 processed event, got {}",
+                                    resp.processed_count
+                                );
+                                Ok(())
+                            }
+                            Err(e) => {
+                                Err(format!("❌ Failed to send {} event {}: {}", event_type_clone, i, e))
+                            }
+                        }
+                    })
+                }).collect();
+                
+                // Wait for this chunk to complete
+                for handle in chunk_handles {
+                    if let Err(e) = handle.await.unwrap() {
+                        panic!("{}", e);
                     }
-                    assert!(
-                        resp.processed_count == 1,
-                        "Expected 1 processed event, got {}",
-                        resp.processed_count
-                    );
-                }
-                Err(e) => {
-                    panic!("❌ Failed to send {} event {}: {}", event_type, i, e);
                 }
             }
-        }
+            
+            println!("  ✅ Successfully sent {} {} events", NUM_EVENTS, event_type);
+            event_type
+        })
+    }).collect();
 
-        println!(
-            "  ✅ Successfully sent {} {} events",
-            NUM_EVENTS, event_type
-        );
+    // Wait for all event types to complete
+    for handle in handles {
+        handle.await.unwrap();
     }
 
     let duration = start_time.elapsed();
-    println!("  ⏱️  Agent events duration: {}ms", duration.as_millis());
+    println!("  ⏱️  Agent events duration: {}ms (parallel execution)", duration.as_millis());
 }
 
 async fn test_batch_events(client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>) {
     let start_time = Instant::now();
 
-    println!("  📦 Creating batch of {} mixed events", NUM_EVENTS);
+    // Split into multiple concurrent batches
+    const BATCH_SIZE: usize = 1000; // Send batches of 1000 events each
+    let num_batches = (NUM_EVENTS + BATCH_SIZE - 1) / BATCH_SIZE;
+    
+    println!("  🚀 Creating {} concurrent batches of ~{} mixed events each (total: {})", 
+             num_batches, BATCH_SIZE, NUM_EVENTS);
 
-    let mut events = Vec::new();
+    // Create concurrent batch handles
+    let handles: Vec<_> = (0..num_batches).map(|batch_idx| {
+        let mut client_clone = client.clone();
+        
+        tokio::spawn(async move {
+            let start_event_idx = batch_idx * BATCH_SIZE + 1;
+            let end_event_idx = std::cmp::min((batch_idx + 1) * BATCH_SIZE, NUM_EVENTS);
+            let batch_event_count = end_event_idx - start_event_idx + 1;
+            
+            println!("  📦 Creating batch {} with {} events (events {}-{})", 
+                     batch_idx + 1, batch_event_count, start_event_idx, end_event_idx);
 
-    for i in 1..=NUM_EVENTS {
-        // Alternate between coordinator and agent events
-        let event = if i % 2 == 0 {
-            let mut event = create_coordinator_started_event();
-            modify_coordinator_event_for_uniqueness(&mut event, i);
-            event
-        } else {
-            let mut event = create_agent_message_event();
-            modify_agent_event_for_uniqueness(&mut event, i);
-            event
-        };
+            let mut events = Vec::new();
 
-        events.push(event);
-    }
+            for i in start_event_idx..=end_event_idx {
+                // Alternate between coordinator and agent events
+                let event = if i % 2 == 0 {
+                    let mut event = create_coordinator_started_event();
+                    modify_coordinator_event_for_uniqueness(&mut event, i);
+                    event
+                } else {
+                    let mut event = create_agent_message_event();
+                    modify_agent_event_for_uniqueness(&mut event, i);
+                    event
+                };
 
-    let request = Request::new(SubmitEventsRequest { events });
-
-    match client.submit_events(request).await {
-        Ok(response) => {
-            let resp = response.into_inner();
-            println!(
-                "  📊 Batch result: {} - Processed: {}",
-                resp.message, resp.processed_count
-            );
-
-            if !resp.success {
-                println!("    ⚠️  Batch had some failures: {}", resp.message);
+                events.push(event);
             }
 
-            // Should have processed all events or failed gracefully
-            assert!(
-                resp.processed_count <= NUM_EVENTS as u32,
-                "Processed count {} exceeds sent count {}",
-                resp.processed_count,
-                NUM_EVENTS
-            );
-        }
-        Err(e) => {
-            panic!("❌ Failed to send batch events: {}", e);
+            let request = Request::new(SubmitEventsRequest { events });
+
+            match client_clone.submit_events(request).await {
+                Ok(response) => {
+                    let resp = response.into_inner();
+                    println!(
+                        "  📊 Batch {} result: {} - Processed: {}/{}",
+                        batch_idx + 1, resp.message, resp.processed_count, batch_event_count
+                    );
+
+                    if !resp.success {
+                        println!("    ⚠️  Batch {} had some failures: {}", batch_idx + 1, resp.message);
+                    }
+
+                    // Should have processed all events or failed gracefully
+                    assert!(
+                        resp.processed_count <= batch_event_count as u32,
+                        "Batch {} processed count {} exceeds sent count {}",
+                        batch_idx + 1,
+                        resp.processed_count,
+                        batch_event_count
+                    );
+
+                    Ok((batch_idx + 1, resp.processed_count as usize, batch_event_count))
+                }
+                Err(e) => {
+                    Err(format!("❌ Failed to send batch {} events: {}", batch_idx + 1, e))
+                }
+            }
+        })
+    }).collect();
+
+    // Wait for all batches to complete and collect results
+    let mut total_processed = 0;
+    let mut total_sent = 0;
+    
+    for handle in handles {
+        match handle.await.unwrap() {
+            Ok((batch_num, processed, sent)) => {
+                total_processed += processed;
+                total_sent += sent;
+                println!("  ✅ Batch {} completed: {}/{} events", batch_num, processed, sent);
+            }
+            Err(e) => panic!("{}", e),
         }
     }
 
     let duration = start_time.elapsed();
-    println!("  ✅ Successfully sent batch of {} events", NUM_EVENTS);
-    println!("  ⏱️  Batch events duration: {}ms", duration.as_millis());
+    println!("  🎉 Successfully sent {} concurrent batches totaling {}/{} events", 
+             num_batches, total_processed, total_sent);
+    println!("  ⏱️  Concurrent batch duration: {}ms", duration.as_millis());
 }
 
 // Helper functions to create different event types
