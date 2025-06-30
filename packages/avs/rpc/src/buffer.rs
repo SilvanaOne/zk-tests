@@ -8,10 +8,10 @@ use tokio::time::{interval, sleep, timeout, Duration, Instant};
 use tracing::{debug, error, info, warn};
 
 const DEFAULT_BATCH_SIZE: usize = 100;
-const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(500); // Reduced for faster processing
 // Bounded channel capacity - prevents OOM
-const DEFAULT_CHANNEL_CAPACITY: usize = 100000;
-// Maximum memory usage in bytes (roughly 100MB for events)
+const DEFAULT_CHANNEL_CAPACITY: usize = 250000; // Increased for high-throughput scenarios
+// Maximum memory usage in bytes (1GB for events)
 const MAX_MEMORY_BYTES: usize = 1000 * 1024 * 1024;
 // Base timeout for adding events when buffer is full (will be adjusted based on flush interval)
 const BASE_ADD_EVENT_TIMEOUT: Duration = Duration::from_millis(100);
@@ -22,7 +22,7 @@ const MAX_DB_RETRIES: usize = 10;
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(100);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 // Semaphore strategy thresholds (as fraction of total capacity)
-const FAST_PATH_THRESHOLD: usize = 4; // Use fast path when > 1/4 permits available
+const FAST_PATH_THRESHOLD: usize = 8; // Use fast path when > 1/8 permits available (more conservative)
 
 // Wrapper for events with their semaphore permits
 type EventWithPermit = (Event, OwnedSemaphorePermit);
@@ -176,6 +176,7 @@ impl EventBuffer {
                     self.stats
                         .backpressure_events
                         .fetch_add(1, Ordering::Relaxed);
+                    self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
                     return Err(anyhow!("Backpressure active - buffer at capacity (race)"));
                 }
             }
@@ -198,6 +199,7 @@ impl EventBuffer {
                             self.stats
                                 .backpressure_events
                                 .fetch_add(1, Ordering::Relaxed);
+                            self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
                             return Err(anyhow!("Backpressure semaphore closed"));
                         }
                         Err(_) => {
@@ -205,6 +207,7 @@ impl EventBuffer {
                             self.stats
                                 .backpressure_events
                                 .fetch_add(1, Ordering::Relaxed);
+                            self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
                             warn!("Backpressure timeout - system overloaded");
                             return Err(anyhow!(
                                 "Backpressure timeout - buffer acquisition failed"
@@ -218,6 +221,7 @@ impl EventBuffer {
             self.stats
                 .backpressure_events
                 .fetch_add(1, Ordering::Relaxed);
+            self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
             warn!("Backpressure applied - buffer full");
             return Err(anyhow!("Backpressure active - buffer at capacity"));
         };
