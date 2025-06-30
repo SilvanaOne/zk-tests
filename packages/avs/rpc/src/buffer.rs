@@ -177,6 +177,16 @@ impl EventBuffer {
                         .backpressure_events
                         .fetch_add(1, Ordering::Relaxed);
                     self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
+                    
+                    let current_memory = self.memory_usage.load(Ordering::Relaxed);
+                    warn!(
+                        "Backpressure active - buffer at capacity (race condition): {}/{} permits, {}MB/{}MB memory ({:.1}%)",
+                        total_permits - self.backpressure_semaphore.available_permits(),
+                        total_permits,
+                        current_memory / (1024 * 1024),
+                        MAX_MEMORY_BYTES / (1024 * 1024),
+                        (current_memory as f64 / MAX_MEMORY_BYTES as f64) * 100.0
+                    );
                     return Err(anyhow!("Backpressure active - buffer at capacity (race)"));
                 }
             }
@@ -208,7 +218,17 @@ impl EventBuffer {
                                 .backpressure_events
                                 .fetch_add(1, Ordering::Relaxed);
                             self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
-                            warn!("Backpressure timeout - system overloaded");
+                            
+                            let current_memory = self.memory_usage.load(Ordering::Relaxed);
+                            warn!(
+                                "Backpressure timeout - system overloaded: {}/{} permits, {}MB/{}MB memory ({:.1}%), timeout: {:?}",
+                                total_permits - self.backpressure_semaphore.available_permits(),
+                                total_permits,
+                                current_memory / (1024 * 1024),
+                                MAX_MEMORY_BYTES / (1024 * 1024),
+                                (current_memory as f64 / MAX_MEMORY_BYTES as f64) * 100.0,
+                                self.add_event_timeout
+                            );
                             return Err(anyhow!(
                                 "Backpressure timeout - buffer acquisition failed"
                             ));
@@ -222,7 +242,16 @@ impl EventBuffer {
                 .backpressure_events
                 .fetch_add(1, Ordering::Relaxed);
             self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
-            warn!("Backpressure applied - buffer full");
+            
+            let current_memory = self.memory_usage.load(Ordering::Relaxed);
+            warn!(
+                "Backpressure applied - buffer full: {}/{} permits used, {}MB/{}MB memory ({:.1}% memory utilization)",
+                total_permits - available_permits,
+                total_permits,
+                current_memory / (1024 * 1024),
+                MAX_MEMORY_BYTES / (1024 * 1024),
+                (current_memory as f64 / MAX_MEMORY_BYTES as f64) * 100.0
+            );
             return Err(anyhow!("Backpressure active - buffer at capacity"));
         };
 
@@ -253,6 +282,17 @@ impl EventBuffer {
                 self.stats
                     .backpressure_events
                     .fetch_add(1, Ordering::Relaxed);
+                
+                let current_memory = self.memory_usage.load(Ordering::Relaxed);
+                warn!(
+                    "Event buffer send timeout - system overloaded: {}/{} permits, {}MB/{}MB memory ({:.1}%), timeout: {:?}",
+                    total_permits - self.backpressure_semaphore.available_permits(),
+                    total_permits,
+                    current_memory / (1024 * 1024),
+                    MAX_MEMORY_BYTES / (1024 * 1024),
+                    (current_memory as f64 / MAX_MEMORY_BYTES as f64) * 100.0,
+                    self.add_event_timeout
+                );
                 Err(anyhow!("Event buffer timeout - system overloaded"))
             }
         }
