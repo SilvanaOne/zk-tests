@@ -272,12 +272,15 @@ impl EventDatabase {
         let duration = start_time.elapsed();
         let duration_ms = duration.as_millis();
 
+        let events_per_second = events.len() as f64 / duration.as_secs_f64();
+        
         info!(
-            "Successfully batch inserted {} events using {} SQL statements in {}ms ({:.2}s)",
+            "Successfully batch inserted {} events using {} SQL statements in {}ms ({:.2}s) - {:.0} events/second",
             events.len(),
             sql_statements_count,
             duration_ms,
-            duration.as_secs_f64()
+            duration.as_secs_f64(),
+            events_per_second
         );
 
         Ok(events.len()) // Return the number of events we attempted to insert

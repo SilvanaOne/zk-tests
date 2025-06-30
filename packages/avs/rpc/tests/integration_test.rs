@@ -10,7 +10,7 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Configuration - easily changeable parameters
-const NUM_EVENTS: usize = 100;
+const NUM_EVENTS: usize = 10000;
 const SERVER_ADDR: &str = "http://127.0.0.1:50051";
 const COORDINATOR_ID: &str = "test-coordinator-001";
 

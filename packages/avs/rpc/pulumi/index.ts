@@ -92,7 +92,7 @@ export = async () => {
 
       // User data script loaded from user-data.sh file
       userData: fs.readFileSync("./user-data.sh", "utf8"),
-      userDataReplaceOnChange: false,
+      userDataReplaceOnChange: true,
 
       tags: {
         Name: "silvana-rpc-instance",
@@ -101,7 +101,7 @@ export = async () => {
       },
     },
     {
-      ignoreChanges: ["userData"],
+      //ignoreChanges: ["userData"],
     }
   );
 

@@ -93,7 +93,7 @@ A gRPC service that accepts event streams and efficiently batches them to TiDB s
 
    ```bash
    # In another terminal, run integration tests
-   cargo test --test integration_test -- --nocapture
+   cargo test --release --test integration_test -- --nocapture
    ```
 
    See **[TESTING.md](TESTING.md)** for detailed testing instructions.
