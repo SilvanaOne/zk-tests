@@ -10,9 +10,9 @@ use tracing::{debug, error, info, warn};
 const DEFAULT_BATCH_SIZE: usize = 100;
 const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 // Bounded channel capacity - prevents OOM
-const DEFAULT_CHANNEL_CAPACITY: usize = 10000;
+const DEFAULT_CHANNEL_CAPACITY: usize = 100000;
 // Maximum memory usage in bytes (roughly 100MB for events)
-const MAX_MEMORY_BYTES: usize = 100 * 1024 * 1024;
+const MAX_MEMORY_BYTES: usize = 1000 * 1024 * 1024;
 // Base timeout for adding events when buffer is full (will be adjusted based on flush interval)
 const BASE_ADD_EVENT_TIMEOUT: Duration = Duration::from_millis(100);
 // Circuit breaker threshold
