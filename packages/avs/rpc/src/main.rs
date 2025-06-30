@@ -206,7 +206,7 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "10000".to_string())
         .parse::<usize>()
         .unwrap_or(10000)
-        .min(50000); // Cap channel capacity
+        .min(250000); // Cap channel capacity
 
     info!("🚀 Starting Silvana RPC server");
     info!("📡 Server address: {}", server_addr);
