@@ -35,6 +35,7 @@ pub struct EventBuffer {
     circuit_breaker: Arc<CircuitBreaker>,
     backpressure_semaphore: Arc<Semaphore>,
     add_event_timeout: Duration,
+    total_permits: usize, // Store the actual channel capacity
 }
 
 // Atomic counters for lock-free stats updates
@@ -137,6 +138,7 @@ impl EventBuffer {
             circuit_breaker,
             backpressure_semaphore,
             add_event_timeout,
+            total_permits: channel_capacity, // Store the actual capacity
         }
     }
 
@@ -165,7 +167,7 @@ impl EventBuffer {
         // Acquire backpressure permit with tiered strategy
         // Strategy: Fast path when plenty of capacity, blocking with timeout when near capacity
         let available_permits = self.backpressure_semaphore.available_permits();
-        let total_permits = DEFAULT_CHANNEL_CAPACITY; // We know this from construction
+        let total_permits = self.total_permits; // Use the actual configured capacity
 
         let permit = if available_permits > total_permits / FAST_PATH_THRESHOLD {
             // Fast path: plenty of capacity, use non-blocking
