@@ -163,7 +163,7 @@ describe("Based rollup", async () => {
       console.log("receiptChainHash", receiptChainHash.toJSON());
 
       const tx = await Mina.transaction(
-        { sender, fee: 200_000_000, memo: `event3_${i}`, nonce: nonce++ },
+        { sender, fee: 500_000_000, memo: `event3_${i}`, nonce: nonce++ },
         async () => {
           const update = AccountUpdate.create(sender);
           update.body.events = events;

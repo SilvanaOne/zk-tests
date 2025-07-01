@@ -6,10 +6,6 @@ authors = ["DFST"]
 license = "Apache-2.0"
 default-run = "rpc"
 
-[[bin]]
-name = "drop_all_tables"
-path = "drop_all_tables.rs"
-
 [dependencies]
 tonic = "0.10"
 prost = "0.12"

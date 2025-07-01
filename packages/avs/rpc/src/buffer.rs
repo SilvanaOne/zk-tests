@@ -1,4 +1,5 @@
 use crate::database::EventDatabase;
+use crate::entities;
 use crate::events::Event;
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -7,11 +8,14 @@ use tokio::sync::{mpsc, OwnedSemaphorePermit, RwLock, Semaphore};
 use tokio::time::{interval, sleep, timeout, Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+// Default configuration constants (kept for potential future use)
+#[allow(dead_code)]
 const DEFAULT_BATCH_SIZE: usize = 100;
+#[allow(dead_code)]
 const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(500); // Reduced for faster processing
-// Bounded channel capacity - prevents OOM
+#[allow(dead_code)]
 const DEFAULT_CHANNEL_CAPACITY: usize = 250000; // Increased for high-throughput scenarios
-// Maximum memory usage in bytes (1GB for events)
+                                                // Maximum memory usage in bytes (1GB for events)
 const MAX_MEMORY_BYTES: usize = 1000 * 1024 * 1024;
 // Base timeout for adding events when buffer is full (will be adjusted based on flush interval)
 const BASE_ADD_EVENT_TIMEOUT: Duration = Duration::from_millis(100);
@@ -58,9 +62,11 @@ pub struct BufferStats {
     pub total_processed: u64,
     pub total_errors: u64,
     pub total_dropped: u64,
+    #[allow(dead_code)]
     pub total_retries: u64,
     pub current_buffer_size: usize,
     pub current_memory_bytes: usize,
+    #[allow(dead_code)]
     pub last_flush_time: Option<Instant>,
     pub backpressure_events: u64,
     pub circuit_breaker_open: bool,
@@ -86,6 +92,7 @@ struct BatchProcessor {
 }
 
 impl EventBuffer {
+    #[allow(dead_code)]
     pub fn new(database: Arc<EventDatabase>) -> Self {
         Self::with_config(
             database,
@@ -179,7 +186,7 @@ impl EventBuffer {
                         .backpressure_events
                         .fetch_add(1, Ordering::Relaxed);
                     self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
-                    
+
                     let current_memory = self.memory_usage.load(Ordering::Relaxed);
                     warn!(
                         "Backpressure active - buffer at capacity (race condition): {}/{} permits, {}MB/{}MB memory ({:.1}%)",
@@ -220,7 +227,7 @@ impl EventBuffer {
                                 .backpressure_events
                                 .fetch_add(1, Ordering::Relaxed);
                             self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
-                            
+
                             let current_memory = self.memory_usage.load(Ordering::Relaxed);
                             warn!(
                                 "Backpressure timeout - system overloaded: {}/{} permits, {}MB/{}MB memory ({:.1}%), timeout: {:?}",
@@ -244,7 +251,7 @@ impl EventBuffer {
                 .backpressure_events
                 .fetch_add(1, Ordering::Relaxed);
             self.stats.total_dropped.fetch_add(1, Ordering::Relaxed);
-            
+
             let current_memory = self.memory_usage.load(Ordering::Relaxed);
             warn!(
                 "Backpressure applied - buffer full: {}/{} permits used, {}MB/{}MB memory ({:.1}% memory utilization)",
@@ -284,7 +291,7 @@ impl EventBuffer {
                 self.stats
                     .backpressure_events
                     .fetch_add(1, Ordering::Relaxed);
-                
+
                 let current_memory = self.memory_usage.load(Ordering::Relaxed);
                 warn!(
                     "Event buffer send timeout - system overloaded: {}/{} permits, {}MB/{}MB memory ({:.1}%), timeout: {:?}",
@@ -392,7 +399,7 @@ impl EventBuffer {
                         + 64
                 }
                 crate::events::coordinator_event::Event::CoordinatorError(e) => {
-                    e.coordinator_id.len() + e.error.len() + 64
+                    e.coordinator_id.len() + e.message.len() + 64
                 }
                 crate::events::coordinator_event::Event::ClientTransaction(e) => {
                     e.coordinator_id.len()
@@ -414,30 +421,23 @@ impl EventBuffer {
         match &agent_event.event {
             Some(event) => match event {
                 crate::events::agent_event::Event::Message(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
+                    let base_size = e.coordinator_id.len()
                         + e.developer.len()
                         + e.agent.len()
                         + e.app.len()
                         + e.job_id.len()
                         + e.message.len()
-                        + (e.sequences.len() * 8)
-                        + 64
-                }
-                crate::events::agent_event::Event::Error(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
-                        + e.developer.len()
-                        + e.agent.len()
-                        + e.app.len()
-                        + e.job_id.len()
-                        + e.error.len()
-                        + (e.sequences.len() * 8)
-                        + 64
+                        + 64;
+
+                    // Add memory for child table records (each sequence creates a separate record)
+                    let sequence_records_size = e.sequences.len()
+                        * std::mem::size_of::<entities::agent_message_event_sequences::Model>();
+
+                    base_size + sequence_records_size
                 }
                 crate::events::agent_event::Event::Transaction(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
+                    let base_size = e.coordinator_id.len()
+                        + e.tx_type.len()
                         + e.developer.len()
                         + e.agent.len()
                         + e.app.len()
@@ -445,11 +445,15 @@ impl EventBuffer {
                         + e.tx_hash.len()
                         + e.chain.len()
                         + e.network.len()
-                        + e.tx_type.len()
                         + e.memo.len()
                         + e.metadata.len()
-                        + (e.sequences.len() * 8)
-                        + 128
+                        + 128;
+
+                    // Add memory for child table records (each sequence creates a separate record)
+                    let sequence_records_size = e.sequences.len()
+                        * std::mem::size_of::<entities::agent_transaction_event_sequences::Model>();
+
+                    base_size + sequence_records_size
                 }
             },
             None => 0,
@@ -838,7 +842,7 @@ impl BatchProcessor {
                         + 64
                 }
                 crate::events::coordinator_event::Event::CoordinatorError(e) => {
-                    e.coordinator_id.len() + e.error.len() + 64
+                    e.coordinator_id.len() + e.message.len() + 64
                 }
                 crate::events::coordinator_event::Event::ClientTransaction(e) => {
                     e.coordinator_id.len()
@@ -857,34 +861,26 @@ impl BatchProcessor {
     }
 
     fn estimate_agent_event_size(&self, agent_event: &crate::events::AgentEvent) -> usize {
-        // Same logic as in EventBuffer
         match &agent_event.event {
             Some(event) => match event {
                 crate::events::agent_event::Event::Message(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
+                    let base_size = e.coordinator_id.len()
                         + e.developer.len()
                         + e.agent.len()
                         + e.app.len()
                         + e.job_id.len()
                         + e.message.len()
-                        + (e.sequences.len() * 8)
-                        + 64
-                }
-                crate::events::agent_event::Event::Error(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
-                        + e.developer.len()
-                        + e.agent.len()
-                        + e.app.len()
-                        + e.job_id.len()
-                        + e.error.len()
-                        + (e.sequences.len() * 8)
-                        + 64
+                        + 64;
+
+                    // Add memory for child table records (each sequence creates a separate record)
+                    let sequence_records_size = e.sequences.len()
+                        * std::mem::size_of::<entities::agent_message_event_sequences::Model>();
+
+                    base_size + sequence_records_size
                 }
                 crate::events::agent_event::Event::Transaction(e) => {
-                    e.coordinator_id.len()
-                        + e.r#type.len()
+                    let base_size = e.coordinator_id.len()
+                        + e.tx_type.len()
                         + e.developer.len()
                         + e.agent.len()
                         + e.app.len()
@@ -892,11 +888,15 @@ impl BatchProcessor {
                         + e.tx_hash.len()
                         + e.chain.len()
                         + e.network.len()
-                        + e.tx_type.len()
                         + e.memo.len()
                         + e.metadata.len()
-                        + (e.sequences.len() * 8)
-                        + 128
+                        + 128;
+
+                    // Add memory for child table records (each sequence creates a separate record)
+                    let sequence_records_size = e.sequences.len()
+                        * std::mem::size_of::<entities::agent_transaction_event_sequences::Model>();
+
+                    base_size + sequence_records_size
                 }
             },
             None => 0,
