@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tonic::transport::Server;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Include the generated protobuf code
@@ -18,14 +18,14 @@ mod buffer;
 mod database;
 #[path = "entity/mod.rs"]
 mod entities;
+mod monitoring;
 mod rpc;
-mod stats;
 
 use buffer::EventBuffer;
 use database::EventDatabase;
 use events::silvana_events_service_server::SilvanaEventsServiceServer;
+use monitoring::{init_monitoring, spawn_monitoring_tasks, start_metrics_server};
 use rpc::SilvanaEventsServiceImpl;
-use stats::spawn_monitoring_tasks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -40,12 +40,20 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // Initialize monitoring system
+    init_monitoring()?;
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let server_addr = env::var("SERVER_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()
         .expect("Invalid SERVER_ADDR format");
+
+    let metrics_addr = env::var("METRICS_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:9090".to_string())
+        .parse()
+        .expect("Invalid METRICS_ADDR format");
 
     // Parse buffer configuration with memory-safe defaults
     let batch_size = env::var("BATCH_SIZE")
@@ -65,6 +73,7 @@ async fn main() -> Result<()> {
 
     info!("🚀 Starting Silvana RPC server");
     info!("📡 Server address: {}", server_addr);
+    info!("📊 Metrics address: {}", metrics_addr);
     info!("🗄️  Database: TiDB Serverless");
     info!(
         "⚙️  Batch size: {} events (minimum trigger - actual batches may be larger)",
@@ -93,19 +102,35 @@ async fn main() -> Result<()> {
 
     info!("✅ Event buffer initialized with memory safety features");
 
-    // Start monitoring tasks (stats reporting and health monitoring)
+    // Start monitoring tasks
     spawn_monitoring_tasks(event_buffer.clone());
 
-    // Create gRPC service
+    // Create gRPC service with Prometheus metrics layer
     let events_service = SilvanaEventsServiceImpl::new(event_buffer, Arc::clone(&database));
+    let grpc_service = SilvanaEventsServiceServer::new(events_service);
 
     info!("🎯 Starting gRPC server on {}", server_addr);
 
-    // Start the server
-    Server::builder()
-        .add_service(SilvanaEventsServiceServer::new(events_service))
-        .serve(server_addr)
-        .await?;
+    // Start both servers concurrently
+    let grpc_server = Server::builder()
+        .add_service(grpc_service)
+        .serve(server_addr);
+
+    let metrics_server = start_metrics_server(metrics_addr);
+
+    // Run both servers concurrently
+    tokio::select! {
+        result = grpc_server => {
+            if let Err(e) = result {
+                error!("gRPC server failed: {}", e);
+            }
+        }
+        result = metrics_server => {
+            if let Err(e) = result {
+                error!("Metrics server failed: {}", e);
+            }
+        }
+    }
 
     Ok(())
 }

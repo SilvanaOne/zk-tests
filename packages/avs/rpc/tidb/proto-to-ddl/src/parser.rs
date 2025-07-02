@@ -17,6 +17,8 @@ pub struct ProtoField {
     pub field_number: u32,
     pub is_repeated: bool,
     pub is_optional: bool,
+    pub has_search_option: bool,
+    pub has_sequences_option: bool,
 }
 
 pub fn parse_proto_file(content: &str) -> Result<Vec<ProtoMessage>> {
@@ -65,9 +67,10 @@ pub fn parse_proto_file(content: &str) -> Result<Vec<ProtoMessage>> {
 fn parse_message_fields(message_body: &str) -> Result<Vec<ProtoField>> {
     let mut fields = Vec::new();
 
-    // Regex to match field definitions
-    let field_regex = Regex::new(r"(?:repeated\s+|optional\s+)?(\w+)\s+(\w+)\s*=\s*(\d+)")
-        .context("Failed to compile field regex")?;
+    // Regex to match field definitions with optional field options
+    let field_regex =
+        Regex::new(r"(?:repeated\s+|optional\s+)?(\w+)\s+(\w+)\s*=\s*(\d+)(?:\s*\[([^\]]*)\])?")
+            .context("Failed to compile field regex")?;
 
     for line in message_body.lines() {
         let line = line.trim();
@@ -88,12 +91,26 @@ fn parse_message_fields(message_body: &str) -> Result<Vec<ProtoField>> {
                 .parse()
                 .context("Failed to parse field number")?;
 
+            // Parse field options if present
+            let mut has_search_option = false;
+            let mut has_sequences_option = false;
+
+            if let Some(options_match) = captures.get(4) {
+                let options_str = options_match.as_str();
+                has_search_option = options_str.contains("(silvana.options.search) = true")
+                    || options_str.contains("(search) = true");
+                has_sequences_option = options_str.contains("(silvana.options.sequences) = true")
+                    || options_str.contains("(sequences) = true");
+            }
+
             fields.push(ProtoField {
                 name: field_name,
                 field_type,
                 field_number,
                 is_repeated,
                 is_optional,
+                has_search_option,
+                has_sequences_option,
             });
         }
     }
@@ -122,8 +139,11 @@ pub fn generate_mysql_ddl(messages: &[ProtoMessage], database: &str) -> Result<S
     for message in messages {
         let table_name = message.name.to_snake_case();
 
-        // Collect `repeated` fields – these will become child tables and NOT columns
-        let mut repeated_fields: Vec<&ProtoField> = Vec::new();
+        // Collect fields with `sequences` option – these will become child tables and NOT columns
+        let mut sequence_fields: Vec<&ProtoField> = Vec::new();
+
+        // Collect fields with `search` option for FULLTEXT indexes
+        let mut search_fields: Vec<&ProtoField> = Vec::new();
 
         ddl.push_str(&format!("-- {} Table\n", message.name));
         ddl.push_str(&format!(
@@ -140,14 +160,23 @@ pub fn generate_mysql_ddl(messages: &[ProtoMessage], database: &str) -> Result<S
 
         // Convert proto fields to MySQL columns
         for field in &message.fields {
-            // Repeated fields are extracted into child tables
-            if field.is_repeated {
-                repeated_fields.push(field);
+            // Fields with sequences option are extracted into child tables
+            if field.has_sequences_option {
+                sequence_fields.push(field);
                 continue;
             }
 
+            // Collect fields with search option for FULLTEXT indexes
+            if field.has_search_option {
+                search_fields.push(field);
+            }
+
             let column_name = field.name.to_snake_case();
-            let mysql_type = proto_type_to_mysql(&field.field_type, field.is_repeated);
+            let mysql_type = proto_type_to_mysql_with_options(
+                &field.field_type,
+                field.is_repeated,
+                field.has_search_option,
+            );
             let nullable = if field.is_optional || field.is_repeated {
                 "NULL"
             } else {
@@ -172,7 +201,14 @@ pub fn generate_mysql_ddl(messages: &[ProtoMessage], database: &str) -> Result<S
 
         // Add specific indexes based on common patterns
         for field in &message.fields {
+            // Skip fields that become child tables
+            if field.has_sequences_option {
+                continue;
+            }
+
             let column_name = field.name.to_snake_case();
+
+            // For TEXT columns (search fields), use key length for regular indexes
             if column_name.contains("id") && column_name != "id" {
                 ddl.push_str(&format!(
                     ",\n    INDEX idx_{} (`{}`)",
@@ -193,12 +229,25 @@ pub fn generate_mysql_ddl(messages: &[ProtoMessage], database: &str) -> Result<S
             }
         }
 
+        // Add FULLTEXT indexes for string fields marked with search option
+        for field in &search_fields {
+            // Only add FULLTEXT indexes for string fields
+            if field.field_type == "string" {
+                let column_name = field.name.to_snake_case();
+                // For TiDB, use VARCHAR type for FULLTEXT search and STANDARD parser
+                ddl.push_str(&format!(
+                    ",\n    FULLTEXT INDEX ft_idx_{} (`{}`) WITH PARSER STANDARD",
+                    column_name, column_name
+                ));
+            }
+        }
+
         ddl.push_str("\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n");
 
         // ------------------------------------------------------------------
-        // Child tables for each repeated field
+        // Child tables for each field with sequences option
         // ------------------------------------------------------------------
-        for field in repeated_fields {
+        for field in sequence_fields {
             let child_table_name = format!("{}_{}", table_name, field.name.to_snake_case());
             let parent_fk = format!("{}_id", table_name); // e.g. agent_message_event_id
             let value_col = field.name.to_singular().to_snake_case(); // e.g. sequences -> sequence
@@ -231,8 +280,8 @@ pub fn generate_mysql_ddl(messages: &[ProtoMessage], database: &str) -> Result<S
                 child_table_name, value_col
             ));
             ddl.push_str(&format!(
-                "    FOREIGN KEY (`{}`) REFERENCES {} (`id`) ON DELETE CASCADE\n",
-                parent_fk, table_name
+                "    CONSTRAINT fk_{}_{} FOREIGN KEY (`{}`) REFERENCES {} (`id`) ON DELETE CASCADE\n",
+                child_table_name, parent_fk, parent_fk, table_name
             ));
             ddl.push_str(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n");
         }
@@ -252,9 +301,9 @@ pub fn generate_entities(messages: &[ProtoMessage], output_dir: &str) -> Result<
     for message in messages {
         generate_entity_file(message, output_dir)?;
 
-        // Also generate entities for each repeated field (child tables)
+        // Also generate entities for each field with sequences option (child tables)
         for field in &message.fields {
-            if field.is_repeated {
+            if field.has_sequences_option {
                 generate_child_entity_file(message, field, output_dir)?;
             }
         }
@@ -275,10 +324,10 @@ fn generate_mod_file(messages: &[ProtoMessage], output_dir: &str) -> Result<()> 
         content.push_str(&format!("pub mod {};\n", module_name));
     }
 
-    // Child modules for repeated fields
+    // Child modules for fields with sequences option
     for message in messages {
         for field in &message.fields {
-            if field.is_repeated {
+            if field.has_sequences_option {
                 let child_mod = format!(
                     "{}_{}",
                     message.name.to_snake_case(),
@@ -349,8 +398,8 @@ fn generate_entity_file(message: &ProtoMessage, output_dir: &str) -> Result<()> 
 
     // Proto fields
     for field in &message.fields {
-        // Skip repeated fields - they are handled by child tables
-        if field.is_repeated {
+        // Skip fields with sequences option - they are handled by child tables
+        if field.has_sequences_option {
             continue;
         }
 
@@ -428,12 +477,26 @@ fn generate_child_entity_file(
 }
 
 pub fn proto_type_to_mysql(proto_type: &str, is_repeated: bool) -> String {
+    proto_type_to_mysql_with_options(proto_type, is_repeated, false)
+}
+
+pub fn proto_type_to_mysql_with_options(
+    proto_type: &str,
+    is_repeated: bool,
+    has_search_option: bool,
+) -> String {
     if is_repeated {
         return "JSON".to_string();
     }
 
     match proto_type {
-        "string" => "VARCHAR(255)".to_string(),
+        "string" => {
+            if has_search_option {
+                "VARCHAR(255)".to_string() // Use VARCHAR for searchable fields - supports both regular and FULLTEXT indexes
+            } else {
+                "VARCHAR(255)".to_string()
+            }
+        }
         "bytes" => "BLOB".to_string(),
         "int32" | "sint32" | "sfixed32" => "INT".to_string(),
         "int64" | "sint64" | "sfixed64" => "BIGINT".to_string(),
@@ -442,6 +505,9 @@ pub fn proto_type_to_mysql(proto_type: &str, is_repeated: bool) -> String {
         "float" => "FLOAT".to_string(),
         "double" => "DOUBLE".to_string(),
         "bool" => "BOOLEAN".to_string(),
+
+        // Handle known enum types
+        "LogLevel" => "TINYINT".to_string(),
 
         // Handle custom message types as JSON for now
         _ if proto_type.chars().next().unwrap().is_uppercase() => "JSON".to_string(),
@@ -463,6 +529,10 @@ pub fn proto_type_to_rust(proto_type: &str, is_repeated: bool, is_optional: bool
             "float" => "f32".to_string(),
             "double" => "f64".to_string(),
             "bool" => "bool".to_string(),
+
+            // Handle known enum types
+            "LogLevel" => "i32".to_string(), // Protobuf enums are typically i32
+
             // Handle custom message types as JSON
             _ if proto_type.chars().next().unwrap().is_uppercase() => {
                 "serde_json::Value".to_string()
@@ -506,9 +576,9 @@ mod tests {
     #[test]
     fn test_field_parsing() {
         let message_body = r#"
-            string coordinator_id = 1;
+            string coordinator_id = 1 [ (silvana.options.search) = true];
             uint64 timestamp = 2;
-            repeated string tags = 3;
+            repeated uint64 sequences = 3 [ (silvana.options.sequences) = true];
             optional string description = 4;
         "#;
 
@@ -518,8 +588,15 @@ mod tests {
         assert_eq!(fields[0].field_type, "string");
         assert!(!fields[0].is_repeated);
         assert!(!fields[0].is_optional);
+        assert!(fields[0].has_search_option);
+        assert!(!fields[0].has_sequences_option);
 
         assert!(fields[2].is_repeated);
+        assert!(fields[2].has_sequences_option);
+        assert!(!fields[2].has_search_option);
+
         assert!(fields[3].is_optional);
+        assert!(!fields[3].has_search_option);
+        assert!(!fields[3].has_sequences_option);
     }
 }

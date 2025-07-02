@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 use tonic::{Request, Response, Status};
 use tracing::{debug, error, warn};
 
@@ -6,10 +7,13 @@ use crate::buffer::EventBuffer;
 use crate::database::EventDatabase;
 use crate::events::{
     silvana_events_service_server::SilvanaEventsService, AgentMessageEventWithId,
-    AgentTransactionEventWithId, Event, GetAgentMessageEventsBySequenceRequest,
-    GetAgentMessageEventsBySequenceResponse, GetAgentTransactionEventsBySequenceRequest,
-    GetAgentTransactionEventsBySequenceResponse, SubmitEventsRequest, SubmitEventsResponse,
+    AgentTransactionEventWithId, CoordinatorMessageEventWithRelevance, Event,
+    GetAgentMessageEventsBySequenceRequest, GetAgentMessageEventsBySequenceResponse,
+    GetAgentTransactionEventsBySequenceRequest, GetAgentTransactionEventsBySequenceResponse,
+    SearchCoordinatorMessageEventsRequest, SearchCoordinatorMessageEventsResponse,
+    SubmitEventsRequest, SubmitEventsResponse,
 };
+use crate::monitoring::record_grpc_request;
 
 pub struct SilvanaEventsServiceImpl {
     event_buffer: EventBuffer,
@@ -31,6 +35,8 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
         &self,
         request: Request<SubmitEventsRequest>,
     ) -> Result<Response<SubmitEventsResponse>, Status> {
+        let start_time = Instant::now();
+
         let events = request.into_inner().events;
         let event_count = events.len();
 
@@ -66,6 +72,11 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
         if !success {
             warn!("{}", message);
         }
+
+        // Record metrics
+        let duration = start_time.elapsed();
+        let status_code = if success { "200" } else { "500" };
+        record_grpc_request("submit_events", status_code, duration.as_secs_f64());
 
         Ok(Response::new(SubmitEventsResponse {
             success,
@@ -241,6 +252,73 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
             Err(e) => {
                 error!("Failed to query agent message events by sequence: {}", e);
                 Err(Status::internal(format!("Database query failed: {}", e)))
+            }
+        }
+    }
+
+    async fn search_coordinator_message_events(
+        &self,
+        request: Request<SearchCoordinatorMessageEventsRequest>,
+    ) -> Result<Response<SearchCoordinatorMessageEventsResponse>, Status> {
+        let req = request.into_inner();
+
+        debug!(
+            "Searching coordinator message events with query: '{}'",
+            req.search_query
+        );
+
+        // Validate search query
+        if req.search_query.trim().is_empty() {
+            return Err(Status::invalid_argument("Search query cannot be empty"));
+        }
+
+        match self
+            .database
+            .search_coordinator_message_events(
+                &req.search_query,
+                req.limit,
+                req.offset,
+                req.coordinator_id,
+            )
+            .await
+        {
+            Ok((events, total_count)) => {
+                let proto_events: Vec<CoordinatorMessageEventWithRelevance> = events
+                    .into_iter()
+                    .map(|event| {
+                        // level is already an i32 from the database
+                        let level = event.level;
+
+                        CoordinatorMessageEventWithRelevance {
+                            id: event.id,
+                            coordinator_id: event.coordinator_id,
+                            event_timestamp: event.event_timestamp,
+                            level,
+                            message: event.message,
+                            created_at_timestamp: event.created_at_timestamp,
+                            relevance_score: event.relevance_score,
+                        }
+                    })
+                    .collect();
+
+                let returned_count = proto_events.len() as u32;
+
+                debug!(
+                    "Found {} coordinator message events for search query: '{}'",
+                    returned_count, req.search_query
+                );
+
+                Ok(Response::new(SearchCoordinatorMessageEventsResponse {
+                    success: true,
+                    message: format!("Found {} events matching search query", returned_count),
+                    events: proto_events,
+                    total_count,
+                    returned_count,
+                }))
+            }
+            Err(e) => {
+                error!("Failed to search coordinator message events: {}", e);
+                Err(Status::internal(format!("Full-text search failed: {}", e)))
             }
         }
     }

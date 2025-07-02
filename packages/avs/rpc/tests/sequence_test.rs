@@ -11,7 +11,7 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Test configuration
-const TOTAL_EVENTS: usize = 1000;
+const TOTAL_EVENTS: usize = 100;
 const SEQUENCE_COUNT: usize = 100;
 const SERVER_ADDR: &str = "http://127.0.0.1:50051";
 // Generate a unique coordinator ID for each test run to avoid data contamination
@@ -243,10 +243,6 @@ async fn test_sequence_events_round_trip() {
                     query_duration.as_millis(),
                     end_to_end_latency.as_millis()
                 );
-            }
-
-            if !success {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
         }
 

@@ -8,6 +8,7 @@ use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
 };
 use std::convert::TryFrom;
+use tracing;
 
 #[derive(Debug, Clone)]
 pub struct KeyPair {
@@ -72,7 +73,7 @@ pub fn verify_signature(
         let sig = signature.strip_prefix("0x").unwrap_or(signature);
         let sig_bytes = hex::decode(sig)?;
 
-        // Ethereum `personal_sign` signatures are 65 bytes (r || s || v)
+        // Ethereum `personal_sign` signatures are 65 bytes (r || s || v)
         if sig_bytes.len() != 65 {
             return Ok(VerifyResult {
                 is_valid: false,
@@ -82,21 +83,36 @@ pub fn verify_signature(
             });
         }
 
-        // Split signature into r||s (first 64 bytes) and v (last byte)
+        // Split signature into r||s (first 64 bytes) and v (last byte)
         let mut sig_rs = [0u8; 64];
         sig_rs.copy_from_slice(&sig_bytes[..64]);
         let v = sig_bytes[64];
+
+        // Add debug logging to see what v values we're getting
+        tracing::debug!("Received signature v value: {}", v);
+
         // Normalise to raw recovery‑id in range 0..=3
-        let rec_id_byte = match v {
-            27 | 28 => v - 27, // legacy Metamask quirk
-            0 | 1 => v,
-            _ => {
-                return Ok(VerifyResult {
-                    is_valid: false,
-                    address: None,
-                    nonce: None,
-                    error: Some("Invalid recovery id".into()),
-                });
+        // Handle both legacy (27/28) and EIP-155 chain-specific signatures
+        let rec_id_byte = if v >= 35 {
+            // EIP-155 signature: v = {0,1} + CHAIN_ID * 2 + 35
+            // To get recovery id: (v - 35) % 2
+            (v - 35) % 2
+        } else {
+            match v {
+                27 | 28 => v - 27, // legacy Metamask quirk
+                0 | 1 => v,        // modern format
+                _ => {
+                    tracing::warn!(
+                        "Invalid recovery id: v={}, expected 0,1,27,28 or v>=35 for EIP-155",
+                        v
+                    );
+                    return Ok(VerifyResult {
+                        is_valid: false,
+                        address: None,
+                        nonce: None,
+                        error: Some(format!("Invalid recovery id: {}", v)),
+                    });
+                }
             }
         };
 
@@ -112,7 +128,7 @@ pub fn verify_signature(
         let msg = Message::from_digest(digest);
         let pubkey = secp.recover_ecdsa(&msg, &rec_sig)?;
 
-        // Derive address from the public key (Keccak256 of the uncompressed key, last 20 bytes)
+        // Derive address from the public key (Keccak256 of the uncompressed key, last 20 bytes)
         let pubkey_uncompressed = pubkey.serialize_uncompressed();
         let hashed_pubkey = keccak256(&pubkey_uncompressed[1..]); // skip the 0x04 prefix
         let recovered_address = H160::from_slice(&hashed_pubkey[12..]);

@@ -15,7 +15,7 @@ pub struct Model {
     pub app: String,
     pub job_id: String,
     pub event_timestamp: i64,
-    pub level: serde_json::Value,
+    pub level: i32,
     pub message: String,
     pub created_at: Option<DateTimeUtc>,
     pub updated_at: Option<DateTimeUtc>,

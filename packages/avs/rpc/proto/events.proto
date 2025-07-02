@@ -1,10 +1,13 @@
 syntax = "proto3";
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/descriptor.proto";
+import "options.proto";
 
 package silvana.events;
 
 option go_package = "github.com/SilvanaOne/zk-tests/packages/avs/rpc/proto;events";
+
 
 // Log level enumeration for messages
 enum LogLevel {
@@ -17,58 +20,58 @@ enum LogLevel {
 
 // Coordinator Events
 message CoordinatorStartedEvent {
-  string coordinator_id = 1;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
   string ethereum_address = 2;
   string sui_ed25519_address = 3;
   uint64 event_timestamp = 4;
 }
 
 message AgentStartedJobEvent {
-  string coordinator_id = 1;
-  string developer = 2;
-  string agent = 3;
-  string app = 4;
-  string job_id = 5;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string developer = 2 [ (silvana.options.search) = true];
+  string agent = 3 [ (silvana.options.search) = true];
+  string app = 4 [ (silvana.options.search) = true];
+  string job_id = 5 [ (silvana.options.search) = true];
   uint64 event_timestamp = 6;
 }
 
 message AgentFinishedJobEvent {
-  string coordinator_id = 1;
-  string developer = 2;
-  string agent = 3;
-  string app = 4;
-  string job_id = 5;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string developer = 2 [ (silvana.options.search) = true];
+  string agent = 3 [ (silvana.options.search) = true];
+  string app = 4 [ (silvana.options.search) = true];
+  string job_id = 5 [ (silvana.options.search) = true];
   uint64 duration = 6;
   uint64 event_timestamp = 7;
 }
 
 message CoordinationTxEvent {
-  string coordinator_id = 1;
-  string developer = 2;
-  string agent = 3;
-  string app = 4;
-  string job_id = 5;
-  string memo = 6;
-  string tx_hash = 7;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string developer = 2 [ (silvana.options.search) = true];
+  string agent = 3 [ (silvana.options.search) = true];
+  string app = 4 [ (silvana.options.search) = true];
+  string job_id = 5 [ (silvana.options.search) = true];
+  string memo = 6 [ (silvana.options.search) = true];
+  string tx_hash = 7 [ (silvana.options.search) = true];
   uint64 event_timestamp = 8;
 }
 
 message CoordinatorMessageEvent {
-  string coordinator_id = 1;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
   uint64 event_timestamp = 2;
   LogLevel level = 3;
-  string message = 4;
+  string message = 4 [ (silvana.options.search) = true];
 }
 
 message ClientTransactionEvent {
-  string coordinator_id = 1;
-  string developer = 2;
-  string agent = 3;
-  string app = 4;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string developer = 2 [ (silvana.options.search) = true];
+  string agent = 3 [ (silvana.options.search) = true];
+  string app = 4 [ (silvana.options.search) = true];
   string client_ip_address = 5;
-  string method = 6;
+  string method = 6 [ (silvana.options.search) = true];
   bytes data = 7;
-  string tx_hash = 8;
+  string tx_hash = 8 [ (silvana.options.search) = true];
   uint64 sequence = 9;
   uint64 event_timestamp = 10;
 }
@@ -87,12 +90,12 @@ message CoordinatorEvent {
 
 // Agent Events
 message AgentMessageEvent {
-  string coordinator_id = 1;
-  string developer = 2;
-  string agent = 3;
-  string app = 4;
-  string job_id = 5;
-  repeated uint64 sequences = 6;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string developer = 2 [ (silvana.options.search) = true];
+  string agent = 3 [ (silvana.options.search) = true];
+  string app = 4 [ (silvana.options.search) = true];
+  string job_id = 5 [ (silvana.options.search) = true];
+  repeated uint64 sequences = 6 [ (silvana.options.sequences) = true];
   uint64 event_timestamp = 7;
   LogLevel level = 8;
   string message = 9;
@@ -100,19 +103,19 @@ message AgentMessageEvent {
 
 
 message AgentTransactionEvent {
-  string coordinator_id = 1;
-  string tx_type = 2;
-  string developer = 3;
-  string agent = 4;
-  string app = 5;
-  string job_id = 6;
-  repeated uint64 sequences = 7;
+  string coordinator_id = 1 [ (silvana.options.search) = true];
+  string tx_type = 2 [ (silvana.options.search) = true];
+  string developer = 3 [ (silvana.options.search) = true];
+  string agent = 4 [ (silvana.options.search) = true];
+  string app = 5 [ (silvana.options.search) = true];
+  string job_id = 6 [ (silvana.options.search) = true];
+  repeated uint64 sequences = 7 [ (silvana.options.sequences) = true];
   uint64 event_timestamp = 8;
-  string tx_hash = 9;
-  string chain = 10;
-  string network = 11;
-  string memo = 12;
-  string metadata = 13; // JSON string
+  string tx_hash = 9 [ (silvana.options.search) = true];
+  string chain = 10 [ (silvana.options.search) = true];
+  string network = 11 [ (silvana.options.search) = true];
+  string memo = 12 [ (silvana.options.search) = true];
+  string metadata = 13 [ (silvana.options.search) = true]; // JSON string
 }
 
 // Union type for all agent events
@@ -212,6 +215,32 @@ message GetAgentMessageEventsBySequenceResponse {
   uint32 returned_count = 5;
 }
 
+// Full-text search request/response messages for CoordinatorMessageEvent
+message SearchCoordinatorMessageEventsRequest {
+  string search_query = 1;              // Search terms for full-text search
+  optional uint32 limit = 2;            // Optional pagination limit
+  optional uint32 offset = 3;           // Optional pagination offset
+  optional string coordinator_id = 4;   // Optional filter by coordinator
+}
+
+message CoordinatorMessageEventWithRelevance {
+  int64 id = 1;                          // Database ID
+  string coordinator_id = 2;
+  uint64 event_timestamp = 3;
+  LogLevel level = 4;
+  string message = 5;
+  int64 created_at_timestamp = 6;        // Database timestamp
+  double relevance_score = 7;            // TiDB FTS relevance score (BM25)
+}
+
+message SearchCoordinatorMessageEventsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated CoordinatorMessageEventWithRelevance events = 3;
+  uint32 total_count = 4;                // Total matching events (for pagination)
+  uint32 returned_count = 5;             // Number of events in this response
+}
+
 // gRPC service definition
 service SilvanaEventsService {
   rpc SubmitEvents(SubmitEventsRequest) returns (SubmitEventsResponse);
@@ -220,4 +249,7 @@ service SilvanaEventsService {
   // Query methods for retrieving events by sequence
   rpc GetAgentTransactionEventsBySequence(GetAgentTransactionEventsBySequenceRequest) returns (GetAgentTransactionEventsBySequenceResponse);
   rpc GetAgentMessageEventsBySequence(GetAgentMessageEventsBySequenceRequest) returns (GetAgentMessageEventsBySequenceResponse);
+  
+  // Full-text search methods
+  rpc SearchCoordinatorMessageEvents(SearchCoordinatorMessageEventsRequest) returns (SearchCoordinatorMessageEventsResponse);
 } 

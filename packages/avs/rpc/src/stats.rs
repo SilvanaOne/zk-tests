@@ -14,7 +14,8 @@ pub async fn stats_reporter(buffer: EventBuffer) {
         let stats = buffer.get_stats().await;
         let health = buffer.health_check().await;
 
-        info!(
+        if !health {
+            info!(
             "📊 Buffer Stats - Received: {}, Processed: {}, Errors: {}, Dropped: {}, Buffer: {}, Memory: {}MB, Backpressure: {}, Health: {}",
             stats.total_received,
             stats.total_processed,
@@ -25,6 +26,7 @@ pub async fn stats_reporter(buffer: EventBuffer) {
             stats.backpressure_events,
             if health { "✅" } else { "❌" }
         );
+        }
 
         // Alert on concerning metrics
         if stats.circuit_breaker_open {

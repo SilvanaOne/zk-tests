@@ -40,6 +40,17 @@ pub struct AgentMessageEventResult {
     pub created_at_timestamp: i64,
 }
 
+#[derive(Debug, Clone)]
+pub struct CoordinatorMessageEventResult {
+    pub id: i64,
+    pub coordinator_id: String,
+    pub event_timestamp: u64,
+    pub level: i32,
+    pub message: String,
+    pub created_at_timestamp: i64,
+    pub relevance_score: f64,
+}
+
 pub struct EventDatabase {
     connection: DatabaseConnection,
 }
@@ -731,14 +742,8 @@ impl EventDatabase {
                 .map(|dt| dt.timestamp())
                 .unwrap_or(0);
 
-            // Parse level from JSON
-            let level_json: serde_json::Value =
-                row.try_get("", "level").unwrap_or(serde_json::Value::Null);
-            let level = if let Some(level_num) = level_json.as_u64() {
-                level_num as u32
-            } else {
-                0 // Default to DEBUG level
-            };
+            // Parse level as integer (TINYINT in database)
+            let level: u32 = row.try_get::<i32>("", "level").unwrap_or(0) as u32;
 
             results.push(AgentMessageEventResult {
                 id: row.try_get("", "id").unwrap_or(0),
@@ -752,6 +757,105 @@ impl EventDatabase {
                 level,
                 message: row.try_get("", "message").unwrap_or_default(),
                 created_at_timestamp,
+            });
+        }
+
+        Ok((results, total_count))
+    }
+
+    /// Search CoordinatorMessageEvent using full-text search on message content
+    /// Uses TiDB's FTS_MATCH_WORD function with automatic language detection and BM25 relevance ranking
+    pub async fn search_coordinator_message_events(
+        &self,
+        search_query: &str,
+        limit: Option<u32>,
+        offset: Option<u32>,
+        coordinator_id: Option<String>,
+    ) -> Result<(Vec<CoordinatorMessageEventResult>, u32)> {
+        use sea_orm::{ConnectionTrait, Statement};
+
+        if search_query.trim().is_empty() {
+            return Ok((Vec::new(), 0));
+        }
+
+        // Escape single quotes in search query to prevent SQL injection
+        let escaped_query = search_query.replace("'", "''");
+
+        // Build the WHERE clause - TiDB requires literal strings for FTS_MATCH_WORD, not parameters
+        let mut where_conditions = vec![format!("fts_match_word('{}', message)", escaped_query)];
+        let mut params: Vec<sea_orm::Value> = Vec::new();
+
+        if let Some(coord_id) = &coordinator_id {
+            where_conditions.push("coordinator_id = ?".to_string());
+            params.push(coord_id.clone().into());
+        }
+
+        let where_clause = where_conditions.join(" AND ");
+
+        // First, get the count for pagination
+        let count_query = format!(
+            "SELECT COUNT(*) as count 
+             FROM coordinator_message_event 
+             WHERE {}",
+            where_clause
+        );
+
+        let count_stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            &count_query,
+            params.clone(),
+        );
+
+        let count_result = self.connection.query_one(count_stmt).await?;
+        let total_count: u32 = count_result
+            .map(|row| row.try_get::<i64>("", "count").unwrap_or(0) as u32)
+            .unwrap_or(0);
+
+        if total_count == 0 {
+            return Ok((Vec::new(), 0));
+        }
+
+        // Build the main query with full-text search and relevance scoring
+        let mut main_query = format!(
+            "SELECT id, coordinator_id, event_timestamp, level, message, created_at,
+                    fts_match_word('{}', message) as relevance_score
+             FROM coordinator_message_event 
+             WHERE {}
+             ORDER BY fts_match_word('{}', message) DESC, created_at DESC",
+            escaped_query, where_clause, escaped_query
+        );
+
+        // Add pagination - TiDB requires LIMIT when using FTS_MATCH_WORD in ORDER BY
+        let limit_val = limit.unwrap_or(1000); // Use large default limit if none specified
+        main_query.push_str(&format!(" LIMIT {}", limit_val));
+        if let Some(offset_val) = offset {
+            main_query.push_str(&format!(" OFFSET {}", offset_val));
+        }
+
+        let main_stmt =
+            Statement::from_sql_and_values(sea_orm::DatabaseBackend::MySql, &main_query, params);
+
+        let rows = self.connection.query_all(main_stmt).await?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            let created_at_timestamp: i64 = row
+                .try_get::<chrono::DateTime<chrono::Utc>>("", "created_at")
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0);
+
+            let level: i32 = row.try_get::<i32>("", "level").unwrap_or(0);
+
+            let relevance_score: f64 = row.try_get::<f64>("", "relevance_score").unwrap_or(0.0);
+
+            results.push(CoordinatorMessageEventResult {
+                id: row.try_get("", "id").unwrap_or(0),
+                coordinator_id: row.try_get("", "coordinator_id").unwrap_or_default(),
+                event_timestamp: row.try_get::<i64>("", "event_timestamp").unwrap_or(0) as u64,
+                level,
+                message: row.try_get("", "message").unwrap_or_default(),
+                created_at_timestamp,
+                relevance_score,
             });
         }
 
@@ -848,7 +952,7 @@ fn convert_coordinator_message_event(
         id: ActiveValue::NotSet,
         coordinator_id: ActiveValue::Set(event.coordinator_id.clone()),
         event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
-        level: ActiveValue::Set(serde_json::Value::Number(event.level.into())),
+        level: ActiveValue::Set(event.level().into()),
         message: ActiveValue::Set(event.message.clone()),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
@@ -894,7 +998,7 @@ fn convert_agent_message_event(
         app: ActiveValue::Set(event.app.clone()),
         job_id: ActiveValue::Set(event.job_id.clone()),
         event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
-        level: ActiveValue::Set(serde_json::Value::Number(event.level.into())),
+        level: ActiveValue::Set(event.level().into()),
         message: ActiveValue::Set(event.message.clone()),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,

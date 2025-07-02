@@ -8,17 +8,45 @@ SQL_DIR := tidb/sql
 MIGR_DIR := tidb/migration/sql
 ENTITY_DIR := src/entity
 
+# Function to load DATABASE_URL from .env file
+define load_database_url
+	$(shell if [ -f .env ] && grep -q "^DATABASE_URL=" .env; then \
+		grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's/^["'"'"']//;s/["'"'"']$$//'; \
+	fi)
+endef
+
 # Database configuration check
 check-database-url:
-	@if [ -z "$(DATABASE_URL)" ]; then \
-		echo "❌ ERROR: DATABASE_URL environment variable is not set"; \
+	@if [ ! -f .env ]; then \
+		echo "❌ ERROR: .env file not found"; \
 		echo ""; \
-		echo "Please set DATABASE_URL with the format:"; \
-		echo "  export DATABASE_URL=\"mysql://user:pass@tcp(host:port)/database\""; \
+		echo "Please create a .env file with DATABASE_URL:"; \
+		echo "  echo 'DATABASE_URL=mysql://user:pass@tcp(host:port)/database' > .env"; \
 		echo ""; \
 		echo "Examples:"; \
-		echo "  export DATABASE_URL=\"mysql://root:@tcp(localhost:4000)/silvana_rpc\""; \
-		echo "  export DATABASE_URL=\"mysql://user:pass@tcp(myhost.com:3306)/mydb\""; \
+		echo "  echo 'DATABASE_URL=mysql://root:@tcp(localhost:4000)/silvana_rpc' > .env"; \
+		echo "  echo 'DATABASE_URL=mysql://user:pass@tcp(myhost.com:3306)/mydb' > .env"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@if ! grep -q "^DATABASE_URL=" .env; then \
+		echo "❌ ERROR: DATABASE_URL not found in .env file"; \
+		echo ""; \
+		echo "Please add DATABASE_URL to your .env file:"; \
+		echo "  echo 'DATABASE_URL=mysql://user:pass@tcp(host:port)/database' >> .env"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  echo 'DATABASE_URL=mysql://root:@tcp(localhost:4000)/silvana_rpc' >> .env"; \
+		echo "  echo 'DATABASE_URL=mysql://user:pass@tcp(myhost.com:3306)/mydb' >> .env"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@DB_URL="$(call load_database_url)"; \
+	if [ -z "$$DB_URL" ]; then \
+		echo "❌ ERROR: DATABASE_URL value is empty in .env file"; \
+		echo ""; \
+		echo "Please set a valid DATABASE_URL value in .env:"; \
+		echo "  DATABASE_URL=mysql://user:pass@tcp(host:port)/database"; \
 		echo ""; \
 		exit 1; \
 	fi
@@ -35,18 +63,20 @@ help: ## Show this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Environment Variables:"
-	@echo "  DATABASE_URL    Database connection URL (REQUIRED)"
-	@echo "                  Format: mysql://user:pass@tcp(host:port)/database"
+	@echo "Configuration:"
+	@echo "  .env file       Contains DATABASE_URL (REQUIRED)"
+	@echo "                  Format: DATABASE_URL=mysql://user:pass@tcp(host:port)/database"
 	@echo ""
-	@echo "Examples:"
-	@echo "  export DATABASE_URL=\"mysql://root:@tcp(localhost:4000)/silvana_rpc\""
-	@echo "  export DATABASE_URL=\"mysql://user:pass@tcp(myhost.com:3306)/mydb\""
+	@echo "Examples for .env file:"
+	@echo "  DATABASE_URL=mysql://root:@tcp(localhost:4000)/silvana_rpc"
+	@echo "  DATABASE_URL=mysql://user:pass@tcp(myhost.com:3306)/mydb"
 	@echo ""
-	@if [ -n "$(DATABASE_URL)" ]; then \
-		echo "Current DATABASE_URL: $(DATABASE_URL)"; \
+	@if [ -f .env ] && grep -q "^DATABASE_URL=" .env; then \
+		echo "Current DATABASE_URL: $$(grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's/^["'"'"']//;s/["'"'"']$$//')"; \
+	elif [ -f .env ]; then \
+		echo "❌ .env file exists but DATABASE_URL is not set"; \
 	else \
-		echo "❌ DATABASE_URL is not set"; \
+		echo "❌ .env file not found"; \
 	fi
 
 install-tools: ## Install required tools (mysqldef only - proto-to-ddl builds automatically)
@@ -88,21 +118,23 @@ proto2sql: check-database-url ## Generate DDL from proto files and apply to data
 	@echo "✅ DDL generated in $(SQL_DIR)/events.sql"
 	@echo ""
 	@echo "📊 Applying schema changes to database..."
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL="$(call load_database_url)"; \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	mysqldef --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--file $(SQL_DIR)/events.sql \
 		--dry-run > $(MIGR_DIR)/$$(date +%s)_proto_diff.sql
 	@echo "🔍 Migration diff saved to $(MIGR_DIR)/"
 	@echo "📊 Applying changes to database..."
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL="$(call load_database_url)"; \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	mysqldef --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--file $(SQL_DIR)/events.sql
 	@echo "✅ Database schema updated"
@@ -121,21 +153,23 @@ proto2entities: ## Generate both DDL and entities from proto files (combined)
 
 apply-ddl: check-database-url ## Apply generated DDL to database
 	@echo "📊 Applying schema changes to database..."
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL=$$(grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's/^["'"'"']//;s/["'"'"']$$//'); \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	mysqldef --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--file $(SQL_DIR)/events.sql \
 		--dry-run > $(MIGR_DIR)/$$(date +%s)_proto_diff.sql
 	@echo "🔍 Migration diff saved to $(MIGR_DIR)/"
 	@echo "📊 Applying changes to database..."
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL=$$(grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's/^["'"'"']//;s/["'"'"']$$//'); \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	mysqldef --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--file $(SQL_DIR)/events.sql
 	@echo "✅ Database schema updated"
@@ -171,21 +205,23 @@ dev-reset: clean-dev regen ## Full development reset: drop all tables + regenera
 # Utility targets
 show-tables: check-database-url ## Show all tables in the database
 	@echo "📋 Tables in database:"
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL="$(call load_database_url)"; \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	mysql --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--execute="SHOW TABLES;" 2>/dev/null || echo "❌ Could not connect to database"
 
 show-schema: check-database-url ## Show schema for all tables  
 	@echo "📊 Database schema:"
-	@export DB_USER=$$(echo "$(DATABASE_URL)" | sed 's|mysql://||' | sed 's|:.*||'); \
-	export DB_PASS=$$(echo "$(DATABASE_URL)" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
-	export DB_HOST=$$(echo "$(DATABASE_URL)" | sed 's|.*@||' | sed 's|:.*||'); \
-	export DB_PORT=$$(echo "$(DATABASE_URL)" | sed 's|.*:||' | sed 's|/.*||'); \
-	export DB_NAME=$$(echo "$(DATABASE_URL)" | sed 's|.*/||'); \
+	@DB_URL="$(call load_database_url)"; \
+	export DB_USER=$$(echo "$$DB_URL" | sed 's|mysql://||' | sed 's|:.*||'); \
+	export DB_PASS=$$(echo "$$DB_URL" | sed 's|mysql://[^:]*:||' | sed 's|@.*||'); \
+	export DB_HOST=$$(echo "$$DB_URL" | sed 's|.*@||' | sed 's|:.*||'); \
+	export DB_PORT=$$(echo "$$DB_URL" | sed 's|.*:||' | sed 's|/.*||'); \
+	export DB_NAME=$$(echo "$$DB_URL" | sed 's|.*/||'); \
 	for table in $$(mysql --user=$$DB_USER --password=$$DB_PASS --host=$$DB_HOST --port=$$DB_PORT $$DB_NAME \
 		--execute="SHOW TABLES;" --batch --skip-column-names 2>/dev/null); do \
 		echo ""; \
@@ -197,9 +233,10 @@ show-schema: check-database-url ## Show schema for all tables
 
 validate-schema: check-database-url check-tools ## Validate that database schema matches proto definitions
 	@echo "🔍 Validating schema consistency..."
+	@DB_URL="$(call load_database_url)"; \
 	cargo run --manifest-path tidb/proto-to-ddl/Cargo.toml --release -- validate \
 		--proto-file $(PROTO_FILES) \
-		--database-url $(DATABASE_URL)
+		--database-url "$$DB_URL"
 
 check-schema: check-database-url check-tools ## Quick schema validation check
 	@./tidb/check_schema.sh 
