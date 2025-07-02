@@ -133,6 +133,7 @@ The service will start:
 cargo test --release --test integration_test -- --nocapture
 cargo test --release --test sequence_test -- --nocapture
 cargo test --release --test fulltext_search_test -- --nocapture
+cargo test --release --test nats_test -- --nocapture
 ```
 
 ## Development

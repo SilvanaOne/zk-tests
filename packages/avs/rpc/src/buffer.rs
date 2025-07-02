@@ -26,6 +26,8 @@ const ERROR_THRESHOLD: usize = 100;
 const MAX_DB_RETRIES: usize = 10;
 const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(100);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+// Maximum batch size to prevent database placeholder limits
+const MAX_BATCH_SIZE: usize = 10000;
 // Semaphore strategy thresholds (as fraction of total capacity)
 const FAST_PATH_THRESHOLD: usize = 8; // Use fast path when > 1/8 permits available (more conservative)
 
@@ -344,8 +346,10 @@ impl EventBuffer {
             // System is idle - always healthy regardless of any startup backpressure
             true
         } else {
-            // System has processed events - check backpressure ratio
-            stats.backpressure_events < stats.total_received / 10 // Less than 10% backpressure
+            // System has processed events - check backpressure ratio using floating point
+            // to avoid integer division issues with small event counts
+            let backpressure_ratio = stats.backpressure_events as f64 / stats.total_received as f64;
+            backpressure_ratio < 0.1 // Less than 10% backpressure
         };
 
         basic_health && backpressure_healthy
@@ -581,11 +585,12 @@ impl BatchProcessor {
         let mut permits_held: Vec<OwnedSemaphorePermit> = Vec::new();
 
         info!(
-            "Started batch processor with batch_size={}, flush_interval={:?}",
-            self.batch_size, self.flush_interval
+            "Started batch processor with batch_size={}, flush_interval={:?}, max_batch_size={}",
+            self.batch_size, self.flush_interval, MAX_BATCH_SIZE
         );
         info!(
-            "Using adaptive batching: batch_size acts as minimum trigger (actual batches may be larger)"
+            "Using adaptive batching with database limits: batch_size acts as minimum trigger, max_batch_size={} prevents database placeholder overflow",
+            MAX_BATCH_SIZE
         );
 
         loop {
@@ -597,10 +602,15 @@ impl BatchProcessor {
                             self.buffer.push(event);
                             permits_held.push(permit);
 
-                            // Check if we should flush due to batch size
-                            if self.buffer.len() >= self.batch_size {
-                                debug!("Batch size reached ({}), draining all available events", self.buffer.len());
-                                self.drain_and_flush(&mut permits_held).await;
+                            // Check if we should flush due to batch size or max limit
+                            if self.buffer.len() >= self.batch_size || self.buffer.len() >= MAX_BATCH_SIZE {
+                                if self.buffer.len() >= MAX_BATCH_SIZE {
+                                    debug!("Max batch size limit reached ({}), flushing immediately", self.buffer.len());
+                                    self.flush_buffer(&mut permits_held).await;
+                                } else {
+                                    debug!("Batch size reached ({}), draining all available events", self.buffer.len());
+                                    self.drain_and_flush(&mut permits_held).await;
+                                }
                             }
                         }
                         None => {
@@ -622,47 +632,91 @@ impl BatchProcessor {
         }
     }
 
-    /// Drain all available events from the channel and flush them in one large batch
+    /// Drain available events from the channel and flush them, respecting MAX_BATCH_SIZE limit
     async fn drain_and_flush(&mut self, permits_held: &mut Vec<OwnedSemaphorePermit>) {
         let initial_count = self.buffer.len();
-        let mut drained_count = 0;
+        let mut total_drained = 0;
+        let mut batch_number = 1;
 
-        // Drain all immediately available events from the channel
         loop {
-            match self.receiver.try_recv() {
-                Ok((event, permit)) => {
-                    self.buffer.push(event);
-                    permits_held.push(permit);
-                    drained_count += 1;
+            let mut drained_this_batch = 0;
+            let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(self.buffer.len());
+
+            if remaining_capacity == 0 {
+                // Buffer is at max capacity, flush immediately
+                debug!(
+                    "Batch {} reached max size limit ({}), flushing immediately",
+                    batch_number, MAX_BATCH_SIZE
+                );
+                self.flush_buffer(permits_held).await;
+                batch_number += 1;
+                continue;
+            }
+
+            // Drain events up to the remaining capacity
+            for _ in 0..remaining_capacity {
+                match self.receiver.try_recv() {
+                    Ok((event, permit)) => {
+                        self.buffer.push(event);
+                        permits_held.push(permit);
+                        drained_this_batch += 1;
+                        total_drained += 1;
+                    }
+                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                        // No more events available right now
+                        break;
+                    }
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        // Channel closed
+                        warn!("Event channel disconnected during drain");
+                        break;
+                    }
                 }
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                    // No more events available right now, proceed with flush
+            }
+
+            // If we have events to flush, or if we filled the buffer, flush now
+            if !self.buffer.is_empty()
+                && (drained_this_batch == 0 || self.buffer.len() >= MAX_BATCH_SIZE)
+            {
+                let total_events = self.buffer.len();
+                if total_drained > 0 && batch_number == 1 {
+                    info!(
+                        "Drained {} additional events (total batch: {} events, efficiency gain: {}x)",
+                        total_drained,
+                        total_events,
+                        if initial_count > 0 {
+                            total_events / initial_count
+                        } else {
+                            1
+                        }
+                    );
+                } else if batch_number > 1 {
+                    info!(
+                        "Processing batch {} with {} events (max batch size: {})",
+                        batch_number, total_events, MAX_BATCH_SIZE
+                    );
+                }
+
+                self.flush_buffer(permits_held).await;
+                batch_number += 1;
+
+                // If we didn't drain any new events this iteration, we're done
+                if drained_this_batch == 0 {
                     break;
                 }
-                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                    // Channel closed, proceed with flush
-                    warn!("Event channel disconnected during drain");
-                    break;
-                }
+            } else if drained_this_batch == 0 {
+                // No new events and buffer is empty or small, we're done
+                break;
             }
         }
 
-        let total_events = self.buffer.len();
-        if drained_count > 0 {
+        if batch_number > 2 {
             info!(
-                "Drained {} additional events (total batch: {} events, efficiency gain: {}x)",
-                drained_count,
-                total_events,
-                if initial_count > 0 {
-                    total_events / initial_count
-                } else {
-                    1
-                }
+                "Completed drain_and_flush with {} batches, total events drained: {}",
+                batch_number - 1,
+                total_drained
             );
         }
-
-        // Flush all accumulated events in one batch
-        self.flush_buffer(permits_held).await;
     }
 
     async fn flush_buffer(&mut self, permits_held: &mut Vec<OwnedSemaphorePermit>) {
@@ -1206,7 +1260,8 @@ mod tests {
         let backpressure_healthy = if stats.total_received == 0 {
             true // Should be healthy when idle
         } else {
-            stats.backpressure_events < stats.total_received / 10
+            let backpressure_ratio = stats.backpressure_events as f64 / stats.total_received as f64;
+            backpressure_ratio < 0.1
         };
 
         let health_result = basic_health && backpressure_healthy;
@@ -1226,14 +1281,46 @@ mod tests {
         let backpressure_healthy_with_events = if stats_with_backpressure.total_received == 0 {
             true // Should still be healthy when idle
         } else {
-            stats_with_backpressure.backpressure_events
-                < stats_with_backpressure.total_received / 10
+            let backpressure_ratio = stats_with_backpressure.backpressure_events as f64
+                / stats_with_backpressure.total_received as f64;
+            backpressure_ratio < 0.1
         };
 
         let health_with_backpressure = basic_health && backpressure_healthy_with_events;
         assert!(
             health_with_backpressure,
             "Health check should pass when idle even with startup backpressure"
+        );
+    }
+
+    #[test]
+    fn test_max_batch_size_limit() {
+        // Test that MAX_BATCH_SIZE is properly configured
+        assert_eq!(
+            MAX_BATCH_SIZE, 1000,
+            "MAX_BATCH_SIZE should be 1000 to prevent database placeholder limits"
+        );
+
+        // Test that MAX_BATCH_SIZE is reasonable compared to other constants
+        assert!(MAX_BATCH_SIZE > 0);
+        assert!(
+            MAX_BATCH_SIZE <= DEFAULT_CHANNEL_CAPACITY,
+            "MAX_BATCH_SIZE should not exceed channel capacity"
+        );
+
+        // Test batch size calculation logic
+        let buffer_size = 1500;
+        let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(buffer_size);
+        assert_eq!(
+            remaining_capacity, 0,
+            "Should have no remaining capacity when buffer exceeds max"
+        );
+
+        let buffer_size = 500;
+        let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(buffer_size);
+        assert_eq!(
+            remaining_capacity, 500,
+            "Should have correct remaining capacity"
         );
     }
 }

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tonic::transport::{Channel, ClientTlsConfig};
 use tonic::Request;
 
 // Import the generated protobuf code
@@ -11,10 +13,10 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Test configuration
-const TOTAL_EVENTS: usize = 10;
+const TOTAL_EVENTS: usize = 100;
 const SEQUENCE_COUNT: usize = 10;
-const SERVER_ADDR: &str = "https://0.0.0.0:50051"; //"https://rpc-dev.silvana.dev:443";
-                                                   // Generate a unique coordinator ID for each test run to avoid data contamination
+const SERVER_ADDR: &str = "http://127.0.0.1:50051"; //"https://rpc-dev.silvana.dev"; //"https://rpc-dev.silvana.dev:443";
+                                                    // Generate a unique coordinator ID for each test run to avoid data contamination
 fn get_unique_coordinator_id() -> String {
     format!("seq-test-{}", get_current_timestamp())
 }
@@ -28,16 +30,94 @@ async fn test_sequence_events_round_trip() {
     );
     println!("🎯 Server address: {}", SERVER_ADDR);
 
-    // Connect to the gRPC server
-    let mut client = match SilvanaEventsServiceClient::connect(SERVER_ADDR).await {
-        Ok(client) => {
-            println!("✅ Connected to RPC server successfully");
-            client
+    // Connect to the gRPC server with conditional TLS based on URL scheme
+    println!("🔗 Attempting to connect to: {}", SERVER_ADDR);
+
+    let use_tls = SERVER_ADDR.starts_with("https://");
+    println!("🔍 Connection details:");
+    if use_tls {
+        println!("  - Protocol: gRPC over TLS/HTTPS");
+        println!("  - TLS enabled for secure connection");
+    } else {
+        println!("  - Protocol: gRPC over plain HTTP");
+        println!("  - TLS disabled for local development");
+    }
+
+    let channel = if use_tls {
+        // HTTPS connection with TLS
+        let server_domain = if SERVER_ADDR.contains("rpc-dev.silvana.dev") {
+            "rpc-dev.silvana.dev"
+        } else {
+            "localhost" // fallback for other HTTPS addresses
+        };
+
+        println!("  - Configuring TLS for domain: {}", server_domain);
+
+        // TLS configuration with webpki-roots for Let's Encrypt certificate verification
+        let tls_config = ClientTlsConfig::new().domain_name(server_domain);
+
+        let endpoint = match Channel::from_static(SERVER_ADDR).tls_config(tls_config) {
+            Ok(endpoint) => endpoint,
+            Err(e) => {
+                println!("❌ Failed to configure TLS endpoint:");
+                println!("  - Error: {:?}", e);
+                panic!("TLS endpoint configuration failed");
+            }
+        };
+
+        match endpoint.connect().await {
+            Ok(channel) => {
+                println!("✅ TLS channel established successfully");
+                channel
+            }
+            Err(e) => {
+                println!("❌ Failed to establish TLS channel:");
+                println!("  - Server address: {}", SERVER_ADDR);
+                println!("  - Server domain: {}", server_domain);
+                println!("  - Error type: {:?}", e);
+                println!("  - Error message: {}", e);
+                println!("  - Error source: {:?}", e.source());
+
+                if let Some(source) = e.source() {
+                    println!("  - Root cause: {}", source);
+                    if let Some(deeper_source) = source.source() {
+                        println!("  - Deeper cause: {}", deeper_source);
+                    }
+                }
+
+                panic!("TLS channel establishment failed - see detailed error information above");
+            }
         }
-        Err(e) => {
-            panic!("❌ Failed to connect to RPC server at {}: {}\nMake sure the server is running with: cargo run", SERVER_ADDR, e);
+    } else {
+        // Plain HTTP connection without TLS
+        println!("  - Using plain HTTP connection");
+
+        match Channel::from_static(SERVER_ADDR).connect().await {
+            Ok(channel) => {
+                println!("✅ HTTP channel established successfully");
+                channel
+            }
+            Err(e) => {
+                println!("❌ Failed to establish HTTP channel:");
+                println!("  - Server address: {}", SERVER_ADDR);
+                println!("  - Error type: {:?}", e);
+                println!("  - Error message: {}", e);
+                println!("  - Error source: {:?}", e.source());
+
+                if let Some(source) = e.source() {
+                    println!("  - Root cause: {}", source);
+                    if let Some(deeper_source) = source.source() {
+                        println!("  - Deeper cause: {}", deeper_source);
+                    }
+                }
+
+                panic!("HTTP channel establishment failed - see detailed error information above");
+            }
         }
     };
+
+    let mut client = SilvanaEventsServiceClient::new(channel);
+    println!("✅ gRPC client created successfully");
 
     // Step 1: Create events grouped by sequence
     let coordinator_id = get_unique_coordinator_id();

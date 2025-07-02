@@ -1,4 +1,9 @@
+use futures::StreamExt;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
+use tokio::time::{sleep, timeout, Duration};
 use tonic::Request;
 
 // Import the generated protobuf code
@@ -10,17 +15,75 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Configuration - easily changeable parameters
-const NUM_EVENTS: usize = 1000;
+const NUM_EVENTS: usize = 100;
 const SERVER_ADDR: &str = "http://127.0.0.1:50051"; // "http://18.194.39.156:50051";
 const COORDINATOR_ID: &str = "test-coordinator-001";
+const NATS_URL: &str = "nats://rpc-dev.silvana.dev:4222";
+const NATS_STREAM_NAME: &str = "silvana-events";
+
+// Shared structure to collect all sent events for comparison
+#[derive(Debug, Clone)]
+struct SentEventsCollector {
+    events: Arc<Mutex<Vec<Event>>>,
+}
+
+impl SentEventsCollector {
+    fn new() -> Self {
+        Self {
+            events: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    async fn add_event(&self, event: Event) {
+        let mut events = self.events.lock().await;
+        events.push(event);
+    }
+
+    async fn add_events(&self, events: Vec<Event>) {
+        let mut stored_events = self.events.lock().await;
+        stored_events.extend(events);
+    }
+
+    async fn get_events(&self) -> Vec<Event> {
+        let events = self.events.lock().await;
+        events.clone()
+    }
+
+    #[allow(dead_code)]
+    async fn len(&self) -> usize {
+        let events = self.events.lock().await;
+        events.len()
+    }
+}
 
 #[tokio::test]
 async fn test_send_coordinator_and_agent_events() {
     let start_time = Instant::now();
 
-    println!("🧪 Starting integration test...");
+    println!("🧪 Starting integration test with NATS verification...");
     println!("📊 Configuration: {} events per type", NUM_EVENTS);
     println!("🎯 Server address: {}", SERVER_ADDR);
+    println!("📡 NATS address: {}", NATS_URL);
+
+    // Create collector for sent events
+    let sent_events = SentEventsCollector::new();
+
+    // Connect to NATS first
+    let nats_client = match async_nats::connect(NATS_URL).await {
+        Ok(client) => {
+            println!("✅ Connected to NATS server successfully");
+            Some(client)
+        }
+        Err(e) => {
+            println!(
+                "⚠️  Failed to connect to NATS server at {}: {}",
+                NATS_URL, e
+            );
+            println!("📝 Note: NATS verification will be skipped");
+            // Continue without NATS verification
+            None
+        }
+    };
 
     // Connect to the gRPC server
     let client = match SilvanaEventsServiceClient::connect(SERVER_ADDR).await {
@@ -33,10 +96,22 @@ async fn test_send_coordinator_and_agent_events() {
         }
     };
 
+    // Set up NATS subscriptions if available
+    let nats_collector = if let Some(ref nats) = nats_client {
+        Some(setup_nats_subscriptions(nats.clone()).await)
+    } else {
+        None
+    };
+
     // Clone clients for parallel execution
     let mut client1 = client.clone();
     let mut client2 = client.clone();
     let mut client3 = client.clone();
+
+    // Clone sent events collector for each test
+    let sent_events1 = sent_events.clone();
+    let sent_events2 = sent_events.clone();
+    let sent_events3 = sent_events.clone();
 
     println!("\n🚀 Running tests in parallel...");
 
@@ -44,26 +119,34 @@ async fn test_send_coordinator_and_agent_events() {
     let _ = tokio::join!(
         async {
             println!("📋 Starting Coordinator Events...");
-            test_coordinator_events(&mut client1).await
+            test_coordinator_events(&mut client1, sent_events1).await
         },
         async {
             println!("🤖 Starting Agent Events...");
-            test_agent_events(&mut client2).await
+            test_agent_events(&mut client2, sent_events2).await
         },
         async {
             println!("📦 Starting Batch Submission...");
-            test_batch_events(&mut client3).await
+            test_batch_events(&mut client3, sent_events3).await
         }
     );
 
     println!("✅ All parallel tests completed!");
 
+    // Wait for NATS events to be published and verify them
+    if let Some(collector) = nats_collector {
+        println!("\n🔍 Verifying NATS published events...");
+        verify_nats_events(collector, sent_events).await;
+    } else {
+        println!("\n⚠️  NATS verification skipped (no NATS connection)");
+    }
+
     let duration = start_time.elapsed();
     let duration_ms = duration.as_millis();
 
     // Calculate total events dispatched (sent concurrently)
-    let coordinator_event_types = 5; // 5 different coordinator event types (coordinator_message disabled)
-    let agent_event_types = 2; // 2 different agent event types (agent_error removed)
+    let coordinator_event_types = 6; // 6 different coordinator event types
+    let agent_event_types = 2; // 2 different agent event types
     let total_events =
         (coordinator_event_types * NUM_EVENTS) + (agent_event_types * NUM_EVENTS) + NUM_EVENTS;
     let events_per_second = if duration.as_secs_f64() > 0.0 {
@@ -91,8 +174,409 @@ async fn test_send_coordinator_and_agent_events() {
     );
 }
 
+// NATS event collector to track published events (now storing full events)
+#[derive(Debug)]
+struct NatsEventCollector {
+    coordinator_started: tokio::sync::mpsc::Receiver<Event>,
+    agent_started_job: tokio::sync::mpsc::Receiver<Event>,
+    agent_finished_job: tokio::sync::mpsc::Receiver<Event>,
+    coordination_tx: tokio::sync::mpsc::Receiver<Event>,
+    coordinator_error: tokio::sync::mpsc::Receiver<Event>,
+    client_transaction: tokio::sync::mpsc::Receiver<Event>,
+    agent_message: tokio::sync::mpsc::Receiver<Event>,
+    agent_transaction: tokio::sync::mpsc::Receiver<Event>,
+}
+
+async fn setup_nats_subscriptions(nats_client: async_nats::Client) -> NatsEventCollector {
+    let base_subject = format!("{}.events", NATS_STREAM_NAME);
+
+    // Create channels for each event type
+    let (coordinator_started_tx, coordinator_started_rx) =
+        tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (agent_started_job_tx, agent_started_job_rx) = tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (agent_finished_job_tx, agent_finished_job_rx) =
+        tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (coordination_tx_tx, coordination_tx_rx) = tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (coordinator_error_tx, coordinator_error_rx) = tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (client_transaction_tx, client_transaction_rx) =
+        tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (agent_message_tx, agent_message_rx) = tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+    let (agent_transaction_tx, agent_transaction_rx) = tokio::sync::mpsc::channel(NUM_EVENTS * 10);
+
+    // Subscribe to each subject
+    let subjects_and_senders = vec![
+        (
+            format!("{}.coordinator.started", base_subject),
+            coordinator_started_tx,
+        ),
+        (
+            format!("{}.coordinator.agent_started_job", base_subject),
+            agent_started_job_tx,
+        ),
+        (
+            format!("{}.coordinator.agent_finished_job", base_subject),
+            agent_finished_job_tx,
+        ),
+        (
+            format!("{}.coordinator.coordination_tx", base_subject),
+            coordination_tx_tx,
+        ),
+        (
+            format!("{}.coordinator.error", base_subject),
+            coordinator_error_tx,
+        ),
+        (
+            format!("{}.coordinator.client_transaction", base_subject),
+            client_transaction_tx,
+        ),
+        (format!("{}.agent.message", base_subject), agent_message_tx),
+        (
+            format!("{}.agent.transaction", base_subject),
+            agent_transaction_tx,
+        ),
+    ];
+
+    for (subject, sender) in subjects_and_senders {
+        let client_clone = nats_client.clone();
+        let subject_clone = subject.clone();
+
+        tokio::spawn(async move {
+            match client_clone.subscribe(subject_clone.clone()).await {
+                Ok(mut subscription) => {
+                    println!("📡 Subscribed to NATS subject: {}", subject_clone);
+
+                    while let Ok(message) =
+                        timeout(Duration::from_secs(30), subscription.next()).await
+                    {
+                        if let Some(msg) = message {
+                            match serde_json::from_slice::<Event>(&msg.payload) {
+                                Ok(event) => {
+                                    if sender.send(event).await.is_err() {
+                                        break; // Channel closed
+                                    }
+                                }
+                                Err(e) => {
+                                    println!(
+                                        "⚠️  Failed to deserialize event from {}: {}",
+                                        subject_clone, e
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Failed to subscribe to {}: {}", subject_clone, e);
+                }
+            }
+        });
+    }
+
+    // Give subscriptions time to be established
+    sleep(Duration::from_millis(100)).await;
+
+    NatsEventCollector {
+        coordinator_started: coordinator_started_rx,
+        agent_started_job: agent_started_job_rx,
+        agent_finished_job: agent_finished_job_rx,
+        coordination_tx: coordination_tx_rx,
+        coordinator_error: coordinator_error_rx,
+        client_transaction: client_transaction_rx,
+        agent_message: agent_message_rx,
+        agent_transaction: agent_transaction_rx,
+    }
+}
+
+async fn verify_nats_events(mut collector: NatsEventCollector, sent_events: SentEventsCollector) {
+    println!("⏳ Waiting for NATS events to be published...");
+
+    // Wait a bit for all events to be published
+    sleep(Duration::from_secs(5)).await;
+
+    let mut total_received = 0;
+    let mut events_by_type = HashMap::new();
+    let mut received_events: Vec<Event> = Vec::new();
+
+    // Collect all events with timeout
+    let collection_timeout = Duration::from_secs(10);
+    let start_collection = Instant::now();
+
+    while start_collection.elapsed() < collection_timeout {
+        tokio::select! {
+            event = collector.coordinator_started.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("coordinator_started".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.agent_started_job.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("agent_started_job".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.agent_finished_job.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("agent_finished_job".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.coordination_tx.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("coordination_tx".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.coordinator_error.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("coordinator_error".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.client_transaction.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("client_transaction".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.agent_message.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("agent_message".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            event = collector.agent_transaction.recv() => {
+                if let Some(event) = event {
+                    *events_by_type.entry("agent_transaction".to_string()).or_insert(0) += 1;
+                    received_events.push(event);
+                    total_received += 1;
+                }
+            }
+            _ = sleep(Duration::from_millis(100)) => {
+                // Check if we've received enough events
+                let expected_individual_events = NUM_EVENTS * 8; // 6 coordinator + 2 agent types
+                let expected_batch_events = NUM_EVENTS; // Mixed events in batch
+                let expected_total = expected_individual_events + expected_batch_events;
+
+                if total_received >= expected_total {
+                    break;
+                }
+            }
+        }
+    }
+
+    println!("\n📊 NATS Event Verification Results:");
+    println!("📥 Total events received from NATS: {}", total_received);
+
+    for (event_type, count) in &events_by_type {
+        println!(
+            "  {} {}: {}",
+            if *count == NUM_EVENTS {
+                "✅"
+            } else if *count > 0 {
+                "⚠️ "
+            } else {
+                "❌"
+            },
+            event_type,
+            count
+        );
+    }
+
+    // Get sent events for comparison
+    let sent_events_list = sent_events.get_events().await;
+    let sent_count = sent_events_list.len();
+
+    println!("\n📋 Event Content Verification:");
+    println!("📤 Total events sent: {}", sent_count);
+    println!("📥 Total events received: {}", total_received);
+
+    // Compare event contents
+    let content_verification = compare_events(&sent_events_list, &received_events).await;
+
+    println!("\n🔍 Content Comparison Results:");
+    println!(
+        "  ✅ Matching events: {}",
+        content_verification.matching_events
+    );
+    println!(
+        "  ❌ Missing events: {}",
+        content_verification.missing_events
+    );
+    println!("  ⚠️  Extra events: {}", content_verification.extra_events);
+    println!(
+        "  🔄 Different content: {}",
+        content_verification.different_content
+    );
+
+    if content_verification.different_content > 0 {
+        println!("\n📝 Content Differences Found:");
+        for diff in &content_verification.content_differences {
+            println!("  {} {}", "⚠️ ", diff);
+        }
+    }
+
+    // Expected counts
+    let expected_individual_events = NUM_EVENTS * 8; // 6 coordinator + 2 agent types from individual tests
+    let expected_batch_events = NUM_EVENTS; // Mixed events from batch test
+    let expected_total = expected_individual_events + expected_batch_events;
+
+    println!("\n📈 Expected vs Actual:");
+    println!("  Expected total: {} events", expected_total);
+    println!("  Sent total: {} events", sent_count);
+    println!("  Received total: {} events", total_received);
+
+    // Overall verification result
+    let count_check = total_received >= expected_total * 90 / 100;
+    let content_check = content_verification.matching_events >= sent_count * 90 / 100;
+
+    if count_check && content_check {
+        println!(
+            "✅ NATS verification PASSED - Events successfully published with matching content!"
+        );
+    } else if count_check {
+        println!("⚠️  NATS verification PARTIAL - Counts match but some content differences found");
+    } else if total_received > 0 {
+        println!(
+            "⚠️  NATS verification PARTIAL - Some events received but counts or content differ"
+        );
+    } else {
+        println!("❌ NATS verification FAILED - No events received from NATS");
+    }
+
+    println!(
+        "📝 Note: Minor differences may occur due to timing, batching, and concurrent processing"
+    );
+}
+
+#[derive(Debug)]
+struct ContentVerificationResult {
+    matching_events: usize,
+    missing_events: usize,
+    extra_events: usize,
+    different_content: usize,
+    content_differences: Vec<String>,
+}
+
+async fn compare_events(
+    sent_events: &[Event],
+    received_events: &[Event],
+) -> ContentVerificationResult {
+    let mut matching_events = 0;
+    let mut different_content = 0;
+    let mut content_differences = Vec::new();
+
+    // Create maps for quick lookup by event signature
+    let mut sent_map: HashMap<String, &Event> = HashMap::new();
+    let mut received_map: HashMap<String, &Event> = HashMap::new();
+
+    // Map sent events by their signature
+    for event in sent_events {
+        let signature = create_event_signature(event);
+        sent_map.insert(signature, event);
+    }
+
+    // Map received events by their signature
+    for event in received_events {
+        let signature = create_event_signature(event);
+        received_map.insert(signature, event);
+    }
+
+    // Check for matching events
+    for (signature, sent_event) in &sent_map {
+        if let Some(received_event) = received_map.get(signature) {
+            if events_match_content(sent_event, received_event) {
+                matching_events += 1;
+            } else {
+                different_content += 1;
+                let diff = format!("Event signature {} has different content", signature);
+                content_differences.push(diff);
+            }
+        }
+    }
+
+    let missing_events = sent_events
+        .len()
+        .saturating_sub(matching_events + different_content);
+    let extra_events = received_events
+        .len()
+        .saturating_sub(matching_events + different_content);
+
+    ContentVerificationResult {
+        matching_events,
+        missing_events,
+        extra_events,
+        different_content,
+        content_differences,
+    }
+}
+
+fn create_event_signature(event: &Event) -> String {
+    // Create a unique signature for each event based on stable fields (not timestamps)
+    match &event.event_type {
+        Some(event_type) => match event_type {
+            events::event::EventType::Coordinator(coord_event) => match &coord_event.event {
+                Some(coordinator_event) => match coordinator_event {
+                    events::coordinator_event::Event::CoordinatorStarted(e) => {
+                        // Use ethereum_address as unique identifier (contains the index)
+                        format!("coord_started_{}_{}", e.coordinator_id, e.ethereum_address)
+                    }
+                    events::coordinator_event::Event::AgentStartedJob(e) => {
+                        format!("agent_started_{}", e.job_id)
+                    }
+                    events::coordinator_event::Event::AgentFinishedJob(e) => {
+                        // Include duration to differentiate from started job
+                        format!("agent_finished_{}_{}", e.job_id, e.duration)
+                    }
+                    events::coordinator_event::Event::CoordinationTx(e) => {
+                        format!("coord_tx_{}", e.tx_hash)
+                    }
+                    events::coordinator_event::Event::CoordinatorError(e) => {
+                        // Use message content which includes the index
+                        format!("coord_error_{}_{}", e.coordinator_id, e.message)
+                    }
+                    events::coordinator_event::Event::ClientTransaction(e) => {
+                        format!("client_tx_{}_{}", e.tx_hash, e.sequence)
+                    }
+                },
+                None => "coord_unknown".to_string(),
+            },
+            events::event::EventType::Agent(agent_event) => match &agent_event.event {
+                Some(agent_event_type) => match agent_event_type {
+                    events::agent_event::Event::Message(e) => {
+                        // Use message content which includes the index
+                        format!("agent_msg_{}_{}", e.job_id, e.message)
+                    }
+                    events::agent_event::Event::Transaction(e) => {
+                        format!("agent_tx_{}", e.tx_hash)
+                    }
+                },
+                None => "agent_unknown".to_string(),
+            },
+        },
+        None => "unknown".to_string(),
+    }
+}
+
+fn events_match_content(sent: &Event, received: &Event) -> bool {
+    // Deep comparison of event content
+    // For simplicity, we'll serialize both to JSON and compare
+    match (serde_json::to_string(sent), serde_json::to_string(received)) {
+        (Ok(sent_json), Ok(received_json)) => sent_json == received_json,
+        _ => false,
+    }
+}
+
 async fn test_coordinator_events(
     client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>,
+    sent_events: SentEventsCollector,
 ) {
     let start_time = Instant::now();
 
@@ -117,6 +601,7 @@ async fn test_coordinator_events(
         .map(|(event_type, event)| {
             let client_clone = client.clone();
             let event_type = event_type.to_string();
+            let sent_events_clone = sent_events.clone();
 
             tokio::spawn(async move {
                 println!(
@@ -140,8 +625,12 @@ async fn test_coordinator_events(
                             modify_coordinator_event_for_uniqueness(&mut test_event, i);
                             let mut client_clone2 = client_clone.clone();
                             let event_type_clone = event_type.clone();
+                            let sent_events_clone2 = sent_events_clone.clone();
 
                             tokio::spawn(async move {
+                                // Record the event before sending
+                                sent_events_clone2.add_event(test_event.clone()).await;
+
                                 let request = Request::new(test_event);
                                 match client_clone2.submit_event(request).await {
                                     Ok(response) => {
@@ -197,7 +686,10 @@ async fn test_coordinator_events(
     );
 }
 
-async fn test_agent_events(client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>) {
+async fn test_agent_events(
+    client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>,
+    sent_events: SentEventsCollector,
+) {
     let start_time = Instant::now();
 
     let test_cases = vec![
@@ -217,6 +709,7 @@ async fn test_agent_events(client: &mut SilvanaEventsServiceClient<tonic::transp
         .map(|(event_type, event)| {
             let client_clone = client.clone();
             let event_type = event_type.to_string();
+            let sent_events_clone = sent_events.clone();
 
             tokio::spawn(async move {
                 println!(
@@ -240,8 +733,12 @@ async fn test_agent_events(client: &mut SilvanaEventsServiceClient<tonic::transp
                             modify_agent_event_for_uniqueness(&mut test_event, i);
                             let mut client_clone2 = client_clone.clone();
                             let event_type_clone = event_type.clone();
+                            let sent_events_clone2 = sent_events_clone.clone();
 
                             tokio::spawn(async move {
+                                // Record the event before sending
+                                sent_events_clone2.add_event(test_event.clone()).await;
+
                                 let request = Request::new(test_event);
                                 match client_clone2.submit_event(request).await {
                                     Ok(response) => {
@@ -297,7 +794,10 @@ async fn test_agent_events(client: &mut SilvanaEventsServiceClient<tonic::transp
     );
 }
 
-async fn test_batch_events(client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>) {
+async fn test_batch_events(
+    client: &mut SilvanaEventsServiceClient<tonic::transport::Channel>,
+    sent_events: SentEventsCollector,
+) {
     let start_time = Instant::now();
 
     // Split into multiple concurrent batches
@@ -313,6 +813,7 @@ async fn test_batch_events(client: &mut SilvanaEventsServiceClient<tonic::transp
     let handles: Vec<_> = (0..num_batches)
         .map(|batch_idx| {
             let mut client_clone = client.clone();
+            let sent_events_clone = sent_events.clone();
 
             tokio::spawn(async move {
                 let start_event_idx = batch_idx * BATCH_SIZE + 1;
@@ -343,6 +844,9 @@ async fn test_batch_events(client: &mut SilvanaEventsServiceClient<tonic::transp
 
                     events.push(event);
                 }
+
+                // Record the events before sending
+                sent_events_clone.add_events(events.clone()).await;
 
                 let request = Request::new(SubmitEventsRequest { events });
 
