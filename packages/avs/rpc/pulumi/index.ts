@@ -11,7 +11,7 @@ export = async () => {
     })
   ).value;
 
-  const keyPairName = "RPC"; // Using RPC keypair
+  const keyPairName = "RPC2"; // Using RPC keypair
   const region = "eu-central-1"; // Using eu-central-1 region
 
   // -------------------------

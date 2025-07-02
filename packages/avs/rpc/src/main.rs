@@ -48,10 +48,10 @@ async fn main() -> Result<()> {
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-    let server_addr = env::var("SERVER_ADDR")
+    let server_address = env::var("SERVER_ADDRESS")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()
-        .expect("Invalid SERVER_ADDR format");
+        .expect("Invalid SERVER_ADDRESS format");
 
     let metrics_addr = env::var("METRICS_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:9090".to_string())
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
         .unwrap_or(500000);
 
     info!("🚀 Starting Silvana RPC server");
-    info!("📡 Server address: {} (gRPC + gRPC-Web)", server_addr);
+    info!("📡 Server address: {} (gRPC + gRPC-Web)", server_address);
     info!("📊 Metrics address: {}", metrics_addr);
     if enable_tls {
         info!("🔒 TLS: Enabled (direct gRPC over HTTPS)");
@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
     let events_service = SilvanaEventsServiceImpl::new(event_buffer, Arc::clone(&database));
     let grpc_service = SilvanaEventsServiceServer::new(events_service);
 
-    info!("🎯 Starting gRPC and gRPC-Web server on {}", server_addr);
+    info!("🎯 Starting gRPC and gRPC-Web server on {}", server_address);
 
     // Configure CORS for gRPC-Web
     let cors = CorsLayer::new()
@@ -153,7 +153,9 @@ async fn main() -> Result<()> {
     }
 
     // Start both servers concurrently
-    let grpc_server = server_builder.add_service(grpc_service).serve(server_addr);
+    let grpc_server = server_builder
+        .add_service(grpc_service)
+        .serve(server_address);
 
     let metrics_server = start_metrics_server(metrics_addr);
 
