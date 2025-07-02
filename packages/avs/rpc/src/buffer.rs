@@ -127,14 +127,19 @@ impl EventBuffer {
             flush_interval / 10, // 10% of flush interval
         );
 
+        // Clone Arc references for the spawned task
+        let stats_clone = Arc::clone(&stats);
+        let memory_usage_clone = Arc::clone(&memory_usage);
+        let circuit_breaker_clone = Arc::clone(&circuit_breaker);
+
         // Spawn the processor task
         tokio::spawn(async move {
             let processor = BatchProcessor::new(
                 receiver,
                 database,
-                Arc::clone(&stats),
-                Arc::clone(&memory_usage),
-                Arc::clone(&circuit_breaker),
+                stats_clone,
+                memory_usage_clone,
+                circuit_breaker_clone,
                 batch_size,
                 flush_interval,
             )
@@ -836,7 +841,7 @@ impl BatchProcessor {
                     // Publish to NATS with timeout
                     match timeout(
                         Duration::from_secs(5),
-                        client.publish(&subject, payload.into()),
+                        client.publish(subject.clone(), payload.into()),
                     )
                     .await
                     {
