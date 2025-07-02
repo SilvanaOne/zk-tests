@@ -183,10 +183,6 @@ server {
     grpc_connect_timeout 60s;
     grpc_read_timeout 300s;
     grpc_send_timeout 300s;
-    
-    # HTTP/2 specific settings
-    http2_body_preread_size 64k;
-    http2_recv_buffer_size 256k;
 
     # gRPC specific configuration
     location / {

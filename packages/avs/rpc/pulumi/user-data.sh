@@ -17,8 +17,8 @@ sudo dnf update -y
 echo "Installing required packages..."
 sudo dnf install -y awscli nano git make gcc protobuf-compiler protobuf-devel --skip-broken
 
-# Try to install nginx, and if it fails, try from a different source
-echo "Installing nginx..."
+# Install nginx with HTTP/2 support (critical for gRPC proxy)
+echo "Installing nginx with HTTP/2 support..."
 if ! sudo dnf install -y nginx; then
     echo "Standard nginx installation failed, trying alternative approach..."
     # Enable nginx from Amazon Linux extras if available
@@ -27,6 +27,24 @@ if ! sudo dnf install -y nginx; then
     else
         # For Amazon Linux 2023, try installing from AppStream
         sudo dnf install -y nginx
+    fi
+fi
+
+# Verify nginx has HTTP/2 support compiled in
+echo "Verifying nginx HTTP/2 support..."
+if nginx -V 2>&1 | grep -q "with-http_v2_module"; then
+    echo "✅ nginx has HTTP/2 support compiled in"
+else
+    echo "⚠️  nginx does not have HTTP/2 support, trying to install additional modules..."
+    # Try to install nginx modules package if available
+    sudo dnf install -y nginx-all-modules nginx-mod-http2 || echo "HTTP/2 modules not available via package manager"
+    
+    # Check again after module installation
+    if nginx -V 2>&1 | grep -q "with-http_v2_module"; then
+        echo "✅ nginx HTTP/2 support enabled via modules"
+    else
+        echo "❌ WARNING: nginx HTTP/2 support not available - HTTPS gRPC proxy may not work"
+        echo "    Consider using direct gRPC port (50051) instead of HTTPS (443)"
     fi
 fi
 
@@ -68,4 +86,3 @@ else
 fi
 
 echo "User-data script completed successfully at $(date)"
-
