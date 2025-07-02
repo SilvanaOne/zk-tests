@@ -123,7 +123,7 @@ if aws s3 cp s3://silvana-tee-images/rpc-cert.tar.gz /tmp/rpc-cert.tar.gz 2>/dev
     sudo tar -xzf rpc-cert.tar.gz -C /
     
     # Verify certificates were extracted successfully
-    if [ -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" ]; then
+    if sudo test -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem"; then
         echo "✅ Certificates restored from S3 successfully"
         cert_from_s3=true
     else
@@ -141,13 +141,13 @@ if [ "$cert_from_s3" = false ]; then
     sudo certbot certonly --webroot -w /var/www/letsencrypt --non-interactive --agree-tos -m "$EMAIL" -d "$DOMAIN_NAME"
     
     # Upload new certificates to S3 for future use
-    if [ -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" ]; then
+    if sudo test -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem"; then
         echo "📤 Uploading new certificates to S3..."
         cd /tmp
         sudo tar -czf rpc-cert.tar.gz -C / etc/letsencrypt/live/${DOMAIN_NAME} etc/letsencrypt/archive/${DOMAIN_NAME} etc/letsencrypt/renewal/${DOMAIN_NAME}.conf
-        aws s3 cp rpc-cert.tar.gz s3://silvana-tee-images/rpc-cert.tar.gz
+        sudo aws s3 cp rpc-cert.tar.gz s3://silvana-tee-images/rpc-cert.tar.gz
         echo "✅ Certificates uploaded to S3 for future deployments"
-        rm -f /tmp/rpc-cert.tar.gz
+        sudo rm -f /tmp/rpc-cert.tar.gz
     else
         echo "❌ Certificate generation failed"
         exit 1
@@ -299,7 +299,7 @@ CERT_SCRIPT
 sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/nats-cert-permissions.sh
 
 # Configure and start NATS
-if [ -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" ]; then
+if sudo test -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem"; then
     echo "Setting certificate permissions for NATS..."
     sudo chgrp ssl-cert /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem
     sudo chgrp ssl-cert /etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem

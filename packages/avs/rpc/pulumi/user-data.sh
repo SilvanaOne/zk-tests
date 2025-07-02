@@ -2,7 +2,6 @@
 
 # AWS EC2 User Data Script for Silvana RPC Server
 # This script performs initial system setup and then calls start.sh from the git repository
-# Designed to stay under AWS 16KB user-data limit
 
 # Set up logging
 exec > >(tee /var/log/user-data.log)
@@ -69,4 +68,5 @@ else
 fi
 
 echo "User-data script completed successfully at $(date)"
+
 
