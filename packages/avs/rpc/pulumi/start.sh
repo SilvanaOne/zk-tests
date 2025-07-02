@@ -495,11 +495,14 @@ echo ""
 
 echo "Ready for RPC server deployment! 🚀" 
 
-cd /home/ec2-user/zk-tests/packages/avs/rpc
-cargo build --release
+# cd /home/ec2-user/zk-tests/packages/avs/rpc
+# cargo build --release
 
 echo "🔄 Note: After deployment, start the RPC server with:"
 echo "   cd /home/ec2-user/zk-tests/packages/avs/rpc"
+echo "   cargo build --release"
+echo "   sudo setcap CAP_NET_BIND_SERVICE=+eip target/release/rpc"
 echo "   cargo run --release"
 echo ""
 echo "🔒 The gRPC server will automatically detect TLS certificates and enable HTTPS on port 443"
+echo "⚡ setcap grants port 443 binding permission without running as root"

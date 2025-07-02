@@ -158,6 +158,13 @@ export = async () => {
         cidrBlocks: ["0.0.0.0/0"],
       },
       {
+        description: "gRPC with TLS",
+        fromPort: 8443,
+        toPort: 8443,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
         description: "gRPC Port 50051",
         fromPort: 50051,
         toPort: 50051,

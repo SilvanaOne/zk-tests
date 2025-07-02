@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dotenvy;
 use std::env;
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -161,6 +162,8 @@ async fn main() -> Result<()> {
         result = grpc_server => {
             if let Err(e) = result {
                 error!("gRPC server failed: {}", e);
+                error!("Error details: {:?}", e);
+                error!("Error source: {:?}", e.source());
             }
         }
         result = metrics_server => {
