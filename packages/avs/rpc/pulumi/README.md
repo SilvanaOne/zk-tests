@@ -1,7 +1,7 @@
 # AWS TypeScript Pulumi Template
 
 ````
-ssh -i "RPC.pem" ec2-user@18.194.39.156
+ssh -i "RPC2.pem" ec2-user@18.194.39.156
 sudo less /var/log/cloud-init-output.log
 
 ```sh
