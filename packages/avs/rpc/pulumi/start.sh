@@ -192,7 +192,7 @@ server {
 
     # gRPC specific configuration
     location / {
-        grpc_pass http://grpc_backend;  # Use http:// since backend doesn't use TLS
+        grpc_pass grpc_backend;
         grpc_set_header Host \$host;
         grpc_set_header X-Real-IP \$remote_addr;
         grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
