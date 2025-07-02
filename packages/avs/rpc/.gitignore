@@ -1,3 +1,6 @@
 target/
 ssh/.env
 .env.backup
+certs/
+.env.rpc
+.env

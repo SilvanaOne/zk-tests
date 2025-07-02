@@ -7,7 +7,7 @@ sudo less /var/log/cloud-init-output.log
 ```sh
 git clone https://github.com/SilvanaOne/zk-tests
 cd zk-tests/packages/avs/rpc
-make
+cargo run --release
 ````
 
 🔒 NATS (TLS): nats://rpc-dev.silvana.dev:4222

@@ -160,79 +160,8 @@ if [ "$cert_from_s3" = false ]; then
     fi
 fi
 
-# Add HTTPS configuration for gRPC
-echo "Adding HTTPS configuration..."
-cat <<EOF | sudo tee -a /etc/nginx/conf.d/rpc-silvana.conf
-
-# gRPC upstream for load balancing and health checks
-upstream grpc_backend {
-    server localhost:50051;
-    keepalive 32;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name ${DOMAIN_NAME};
-
-    ssl_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-
-    # Timeouts and buffer sizes for gRPC
-    client_body_timeout 300;
-    client_header_timeout 300;
-    client_max_body_size 4m;
-    
-    # gRPC specific buffer configurations
-    grpc_buffer_size 4k;
-    grpc_connect_timeout 60s;
-    grpc_read_timeout 300s;
-    grpc_send_timeout 300s;
-
-    # gRPC specific configuration
-    location / {
-        grpc_pass grpc_backend;
-        grpc_set_header Host \$host;
-        grpc_set_header X-Real-IP \$remote_addr;
-        grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        grpc_set_header X-Forwarded-Proto \$scheme;
-        
-        # Additional buffer settings
-        grpc_buffer_size 4k;
-        grpc_read_timeout 300;
-        grpc_send_timeout 300;
-        
-        # Error handling
-        error_page 502 @grpc_error;
-        
-        # CORS headers for gRPC-Web
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,grpc-timeout,grpc-encoding,grpc-accept-encoding' always;
-        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range,grpc-status,grpc-message' always;
-        
-        # Handle preflight requests
-        if (\$request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' '*';
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,grpc-timeout,grpc-encoding,grpc-accept-encoding';
-            add_header 'Access-Control-Max-Age' 1728000;
-            add_header 'Content-Type' 'text/plain; charset=utf-8';
-            add_header 'Content-Length' 0;
-            return 204;
-        }
-    }
-    
-    # Error page for gRPC errors
-    location @grpc_error {
-        internal;
-        add_header grpc-status 14;
-        add_header grpc-message "Upstream connection error";
-        return 502;
-    }
-}
-EOF
+# The gRPC server handles TLS directly on port 443
+echo "✅ nginx configured for HTTP only (gRPC uses direct TLS)"
 
 # Test and reload nginx with final configuration
 echo "Testing final nginx configuration..."
@@ -240,22 +169,46 @@ if sudo nginx -t; then
     echo "✅ Final nginx configuration is valid"
     sudo systemctl reload nginx
     
-    # Verify nginx is listening on port 443
+    # Verify nginx is listening on port 80 (HTTP only)
     sleep 2
-    if sudo netstat -tlnp | grep -q ":443.*nginx"; then
-        echo "✅ nginx is listening on port 443"
+    if sudo netstat -tlnp | grep -q ":80.*nginx"; then
+        echo "✅ nginx is listening on port 80 (HTTP/redirect only)"
     else
-        echo "❌ nginx is NOT listening on port 443"
+        echo "❌ nginx is NOT listening on port 80"
         echo "Checking nginx error logs..."
         sudo tail -n 10 /var/log/nginx/error.log
-        echo "Checking certificate files..."
-        sudo ls -la /etc/letsencrypt/live/${DOMAIN_NAME}/ || echo "Certificate directory not found"
         exit 1
     fi
 else
     echo "❌ Final nginx configuration failed"
     sudo nginx -t  # Show the error details
     exit 1
+fi
+
+# Copy certificates to RPC project directory for easy access
+echo "Copying SSL certificates to RPC project directory..."
+if sudo test -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem"; then
+    # Create certificates directory in RPC project
+    sudo -u ec2-user mkdir -p /home/ec2-user/zk-tests/packages/avs/rpc/certs
+    
+    # Copy certificates to RPC project directory with proper ownership
+    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" /home/ec2-user/zk-tests/packages/avs/rpc/certs/
+    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem" /home/ec2-user/zk-tests/packages/avs/rpc/certs/
+    
+    # Set proper ownership and permissions
+    sudo chown ec2-user:ec2-user /home/ec2-user/zk-tests/packages/avs/rpc/certs/*
+    sudo chmod 600 /home/ec2-user/zk-tests/packages/avs/rpc/certs/*
+    
+    echo "✅ SSL certificates copied to RPC project directory"
+    echo "   📁 Location: /home/ec2-user/zk-tests/packages/avs/rpc/certs/"
+    
+    # Add certs directory to .gitignore to prevent accidental commit of certificates
+    if ! grep -q "^certs/" /home/ec2-user/zk-tests/packages/avs/rpc/.gitignore 2>/dev/null; then
+        echo "certs/" | sudo -u ec2-user tee -a /home/ec2-user/zk-tests/packages/avs/rpc/.gitignore > /dev/null
+        echo "   🔒 Added certs/ to .gitignore for security"
+    fi
+else
+    echo "❌ SSL certificates not found - gRPC server will run without TLS"
 fi
 
 # -------------------------
@@ -269,7 +222,7 @@ Description=Renew Let\'s Encrypt certificates
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/certbot renew --quiet --deploy-hook "/usr/bin/systemctl reload nginx && /usr/local/bin/upload-renewed-certs.sh"
+ExecStart=/usr/bin/certbot renew --quiet --deploy-hook "/usr/bin/systemctl reload nginx && /usr/local/bin/upload-renewed-certs.sh && /usr/local/bin/update-rpc-certs.sh"
 EOF
 
 cat <<'EOF' | sudo tee /etc/systemd/system/certbot-renew.timer
@@ -308,6 +261,33 @@ fi
 UPLOAD_SCRIPT
 
 sudo chmod +x /usr/local/bin/upload-renewed-certs.sh
+
+# Create script to update RPC certificates when they get renewed
+echo "Creating RPC certificate update script..."
+cat <<UPDATE_RPC_SCRIPT | sudo tee /usr/local/bin/update-rpc-certs.sh
+#!/bin/bash
+# Script to update RPC project certificates after renewal
+DOMAIN_NAME="${DOMAIN_NAME}"
+RPC_CERTS_DIR="/home/ec2-user/zk-tests/packages/avs/rpc/certs"
+
+echo "\$(date): Updating RPC project certificates..."
+
+if [ -f "/etc/letsencrypt/live/\${DOMAIN_NAME}/fullchain.pem" ]; then
+    # Copy renewed certificates to RPC project
+    cp "/etc/letsencrypt/live/\${DOMAIN_NAME}/fullchain.pem" "\${RPC_CERTS_DIR}/"
+    cp "/etc/letsencrypt/live/\${DOMAIN_NAME}/privkey.pem" "\${RPC_CERTS_DIR}/"
+    
+    # Set proper ownership and permissions
+    chown ec2-user:ec2-user "\${RPC_CERTS_DIR}"/*
+    chmod 600 "\${RPC_CERTS_DIR}"/*
+    
+    echo "\$(date): ✅ RPC project certificates updated successfully"
+else
+    echo "\$(date): ❌ Failed to find renewed certificates"
+fi
+UPDATE_RPC_SCRIPT
+
+sudo chmod +x /usr/local/bin/update-rpc-certs.sh
 
 # -------------------------
 # Install and Configure NATS JetStream with TLS
@@ -494,7 +474,8 @@ echo "   • NATS JetStream: $(sudo systemctl is-active nats-server)"
 echo "   • SSL Auto-renewal: $(sudo systemctl is-active certbot-renew.timer)"
 echo ""
 echo "🌐 Endpoints:"
-echo "   • gRPC + gRPC-Web: https://${DOMAIN_NAME}:443"
+echo "   • gRPC + gRPC-Web (Direct TLS): https://${DOMAIN_NAME}:443"
+echo "   • HTTP Redirect: http://${DOMAIN_NAME}:80"
 if [ "$nats_config" = "TLS enabled" ]; then
 echo "   • NATS (TLS): nats://${DOMAIN_NAME}:4222"
 echo "   • NATS-WS (TLS): wss://${DOMAIN_NAME}:8080/ws"
@@ -513,3 +494,12 @@ echo "   • NATS CLI: nats --help"
 echo ""
 
 echo "Ready for RPC server deployment! 🚀" 
+
+cd /home/ec2-user/zk-tests/packages/avs/rpc
+cargo build --release
+
+echo "🔄 Note: After deployment, start the RPC server with:"
+echo "   cd /home/ec2-user/zk-tests/packages/avs/rpc"
+echo "   cargo run --release"
+echo ""
+echo "🔒 The gRPC server will automatically detect TLS certificates and enable HTTPS on port 443"

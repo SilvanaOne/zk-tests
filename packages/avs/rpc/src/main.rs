@@ -4,10 +4,10 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tonic::transport::Server;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Include the generated protobuf code
@@ -57,6 +57,11 @@ async fn main() -> Result<()> {
         .parse()
         .expect("Invalid METRICS_ADDR format");
 
+    // TLS configuration
+    let tls_cert_path = env::var("TLS_CERT_PATH");
+    let tls_key_path = env::var("TLS_KEY_PATH");
+    let enable_tls = tls_cert_path.is_ok() && tls_key_path.is_ok();
+
     // Parse buffer configuration with memory-safe defaults
     let batch_size = env::var("BATCH_SIZE")
         .unwrap_or_else(|_| "100".to_string())
@@ -76,6 +81,11 @@ async fn main() -> Result<()> {
     info!("🚀 Starting Silvana RPC server");
     info!("📡 Server address: {} (gRPC + gRPC-Web)", server_addr);
     info!("📊 Metrics address: {}", metrics_addr);
+    if enable_tls {
+        info!("🔒 TLS: Enabled (direct gRPC over HTTPS)");
+    } else {
+        info!("🔓 TLS: Disabled (plain gRPC over HTTP)");
+    }
     info!("🗄️  Database: TiDB Serverless");
     info!("🌐 Protocols: gRPC (HTTP/2) and gRPC-Web (HTTP/1.1)");
     info!(
@@ -121,13 +131,28 @@ async fn main() -> Result<()> {
         .allow_methods(Any)
         .expose_headers(Any);
 
-    // Start both servers concurrently with gRPC-Web support
-    let grpc_server = Server::builder()
+    // Build server with optional TLS
+    let mut server_builder = Server::builder()
         .accept_http1(true) // Enable HTTP/1.1 for gRPC-Web
         .layer(cors)
-        .layer(GrpcWebLayer::new())
-        .add_service(grpc_service)
-        .serve(server_addr);
+        .layer(GrpcWebLayer::new());
+
+    // Configure TLS if certificates are available
+    if enable_tls {
+        match load_tls_config(&tls_cert_path.unwrap(), &tls_key_path.unwrap()).await {
+            Ok(tls_config) => {
+                info!("✅ TLS certificates loaded successfully");
+                server_builder = server_builder.tls_config(tls_config)?;
+            }
+            Err(e) => {
+                warn!("⚠️  Failed to load TLS certificates: {}", e);
+                warn!("�� Falling back to unencrypted gRPC");
+            }
+        }
+    }
+
+    // Start both servers concurrently
+    let grpc_server = server_builder.add_service(grpc_service).serve(server_addr);
 
     let metrics_server = start_metrics_server(metrics_addr);
 
@@ -146,4 +171,20 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn load_tls_config(cert_path: &str, key_path: &str) -> Result<ServerTlsConfig> {
+    use tokio::fs;
+
+    let cert = fs::read(cert_path)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to read certificate file {}: {}", cert_path, e))?;
+
+    let key = fs::read(key_path)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to read private key file {}: {}", key_path, e))?;
+
+    let identity = Identity::from_pem(&cert, &key);
+
+    Ok(ServerTlsConfig::new().identity(identity))
 }
