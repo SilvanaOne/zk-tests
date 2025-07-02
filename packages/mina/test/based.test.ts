@@ -103,8 +103,8 @@ describe("Based rollup", async () => {
       throw new Error("PRIVATE_KEY is not set");
     }
 
-    //const url = "https://devnet.zeko.io/graphql";
-    const url = "http://m1.zeko.io/graphql";
+    const url = "https://devnet.zeko.io/graphql";
+    //const url = "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
       mina: url,
@@ -163,7 +163,7 @@ describe("Based rollup", async () => {
       console.log("receiptChainHash", receiptChainHash.toJSON());
 
       const tx = await Mina.transaction(
-        { sender, fee: 500_000_000, memo: `event3_${i}`, nonce: nonce++ },
+        { sender, fee: 500_000_000_000, memo: `event3_${i}`, nonce: nonce++ },
         async () => {
           const update = AccountUpdate.create(sender);
           update.body.events = events;

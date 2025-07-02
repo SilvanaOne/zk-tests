@@ -14,6 +14,120 @@ export = async () => {
   const keyPairName = "RPC"; // Using RPC keypair
   const region = "eu-central-1"; // Using eu-central-1 region
 
+  // -------------------------
+  // IAM Role and Policies for EC2 Instance
+  // -------------------------
+
+  // Create IAM role for EC2 instance
+  const ec2Role = new aws.iam.Role("silvana-rpc-ec2-role", {
+    assumeRolePolicy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Action: "sts:AssumeRole",
+          Effect: "Allow",
+          Principal: {
+            Service: "ec2.amazonaws.com",
+          },
+        },
+      ],
+    }),
+    tags: {
+      Name: "silvana-rpc-ec2-role",
+      Project: "silvana-rpc",
+    },
+  });
+
+  // Create policy for Parameter Store access
+  const parameterStorePolicy = new aws.iam.Policy(
+    "silvana-rpc-parameter-store-policy",
+    {
+      description:
+        "Policy for accessing Silvana RPC environment variables in Parameter Store",
+      policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Action: ["ssm:GetParameter"],
+            Resource: "arn:aws:ssm:*:*:parameter/silvana-rpc/*/env",
+          },
+          {
+            Effect: "Allow",
+            Action: "kms:Decrypt",
+            Resource: "*",
+          },
+        ],
+      }),
+      tags: {
+        Name: "silvana-rpc-parameter-store-policy",
+        Project: "silvana-rpc",
+      },
+    }
+  );
+
+  // Create policy for S3 access (for certificates)
+  const s3Policy = new aws.iam.Policy("silvana-rpc-s3-policy", {
+    description: "Policy for accessing S3 bucket for SSL certificates",
+    policy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: ["s3:GetObject", "s3:PutObject"],
+          Resource: "arn:aws:s3:::silvana-tee-images/rpc-cert.tar.gz",
+        },
+      ],
+    }),
+    tags: {
+      Name: "silvana-rpc-s3-policy",
+      Project: "silvana-rpc",
+    },
+  });
+
+  // Attach policies to the role
+  new aws.iam.RolePolicyAttachment("silvana-rpc-parameter-store-attachment", {
+    role: ec2Role.name,
+    policyArn: parameterStorePolicy.arn,
+  });
+
+  new aws.iam.RolePolicyAttachment("silvana-rpc-s3-attachment", {
+    role: ec2Role.name,
+    policyArn: s3Policy.arn,
+  });
+
+  // Create instance profile
+  const instanceProfile = new aws.iam.InstanceProfile(
+    "silvana-rpc-instance-profile",
+    {
+      role: ec2Role.name,
+      tags: {
+        Name: "silvana-rpc-instance-profile",
+        Project: "silvana-rpc",
+      },
+    }
+  );
+
+  // -------------------------
+  // Store Environment Variables in Parameter Store
+  // -------------------------
+
+  // Read and store the .env.rpc file in Parameter Store
+  const envContent = fs.readFileSync("./.env.rpc", "utf8");
+
+  const envParameter = new aws.ssm.Parameter("silvana-rpc-env-dev", {
+    name: "/silvana-rpc/dev/env",
+    type: "SecureString",
+    value: envContent,
+    keyId: "alias/aws/ssm",
+    description: "Silvana RPC environment variables for development",
+    tags: {
+      Name: "silvana-rpc-env-dev",
+      Project: "silvana-rpc",
+      Environment: "dev",
+    },
+  });
+
   // Create Elastic IP for the RPC instance
   const rpcElasticIp = new aws.ec2.Eip("silvana-rpc-ip", {
     domain: "vpc",
@@ -106,9 +220,10 @@ export = async () => {
     "silvana-rpc-instance",
     {
       ami: amiIdArm64,
-      instanceType: "c7g.4xlarge", // Graviton processor as requested
+      instanceType: "c7g.4xlarge", // Graviton processor t4g.micro - 1 GB RAM
       keyName: keyPairName,
       vpcSecurityGroupIds: [securityGroup.id],
+      iamInstanceProfile: instanceProfile.name,
 
       // NO Nitro Enclaves enabled (removed enclaveOptions)
 
@@ -129,6 +244,7 @@ export = async () => {
       },
     },
     {
+      dependsOn: [instanceProfile, envParameter],
       //ignoreChanges: ["userData"],
     }
   );
@@ -152,5 +268,7 @@ export = async () => {
     rpcInstancePrivateIp: rpcInstance.privateIp,
     region: region,
     keyPairName: keyPairName,
+    iamRoleArn: ec2Role.arn,
+    parameterStoreArn: envParameter.arn,
   };
 };
