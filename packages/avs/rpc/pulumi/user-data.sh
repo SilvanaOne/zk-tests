@@ -143,7 +143,8 @@ upstream grpc_backend {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name ${DOMAIN_NAME};
 
     ssl_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
@@ -244,8 +245,10 @@ rm -f /tmp/nats-cli.rpm
 
 # Give NATS user access to Let's Encrypt certificates
 echo "Setting up certificate access for NATS..."
-# Add nats user to ssl-cert group (created by certbot)
-sudo usermod -a -G ssl-cert nats 2>/dev/null || true
+# Create ssl-cert group if it doesn't exist (Amazon Linux 2023 doesn't create it by default)
+sudo groupadd ssl-cert 2>/dev/null || true
+# Add nats user to ssl-cert group
+sudo usermod -a -G ssl-cert nats
 
 # Create renewal hooks directory if it doesn't exist
 sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy
@@ -253,13 +256,10 @@ sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 # Create a script to set proper permissions for certificates after renewal
 cat <<'CERT_SCRIPT' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/nats-cert-permissions.sh
 #!/bin/bash
-# Set permissions for NATS to read SSL certificates
 chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
 chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
 chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
 chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
-
-# Restart NATS server to reload certificates
 systemctl reload-or-restart nats-server
 CERT_SCRIPT
 
@@ -272,6 +272,9 @@ if [ -f "/etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem" ]; then
     sudo chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
     sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
     sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
+    
+    # Verify certificate permissions
+    ls -la /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
 
     # Create NATS configuration with TLS
     echo "Creating NATS configuration with TLS..."
@@ -399,7 +402,9 @@ EOF
         echo "🔒 NATS-WS (TLS): wss://rpc.silvana.dev:8080/ws"
         echo "📊 NATS monitoring: http://rpc.silvana.dev:8222"
     else
-        echo "⚠️  NATS server failed to start with TLS, reverting to non-TLS configuration"
+        echo "⚠️  NATS server failed to start with TLS, checking logs..."
+        sudo journalctl -u nats-server -n 10 --no-pager
+        echo "Reverting to non-TLS configuration..."
         # Revert to the original non-TLS configuration
         cat <<EOF | sudo tee /etc/nats/nats-server.conf
 # NATS Server Configuration with JetStream (Fallback - No TLS)
