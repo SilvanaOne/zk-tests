@@ -15,7 +15,7 @@ sudo dnf update -y
 # Install required packages (using dnf consistently for Amazon Linux 2023)
 # Note: Skip curl since curl-minimal provides the functionality and conflicts with curl package
 echo "Installing required packages..."
-sudo dnf install -y awscli nano git make gcc protobuf-compiler protobuf-devel --skip-broken
+sudo dnf install -y awscli nano git make gcc protobuf-compiler protobuf-devel libcap --skip-broken
 
 # Install nginx with HTTP/2 support (critical for gRPC proxy)
 echo "Installing nginx with HTTP/2 support..."
