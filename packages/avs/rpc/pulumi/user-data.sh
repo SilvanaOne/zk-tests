@@ -176,17 +176,15 @@ fi
 
 # Install NATS CLI tool for management
 echo "Installing NATS CLI tool..."
-NATS_CLI_VERSION="0.1.5"
-wget -q "https://github.com/nats-io/natscli/releases/download/v${NATS_CLI_VERSION}/nats-${NATS_CLI_VERSION}-linux-amd64.tar.gz" -O /tmp/nats-cli.tar.gz
-cd /tmp
-if tar -xzf nats-cli.tar.gz; then
-    sudo mv "nats-${NATS_CLI_VERSION}-linux-amd64/nats" /usr/local/bin/
-    sudo chmod +x /usr/local/bin/nats
-    echo "✅ NATS CLI installed at /usr/local/bin/nats"
+NATS_CLI_VERSION="0.2.3"
+wget -q "https://github.com/nats-io/natscli/releases/download/v${NATS_CLI_VERSION}/nats-${NATS_CLI_VERSION}-amd64.rpm" -O /tmp/nats-cli.rpm
+if sudo dnf install -y /tmp/nats-cli.rpm; then
+    echo "✅ NATS CLI v${NATS_CLI_VERSION} installed successfully via RPM"
+    nats --version 2>/dev/null || echo "📋 NATS CLI ready for use"
 else
     echo "⚠️  NATS CLI installation failed, continuing without CLI"
 fi
-rm -rf /tmp/nats-*
+rm -f /tmp/nats-cli.rpm
 
 # -------------------------
 # Nginx / Certbot setup for gRPC
