@@ -33,17 +33,10 @@ if ! command -v git >/dev/null 2>&1; then
     sudo dnf install -y git-all
 fi
 
-
-# -------------------------
-# Install Rust and Cargo
-# -------------------------
 echo "Installing Rust and Cargo..."
 sudo -u ec2-user -i bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
 sudo -u ec2-user -i bash -c 'source ~/.cargo/env && rustc --version && cargo --version'
 
-# -------------------------
-# Clone zk-tests repository
-# -------------------------
 echo "Cloning zk-tests repository as ec2-user into /home/ec2-user..."
 if command -v git >/dev/null 2>&1; then
     sudo -u ec2-user -i bash -c 'cd /home/ec2-user && git clone --quiet --no-progress --depth 1 https://github.com/SilvanaOne/zk-tests'
@@ -52,9 +45,6 @@ else
     exit 1
 fi
 
-# -------------------------
-# Install and Configure NATS JetStream Server
-# -------------------------
 echo "Installing NATS JetStream server..."
 
 # Create nats user
@@ -179,10 +169,6 @@ sleep 3
 # Verify NATS is running
 if sudo systemctl is-active --quiet nats-server; then
     echo "✅ NATS JetStream server started successfully (without TLS)"
-    echo "NATS server listening on port 4222"
-    echo "NATS WebSocket listening on port 8080"
-    echo "NATS monitoring available on port 8222"
-    echo "Note: TLS will be configured after SSL certificates are obtained"
 else
     echo "WARNING: NATS server failed to start properly"
     echo "Check logs with: sudo journalctl -u nats-server -f"
@@ -483,11 +469,6 @@ EOF
     sleep 5
     if sudo systemctl is-active --quiet nats-server; then
         echo "✅ NATS JetStream server restarted successfully with TLS"
-        echo "🔒 NATS server (TLS) listening on port 4222"
-        echo "🔒 NATS WebSocket (TLS) listening on port 8080"
-        echo "📊 NATS monitoring available on port 8222"
-        echo "🌐 Connect using: nats://rpc.silvana.dev:4222 (TLS required)"
-        echo "🌐 WebSocket connect using: wss://rpc.silvana.dev:8080/ws"
     else
         echo "⚠️  NATS server failed to start with TLS, reverting to non-TLS configuration"
         # Revert to the original non-TLS configuration
