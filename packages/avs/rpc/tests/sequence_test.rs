@@ -13,7 +13,7 @@ use events::*;
 // Test configuration
 const TOTAL_EVENTS: usize = 10;
 const SEQUENCE_COUNT: usize = 10;
-const SERVER_ADDR: &str = "https://rpc-dev.silvana.dev:8443"; //"https://rpc-dev.silvana.dev:443";
+const SERVER_ADDR: &str = "http://rpc-dev.silvana.dev:50051"; //"https://rpc-dev.silvana.dev:443";
                                                               // Generate a unique coordinator ID for each test run to avoid data contamination
 fn get_unique_coordinator_id() -> String {
     format!("seq-test-{}", get_current_timestamp())
