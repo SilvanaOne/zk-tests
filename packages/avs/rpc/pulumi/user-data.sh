@@ -59,6 +59,203 @@ else
 fi
 
 # -------------------------
+# Install and Configure NATS JetStream Server
+# -------------------------
+echo "Installing NATS JetStream server..."
+
+# Create nats user
+sudo useradd -r -s /bin/false nats
+
+# Download and install NATS server
+NATS_VERSION="2.11.6"
+wget -q "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-amd64.tar.gz" -O /tmp/nats-server.tar.gz
+cd /tmp
+tar -xzf nats-server.tar.gz
+sudo mv "nats-server-v${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/
+sudo chmod +x /usr/local/bin/nats-server
+rm -rf /tmp/nats-server*
+
+# Create NATS directories
+sudo mkdir -p /etc/nats
+sudo mkdir -p /var/lib/nats/jetstream
+sudo mkdir -p /var/log/nats
+sudo chown -R nats:nats /var/lib/nats
+sudo chown -R nats:nats /var/log/nats
+
+# Create NATS configuration file with JetStream enabled
+cat <<EOF | sudo tee /etc/nats/nats-server.conf
+# NATS Server Configuration with JetStream
+
+# Network configuration
+host: 0.0.0.0
+port: 4222
+
+# TLS configuration for NATS protocol
+tls {
+    cert_file: "/etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem"
+    key_file: "/etc/letsencrypt/live/rpc.silvana.dev/privkey.pem"
+    
+    # Optional: Require client certificates
+    # verify: true
+    # ca_file: "/path/to/ca.pem"
+    
+    # Timeout for TLS handshake
+    timeout: 5
+}
+
+# HTTP monitoring port
+http_port: 8222
+
+# WebSocket configuration for NATS-WS with TLS
+websocket {
+    # Enable WebSocket on port 8080
+    host: 0.0.0.0
+    port: 8080
+    
+    # Enable compression
+    compression: true
+    
+    # Set custom path (default is /ws)
+    # path: "/ws"
+    
+    # Enable TLS for secure WebSocket (wss://)
+    tls {
+        cert_file: "/etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem"
+        key_file: "/etc/letsencrypt/live/rpc.silvana.dev/privkey.pem"
+    }
+}
+
+# JetStream configuration
+jetstream {
+    # Store directory
+    store_dir: "/var/lib/nats/jetstream"
+    
+    # Maximum memory and storage limits
+    max_memory_store: 1GB
+    max_file_store: 10GB
+    
+    # Sync options for durability
+    sync_interval: 2s
+}
+
+# Logging
+log_file: "/var/log/nats/nats-server.log"
+log_size_limit: 100MB
+max_traced_msg_len: 32768
+
+# Limits
+max_payload: 1MB
+max_pending: 256MB
+max_connections: 64K
+
+# Write deadline
+write_deadline: "10s"
+
+# Client authentication (optional - can be enabled later)
+# accounts {
+#   \$SYS {
+#     users = [
+#       {user: "admin", pass: "password"}
+#     ]
+#   }
+# }
+EOF
+
+# Create systemd service file for NATS
+cat <<EOF | sudo tee /etc/systemd/system/nats-server.service
+[Unit]
+Description=NATS JetStream Server
+Documentation=https://docs.nats.io/
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=nats
+Group=nats
+ExecStart=/usr/local/bin/nats-server -c /etc/nats/nats-server.conf
+ExecReload=/bin/kill -s HUP \$MAINPID
+KillMode=process
+Restart=always
+RestartSec=5s
+LimitNOFILE=1000000
+LimitNPROC=1000000
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nats /var/log/nats
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Give NATS user access to Let's Encrypt certificates
+echo "Setting up certificate access for NATS..."
+# Add nats user to ssl-cert group (created by certbot)
+sudo usermod -a -G ssl-cert nats 2>/dev/null || true
+
+# Create a script to set proper permissions for certificates after renewal
+cat <<'CERT_SCRIPT' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/nats-cert-permissions.sh
+#!/bin/bash
+# Set permissions for NATS to read SSL certificates
+chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
+chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
+chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
+chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
+
+# Restart NATS server to reload certificates
+systemctl reload-or-restart nats-server
+CERT_SCRIPT
+
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/nats-cert-permissions.sh
+
+# Set initial permissions for existing certificates (if they exist)
+if [ -f "/etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem" ]; then
+    echo "Setting initial certificate permissions..."
+    sudo chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
+    sudo chgrp ssl-cert /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
+    sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
+    sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
+fi
+
+# Start and enable NATS service
+echo "Starting NATS JetStream server with TLS..."
+sudo systemctl daemon-reload
+sudo systemctl enable nats-server
+sudo systemctl start nats-server
+
+# Wait a moment for NATS to start
+sleep 3
+
+# Verify NATS is running
+if sudo systemctl is-active --quiet nats-server; then
+    echo "NATS JetStream server with TLS started successfully"
+    echo "NATS server (TLS) listening on port 4222"
+    echo "NATS WebSocket (TLS) listening on port 8080"
+    echo "NATS monitoring available on port 8222"
+    echo "Connect using: nats://rpc.silvana.dev:4222 (TLS required)"
+    echo "WebSocket connect using: wss://rpc.silvana.dev:8080/ws"
+else
+    echo "WARNING: NATS server failed to start properly"
+    echo "Check logs with: sudo journalctl -u nats-server -f"
+fi
+
+# Install NATS CLI tool for management (optional)
+echo "Installing NATS CLI tool..."
+NATS_CLI_VERSION="0.2.3"
+wget -q "https://github.com/nats-io/natscli/releases/download/v${NATS_CLI_VERSION}/nats-${NATS_CLI_VERSION}-linux-amd64.tar.gz" -O /tmp/nats-cli.tar.gz
+cd /tmp
+tar -xzf nats-cli.tar.gz
+sudo mv "nats-${NATS_CLI_VERSION}-linux-amd64/nats" /usr/local/bin/
+sudo chmod +x /usr/local/bin/nats
+rm -rf /tmp/nats-*
+
+echo "NATS CLI installed at /usr/local/bin/nats"
+
+# -------------------------
 # Nginx / Certbot setup for gRPC
 # -------------------------
 

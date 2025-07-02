@@ -2,6 +2,7 @@ use crate::database::EventDatabase;
 use crate::entities;
 use crate::events::Event;
 use anyhow::{anyhow, Result};
+use std::env;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, OwnedSemaphorePermit, RwLock, Semaphore};
@@ -89,6 +90,8 @@ struct BatchProcessor {
     circuit_breaker: Arc<CircuitBreaker>,
     batch_size: usize,
     flush_interval: Duration,
+    nats_client: Option<async_nats::Client>,
+    nats_stream_name: String,
 }
 
 impl EventBuffer {
@@ -124,17 +127,19 @@ impl EventBuffer {
             flush_interval / 10, // 10% of flush interval
         );
 
-        let processor = BatchProcessor::new(
-            receiver,
-            database,
-            Arc::clone(&stats),
-            Arc::clone(&memory_usage),
-            Arc::clone(&circuit_breaker),
-            batch_size,
-            flush_interval,
-        );
-
+        // Spawn the processor task
         tokio::spawn(async move {
+            let processor = BatchProcessor::new(
+                receiver,
+                database,
+                Arc::clone(&stats),
+                Arc::clone(&memory_usage),
+                Arc::clone(&circuit_breaker),
+                batch_size,
+                flush_interval,
+            )
+            .await;
+
             processor.run().await;
         });
 
@@ -520,7 +525,7 @@ impl CircuitBreaker {
 }
 
 impl BatchProcessor {
-    fn new(
+    async fn new(
         receiver: mpsc::Receiver<EventWithPermit>,
         database: Arc<EventDatabase>,
         stats: Arc<BufferStatsAtomic>,
@@ -529,6 +534,29 @@ impl BatchProcessor {
         batch_size: usize,
         flush_interval: Duration,
     ) -> Self {
+        // Initialize NATS client if NATS_URL is provided
+        let nats_client = match env::var("NATS_URL") {
+            Ok(nats_url) => {
+                match async_nats::connect(&nats_url).await {
+                    Ok(client) => {
+                        info!("✅ Connected to NATS server at: {}", nats_url);
+                        Some(client)
+                    }
+                    Err(e) => {
+                        warn!("⚠️  Failed to connect to NATS server at {}: {}. Continuing without NATS.", nats_url, e);
+                        None
+                    }
+                }
+            }
+            Err(_) => {
+                info!("ℹ️  NATS_URL not set. Running without NATS publishing.");
+                None
+            }
+        };
+
+        let nats_stream_name =
+            env::var("NATS_STREAM_NAME").unwrap_or_else(|_| "silvana-events".to_string());
+
         Self {
             receiver,
             buffer: Vec::with_capacity(batch_size),
@@ -538,6 +566,8 @@ impl BatchProcessor {
             circuit_breaker,
             batch_size,
             flush_interval,
+            nats_client,
+            nats_stream_name,
         }
     }
 
@@ -775,14 +805,126 @@ impl BatchProcessor {
     }
 
     async fn publish_to_nats(&self, events: &[Event]) {
-        // Placeholder for NATS JetStream publishing
+        if events.is_empty() {
+            return;
+        }
+
+        let Some(ref client) = self.nats_client else {
+            debug!(
+                "ℹ️  NATS client not available. Skipping publishing {} events.",
+                events.len()
+            );
+            return;
+        };
+
         debug!(
-            "Publishing {} events to NATS JetStream (placeholder)",
-            events.len()
+            "📤 Publishing {} events to NATS JetStream stream '{}'",
+            events.len(),
+            self.nats_stream_name
         );
 
-        // TODO: Implement actual NATS publishing with similar memory safety measures
-        info!("Would publish {} events to NATS JetStream", events.len());
+        let mut successful_publishes = 0;
+        let mut failed_publishes = 0;
+
+        for event in events {
+            // Serialize event to JSON for NATS publishing
+            match serde_json::to_vec(event) {
+                Ok(payload) => {
+                    // Create a subject based on event type for better routing
+                    let subject = self.create_nats_subject(event);
+
+                    // Publish to NATS with timeout
+                    match timeout(
+                        Duration::from_secs(5),
+                        client.publish(&subject, payload.into()),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_)) => {
+                            successful_publishes += 1;
+                            debug!("✅ Published event to NATS subject: {}", subject);
+                        }
+                        Ok(Err(e)) => {
+                            failed_publishes += 1;
+                            warn!(
+                                "❌ Failed to publish event to NATS subject {}: {}",
+                                subject, e
+                            );
+                        }
+                        Err(_) => {
+                            failed_publishes += 1;
+                            warn!("⏰ Timeout publishing event to NATS subject: {}", subject);
+                        }
+                    }
+                }
+                Err(e) => {
+                    failed_publishes += 1;
+                    error!("🔥 Failed to serialize event for NATS publishing: {}", e);
+                }
+            }
+        }
+
+        if successful_publishes > 0 {
+            info!(
+                "📤 Successfully published {}/{} events to NATS JetStream",
+                successful_publishes,
+                events.len()
+            );
+        }
+
+        if failed_publishes > 0 {
+            warn!(
+                "⚠️  Failed to publish {}/{} events to NATS",
+                failed_publishes,
+                events.len()
+            );
+        }
+    }
+
+    fn create_nats_subject(&self, event: &Event) -> String {
+        let base_subject = format!("{}.events", self.nats_stream_name);
+
+        match &event.event_type {
+            Some(event_type) => match event_type {
+                crate::events::event::EventType::Coordinator(coord_event) => {
+                    match &coord_event.event {
+                        Some(coordinator_event) => match coordinator_event {
+                            crate::events::coordinator_event::Event::CoordinatorStarted(_) => {
+                                format!("{}.coordinator.started", base_subject)
+                            }
+                            crate::events::coordinator_event::Event::AgentStartedJob(_) => {
+                                format!("{}.coordinator.agent_started_job", base_subject)
+                            }
+                            crate::events::coordinator_event::Event::AgentFinishedJob(_) => {
+                                format!("{}.coordinator.agent_finished_job", base_subject)
+                            }
+                            crate::events::coordinator_event::Event::CoordinationTx(_) => {
+                                format!("{}.coordinator.coordination_tx", base_subject)
+                            }
+                            crate::events::coordinator_event::Event::CoordinatorError(_) => {
+                                format!("{}.coordinator.error", base_subject)
+                            }
+                            crate::events::coordinator_event::Event::ClientTransaction(_) => {
+                                format!("{}.coordinator.client_transaction", base_subject)
+                            }
+                        },
+                        None => format!("{}.coordinator.unknown", base_subject),
+                    }
+                }
+                crate::events::event::EventType::Agent(agent_event) => match &agent_event.event {
+                    Some(agent_event_type) => match agent_event_type {
+                        crate::events::agent_event::Event::Message(_) => {
+                            format!("{}.agent.message", base_subject)
+                        }
+                        crate::events::agent_event::Event::Transaction(_) => {
+                            format!("{}.agent.transaction", base_subject)
+                        }
+                    },
+                    None => format!("{}.agent.unknown", base_subject),
+                },
+            },
+            None => format!("{}.unknown", base_subject),
+        }
     }
 
     fn estimate_event_memory_usage(&self, event: &Event) -> usize {

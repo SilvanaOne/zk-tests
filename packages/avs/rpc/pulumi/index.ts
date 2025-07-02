@@ -23,11 +23,11 @@ export = async () => {
     },
   });
 
-  // Create Security Group allowing SSH, HTTPS, and gRPC port 50051
+  // Create Security Group allowing SSH, HTTPS, gRPC, NATS, and monitoring ports
   const securityGroup = new aws.ec2.SecurityGroup("silvana-rpc-sg", {
     name: "silvana-rpc-sg",
     description:
-      "Security group allowing SSH (22), HTTPS (443), and gRPC (50051)",
+      "Security group for Silvana RPC: SSH (22), HTTP (80), HTTPS (443), gRPC (50051), NATS (4222), NATS-WS (8080), NATS monitoring (8222), Prometheus metrics (9090)",
     ingress: [
       {
         description: "SSH",
@@ -54,6 +54,34 @@ export = async () => {
         description: "Port 80",
         fromPort: 80,
         toPort: 80,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "NATS Port 4222",
+        fromPort: 4222,
+        toPort: 4222,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "NATS WebSocket Port 8080",
+        fromPort: 8080,
+        toPort: 8080,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "NATS Monitoring Port 8222",
+        fromPort: 8222,
+        toPort: 8222,
+        protocol: "tcp",
+        cidrBlocks: ["0.0.0.0/0"],
+      },
+      {
+        description: "Prometheus Metrics Port 9090",
+        fromPort: 9090,
+        toPort: 9090,
         protocol: "tcp",
         cidrBlocks: ["0.0.0.0/0"],
       },

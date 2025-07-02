@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tonic::transport::Server;
+use tonic_web::GrpcWebLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -72,9 +74,10 @@ async fn main() -> Result<()> {
         .unwrap_or(500000);
 
     info!("🚀 Starting Silvana RPC server");
-    info!("📡 Server address: {}", server_addr);
+    info!("📡 Server address: {} (gRPC + gRPC-Web)", server_addr);
     info!("📊 Metrics address: {}", metrics_addr);
     info!("🗄️  Database: TiDB Serverless");
+    info!("🌐 Protocols: gRPC (HTTP/2) and gRPC-Web (HTTP/1.1)");
     info!(
         "⚙️  Batch size: {} events (minimum trigger - actual batches may be larger)",
         batch_size
@@ -109,10 +112,20 @@ async fn main() -> Result<()> {
     let events_service = SilvanaEventsServiceImpl::new(event_buffer, Arc::clone(&database));
     let grpc_service = SilvanaEventsServiceServer::new(events_service);
 
-    info!("🎯 Starting gRPC server on {}", server_addr);
+    info!("🎯 Starting gRPC and gRPC-Web server on {}", server_addr);
 
-    // Start both servers concurrently
+    // Configure CORS for gRPC-Web
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_headers(Any)
+        .allow_methods(Any)
+        .expose_headers(Any);
+
+    // Start both servers concurrently with gRPC-Web support
     let grpc_server = Server::builder()
+        .accept_http1(true) // Enable HTTP/1.1 for gRPC-Web
+        .layer(cors)
+        .layer(GrpcWebLayer::new())
         .add_service(grpc_service)
         .serve(server_addr);
 
