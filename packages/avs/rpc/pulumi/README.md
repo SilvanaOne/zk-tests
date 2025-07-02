@@ -10,6 +10,10 @@ cd zk-tests/packages/avs/rpc
 make
 ````
 
+🔒 NATS (TLS): nats://rpc-dev.silvana.dev:4222
+🔒 NATS-WS (TLS): wss://rpc-dev.silvana.dev:8080/ws
+📊 NATS monitoring: http://rpc-dev.silvana.dev:8222
+
 copy image to s3 and back:
 
 ```sh

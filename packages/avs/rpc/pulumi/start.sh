@@ -161,11 +161,11 @@ cat <<EOF | sudo tee -a /etc/nginx/conf.d/rpc-silvana.conf
 # gRPC upstream for load balancing and health checks
 upstream grpc_backend {
     server localhost:50051;
+    keepalive 32;
 }
 
 server {
-    listen 443 ssl;
-    http2 on;
+    listen 443 ssl http2;
     server_name ${DOMAIN_NAME};
 
     ssl_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
@@ -173,19 +173,36 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
 
+    # Timeouts and buffer sizes for gRPC
     client_body_timeout 300;
     client_header_timeout 300;
+    client_max_body_size 4m;
+    
+    # gRPC specific buffer configurations
+    grpc_buffer_size 4k;
+    grpc_connect_timeout 60s;
+    grpc_read_timeout 300s;
+    grpc_send_timeout 300s;
+    
+    # HTTP/2 specific settings
+    http2_body_preread_size 64k;
+    http2_recv_buffer_size 256k;
 
     # gRPC specific configuration
     location / {
-        grpc_pass grpc://grpc_backend;
+        grpc_pass http://grpc_backend;  # Use http:// since backend doesn't use TLS
         grpc_set_header Host \$host;
         grpc_set_header X-Real-IP \$remote_addr;
         grpc_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         grpc_set_header X-Forwarded-Proto \$scheme;
         
+        # Additional buffer settings
+        grpc_buffer_size 4k;
         grpc_read_timeout 300;
         grpc_send_timeout 300;
+        
+        # Error handling
+        error_page 502 @grpc_error;
         
         # CORS headers for gRPC-Web
         add_header 'Access-Control-Allow-Origin' '*' always;
@@ -203,6 +220,14 @@ server {
             add_header 'Content-Length' 0;
             return 204;
         }
+    }
+    
+    # Error page for gRPC errors
+    location @grpc_error {
+        internal;
+        add_header grpc-status 14;
+        add_header grpc-message "Upstream connection error";
+        return 502;
     }
 }
 EOF
