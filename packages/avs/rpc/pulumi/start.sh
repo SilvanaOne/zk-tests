@@ -113,7 +113,13 @@ EOF
 
 # Test and reload nginx
 echo "Testing nginx configuration..."
-sudo nginx -t && sudo nginx -s reload
+if sudo nginx -t; then
+    echo "✅ Initial nginx configuration is valid"
+    sudo systemctl reload nginx
+else
+    echo "❌ Initial nginx configuration failed"
+    exit 1
+fi
 
 # Check for existing certificates in S3 first
 echo "Checking for existing SSL certificates in S3..."
@@ -229,8 +235,28 @@ server {
 EOF
 
 # Test and reload nginx with final configuration
-echo "Reloading nginx with final configuration..."
-sudo nginx -t && sudo nginx -s reload
+echo "Testing final nginx configuration..."
+if sudo nginx -t; then
+    echo "✅ Final nginx configuration is valid"
+    sudo systemctl reload nginx
+    
+    # Verify nginx is listening on port 443
+    sleep 2
+    if sudo netstat -tlnp | grep -q ":443.*nginx"; then
+        echo "✅ nginx is listening on port 443"
+    else
+        echo "❌ nginx is NOT listening on port 443"
+        echo "Checking nginx error logs..."
+        sudo tail -n 10 /var/log/nginx/error.log
+        echo "Checking certificate files..."
+        sudo ls -la /etc/letsencrypt/live/${DOMAIN_NAME}/ || echo "Certificate directory not found"
+        exit 1
+    fi
+else
+    echo "❌ Final nginx configuration failed"
+    sudo nginx -t  # Show the error details
+    exit 1
+fi
 
 # -------------------------
 # Setup SSL Certificate Auto-Renewal
