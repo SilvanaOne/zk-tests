@@ -45,17 +45,17 @@ else
     exit 1
 fi
 
-echo "Installing NATS JetStream server..."
+echo "Preparing NATS JetStream server (will install after TLS certificates are ready)..."
 
 # Create nats user
 sudo useradd -r -s /bin/false nats
 
-# Download and install NATS server
+# Download and install NATS server for ARM64 (Graviton)
 NATS_VERSION="2.11.6"
-wget -q "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-amd64.tar.gz" -O /tmp/nats-server.tar.gz
+wget -q "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-arm64.tar.gz" -O /tmp/nats-server.tar.gz
 cd /tmp
 tar -xzf nats-server.tar.gz
-sudo mv "nats-server-v${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/
+sudo mv "nats-server-v${NATS_VERSION}-linux-arm64/nats-server" /usr/local/bin/
 sudo chmod +x /usr/local/bin/nats-server
 rm -rf /tmp/nats-server*
 
@@ -66,125 +66,7 @@ sudo mkdir -p /var/log/nats
 sudo chown -R nats:nats /var/lib/nats
 sudo chown -R nats:nats /var/log/nats
 
-# Create initial NATS configuration file (without TLS - will be updated after certificates)
-cat <<EOF | sudo tee /etc/nats/nats-server.conf
-# NATS Server Configuration with JetStream (Initial - No TLS)
-
-# Network configuration
-host: 0.0.0.0
-port: 4222
-
-# HTTP monitoring port
-http_port: 8222
-
-# WebSocket configuration for NATS-WS (without TLS initially)
-websocket {
-    # Enable WebSocket on port 8080
-    host: 0.0.0.0
-    port: 8080
-    
-    # Enable compression
-    compression: true
-    
-    # Set custom path (default is /ws)
-    # path: "/ws"
-}
-
-# JetStream configuration
-jetstream {
-    # Store directory
-    store_dir: "/var/lib/nats/jetstream"
-    
-    # Maximum memory and storage limits
-    max_memory_store: 1GB
-    max_file_store: 10GB
-    
-    # Sync options for durability
-    sync_interval: 2s
-}
-
-# Logging
-log_file: "/var/log/nats/nats-server.log"
-log_size_limit: 100MB
-max_traced_msg_len: 32768
-
-# Limits
-max_payload: 1MB
-max_pending: 256MB
-max_connections: 64K
-
-# Write deadline
-write_deadline: "10s"
-
-# Client authentication (optional - can be enabled later)
-# accounts {
-#   \$SYS {
-#     users = [
-#       {user: "admin", pass: "password"}
-#     ]
-#   }
-# }
-EOF
-
-# Create systemd service file for NATS
-cat <<EOF | sudo tee /etc/systemd/system/nats-server.service
-[Unit]
-Description=NATS JetStream Server
-Documentation=https://docs.nats.io/
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=nats
-Group=nats
-ExecStart=/usr/local/bin/nats-server -c /etc/nats/nats-server.conf
-ExecReload=/bin/kill -s HUP \$MAINPID
-KillMode=process
-Restart=always
-RestartSec=5s
-LimitNOFILE=1000000
-LimitNPROC=1000000
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=true
-ProtectSystem=strict
-ReadWritePaths=/var/lib/nats /var/log/nats
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start NATS service initially without TLS
-echo "Starting NATS JetStream server (initially without TLS)..."
-sudo systemctl daemon-reload
-sudo systemctl enable nats-server
-sudo systemctl start nats-server
-
-# Wait a moment for NATS to start
-sleep 3
-
-# Verify NATS is running
-if sudo systemctl is-active --quiet nats-server; then
-    echo "✅ NATS JetStream server started successfully (without TLS)"
-else
-    echo "WARNING: NATS server failed to start properly"
-    echo "Check logs with: sudo journalctl -u nats-server -f"
-fi
-
-# Install NATS CLI tool for management
-echo "Installing NATS CLI tool..."
-NATS_CLI_VERSION="0.2.3"
-wget -q "https://github.com/nats-io/natscli/releases/download/v${NATS_CLI_VERSION}/nats-${NATS_CLI_VERSION}-amd64.rpm" -O /tmp/nats-cli.rpm
-if sudo dnf install -y /tmp/nats-cli.rpm; then
-    echo "✅ NATS CLI v${NATS_CLI_VERSION} installed successfully via RPM"
-    nats --version 2>/dev/null || echo "📋 NATS CLI ready for use"
-else
-    echo "⚠️  NATS CLI installation failed, continuing without CLI"
-fi
-rm -f /tmp/nats-cli.rpm
+echo "✅ NATS server binaries prepared, will configure and start after TLS certificates"
 
 # -------------------------
 # Nginx / Certbot setup for gRPC
@@ -344,9 +226,21 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now certbot-renew.timer
 
 # -------------------------
-# Configure NATS with TLS now that certificates are available
+# Install and Configure NATS JetStream Server with TLS
 # -------------------------
-echo "Configuring NATS with TLS now that SSL certificates are available..."
+echo "Installing and configuring NATS JetStream server with TLS..."
+
+# Install NATS CLI tool for management (ARM64 for Graviton)
+echo "Installing NATS CLI tool..."
+NATS_CLI_VERSION="0.2.3"
+wget -q "https://github.com/nats-io/natscli/releases/download/v${NATS_CLI_VERSION}/nats-${NATS_CLI_VERSION}-arm64.rpm" -O /tmp/nats-cli.rpm
+if sudo dnf install -y /tmp/nats-cli.rpm; then
+    echo "✅ NATS CLI v${NATS_CLI_VERSION} installed successfully via RPM"
+    nats --version 2>/dev/null || echo "📋 NATS CLI ready for use"
+else
+    echo "⚠️  NATS CLI installation failed, continuing without CLI"
+fi
+rm -f /tmp/nats-cli.rpm
 
 # Give NATS user access to Let's Encrypt certificates
 echo "Setting up certificate access for NATS..."
@@ -379,8 +273,8 @@ if [ -f "/etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem" ]; then
     sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/fullchain.pem
     sudo chmod 640 /etc/letsencrypt/live/rpc.silvana.dev/privkey.pem
 
-    # Update NATS configuration with TLS
-    echo "Updating NATS configuration with TLS..."
+    # Create NATS configuration with TLS
+    echo "Creating NATS configuration with TLS..."
     cat <<EOF | sudo tee /etc/nats/nats-server.conf
 # NATS Server Configuration with JetStream and TLS
 
@@ -459,14 +353,51 @@ write_deadline: "10s"
 # }
 EOF
 
-    # Restart NATS server with new TLS configuration
-    echo "Restarting NATS server with TLS configuration..."
-    sudo systemctl restart nats-server
+    # Create systemd service file for NATS
+    echo "Creating NATS systemd service..."
+    cat <<EOF | sudo tee /etc/systemd/system/nats-server.service
+[Unit]
+Description=NATS JetStream Server
+Documentation=https://docs.nats.io/
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=nats
+Group=nats
+ExecStart=/usr/local/bin/nats-server -c /etc/nats/nats-server.conf
+ExecReload=/bin/kill -s HUP \$MAINPID
+KillMode=process
+Restart=always
+RestartSec=5s
+LimitNOFILE=1000000
+LimitNPROC=1000000
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nats /var/log/nats
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Start NATS server with TLS configuration
+    echo "Starting NATS JetStream server with TLS..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable nats-server
+    sudo systemctl start nats-server
 
     # Wait a moment and verify NATS is running with TLS
     sleep 5
     if sudo systemctl is-active --quiet nats-server; then
-        echo "✅ NATS JetStream server restarted successfully with TLS"
+        echo "✅ NATS JetStream server started successfully with TLS"
+        echo "🔒 NATS (TLS): nats://rpc.silvana.dev:4222"
+        echo "🔒 NATS-WS (TLS): wss://rpc.silvana.dev:8080/ws"
+        echo "📊 NATS monitoring: http://rpc.silvana.dev:8222"
     else
         echo "⚠️  NATS server failed to start with TLS, reverting to non-TLS configuration"
         # Revert to the original non-TLS configuration
@@ -519,11 +450,94 @@ max_connections: 64K
 # Write deadline
 write_deadline: "10s"
 EOF
-        sudo systemctl restart nats-server
+        sudo systemctl start nats-server
         echo "🔓 NATS server running without TLS on port 4222"
     fi
 else
-    echo "⚠️  SSL certificates not found, NATS will continue without TLS"
+    echo "⚠️  SSL certificates not found, starting NATS without TLS"
+    # Create fallback non-TLS configuration
+    cat <<EOF | sudo tee /etc/nats/nats-server.conf
+# NATS Server Configuration with JetStream (No TLS - Certificates not found)
+
+# Network configuration
+host: 0.0.0.0
+port: 4222
+
+# HTTP monitoring port
+http_port: 8222
+
+# WebSocket configuration for NATS-WS (without TLS)
+websocket {
+    # Enable WebSocket on port 8080
+    host: 0.0.0.0
+    port: 8080
+    
+    # Enable compression
+    compression: true
+}
+
+# JetStream configuration
+jetstream {
+    # Store directory
+    store_dir: "/var/lib/nats/jetstream"
+    
+    # Maximum memory and storage limits
+    max_memory_store: 1GB
+    max_file_store: 10GB
+    
+    # Sync options for durability
+    sync_interval: 2s
+}
+
+# Logging
+log_file: "/var/log/nats/nats-server.log"
+log_size_limit: 100MB
+max_traced_msg_len: 32768
+
+# Limits
+max_payload: 1MB
+max_pending: 256MB
+max_connections: 64K
+
+# Write deadline
+write_deadline: "10s"
+EOF
+
+    # Create systemd service and start NATS
+    cat <<EOF | sudo tee /etc/systemd/system/nats-server.service
+[Unit]
+Description=NATS JetStream Server
+Documentation=https://docs.nats.io/
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=nats
+Group=nats
+ExecStart=/usr/local/bin/nats-server -c /etc/nats/nats-server.conf
+ExecReload=/bin/kill -s HUP \$MAINPID
+KillMode=process
+Restart=always
+RestartSec=5s
+LimitNOFILE=1000000
+LimitNPROC=1000000
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nats /var/log/nats
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable nats-server
+    sudo systemctl start nats-server
+    echo "🔓 NATS server started without TLS (certificates not available)"
 fi
 
 echo "User-data script completed successfully at $(date)"
