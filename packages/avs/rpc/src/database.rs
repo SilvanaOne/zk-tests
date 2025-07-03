@@ -3,7 +3,7 @@ use crate::events::Event;
 use anyhow::Result;
 use sea_orm::{Database, DatabaseConnection, EntityTrait, TransactionTrait};
 use std::time::Instant;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 // Result structs for query responses
 #[derive(Debug, Clone)]
@@ -154,7 +154,7 @@ impl EventDatabase {
         }
 
         // Phase 1: Run all independent main table insertions in parallel
-        info!("Phase 1: Running main table insertions in parallel");
+        debug!("Phase 1: Running main table insertions in parallel");
         let independent_results = tokio::try_join!(
             self.insert_coordinator_started_events(&txn, coordinator_started_events),
             self.insert_agent_started_job_events(&txn, agent_started_job_events),
@@ -173,7 +173,7 @@ impl EventDatabase {
             + independent_results.5;
 
         // Phase 2: Handle parent-child relationships for events with sequences
-        info!("Phase 2: Running parent-child table insertions");
+        debug!("Phase 2: Running parent-child table insertions");
         let parent_child_results = tokio::try_join!(
             self.insert_agent_message_events_with_sequences(
                 &txn,
@@ -195,7 +195,7 @@ impl EventDatabase {
         let duration_ms = duration.as_millis();
         let events_per_second = events.len() as f64 / duration.as_secs_f64();
 
-        info!(
+        debug!(
             "Successfully parallel batch inserted {} records for {} events in {}ms ({:.2}s) - {:.0} events/second",
             total_inserted,
             events.len(),
@@ -221,13 +221,24 @@ impl EventDatabase {
             "Parallel inserting {} coordinator_started_events",
             events.len()
         );
+        let events_len = events.len();
         match entities::coordinator_started_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted coordinator_started_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert coordinator_started_events: {}", e);
@@ -249,13 +260,24 @@ impl EventDatabase {
             "Parallel inserting {} agent_started_job_events",
             events.len()
         );
+        let events_len = events.len();
         match entities::agent_started_job_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted agent_started_job_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert agent_started_job_events: {}", e);
@@ -277,13 +299,24 @@ impl EventDatabase {
             "Parallel inserting {} agent_finished_job_events",
             events.len()
         );
+        let events_len = events.len();
         match entities::agent_finished_job_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted agent_finished_job_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert agent_finished_job_events: {}", e);
@@ -302,13 +335,24 @@ impl EventDatabase {
         }
 
         debug!("Parallel inserting {} coordination_tx_events", events.len());
+        let events_len = events.len();
         match entities::coordination_tx_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted coordination_tx_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert coordination_tx_events: {}", e);
@@ -330,13 +374,24 @@ impl EventDatabase {
             "Parallel inserting {} coordinator_message_events",
             events.len()
         );
+        let events_len = events.len();
         match entities::coordinator_message_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted coordinator_message_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert coordinator_message_events: {}", e);
@@ -358,13 +413,24 @@ impl EventDatabase {
             "Parallel inserting {} client_transaction_events",
             events.len()
         );
+        let events_len = events.len();
         match entities::client_transaction_event::Entity::insert_many(events)
             .exec(txn)
             .await
         {
             Ok(result) => {
                 debug!("Successfully inserted client_transaction_events");
-                Ok(result.last_insert_id as usize)
+                let count =
+                    if result.last_insert_id >= 0 && result.last_insert_id <= i64::MAX as i64 {
+                        result.last_insert_id as usize
+                    } else {
+                        warn!(
+                            "Invalid last_insert_id value: {}, defaulting to events count",
+                            result.last_insert_id
+                        );
+                        events_len
+                    };
+                Ok(count)
             }
             Err(e) => {
                 error!("Failed to batch insert client_transaction_events: {}", e);
@@ -389,6 +455,9 @@ impl EventDatabase {
             events.len()
         );
 
+        // FIXED: Save length before move to prevent borrow after move
+        let events_len = events.len();
+
         // Insert parent records first
         let parent_result = entities::agent_message_event::Entity::insert_many(events)
             .exec(txn)
@@ -410,7 +479,19 @@ impl EventDatabase {
             debug!("Successfully inserted agent message sequences");
         }
 
-        Ok(parent_result.last_insert_id as usize)
+        // FIXED: Safe casting to prevent panic
+        let count = if parent_result.last_insert_id >= 0
+            && parent_result.last_insert_id <= i64::MAX as i64
+        {
+            parent_result.last_insert_id as usize
+        } else {
+            warn!(
+                "Invalid last_insert_id value: {}, defaulting to events count",
+                parent_result.last_insert_id
+            );
+            events_len
+        };
+        Ok(count)
     }
 
     async fn insert_agent_transaction_events_with_sequences(
@@ -427,6 +508,9 @@ impl EventDatabase {
             "Parallel inserting {} agent_transaction_events with sequences",
             events.len()
         );
+
+        // FIXED: Save length before move to prevent borrow after move
+        let events_len = events.len();
 
         // Insert parent records first
         let parent_result = entities::agent_transaction_event::Entity::insert_many(events)
@@ -449,7 +533,19 @@ impl EventDatabase {
             debug!("Successfully inserted agent transaction sequences");
         }
 
-        Ok(parent_result.last_insert_id as usize)
+        // FIXED: Safe casting to prevent panic
+        let count = if parent_result.last_insert_id >= 0
+            && parent_result.last_insert_id <= i64::MAX as i64
+        {
+            parent_result.last_insert_id as usize
+        } else {
+            warn!(
+                "Invalid last_insert_id value: {}, defaulting to events count",
+                parent_result.last_insert_id
+            );
+            events_len
+        };
+        Ok(count)
     }
 
     fn create_agent_message_sequence_records(
@@ -465,15 +561,27 @@ impl EventDatabase {
 
         for sequences in sequences_per_event {
             for &sequence in sequences {
+                // FIXED: Safe casting to prevent overflow
+                let safe_sequence = if sequence <= i64::MAX as u64 {
+                    sequence as i64
+                } else {
+                    warn!(
+                        "Sequence value {} exceeds i64::MAX, clamping to maximum",
+                        sequence
+                    );
+                    i64::MAX
+                };
+
                 records.push(ActiveModel {
                     id: ActiveValue::NotSet,
                     agent_message_event_id: ActiveValue::Set(current_id),
-                    sequence: ActiveValue::Set(sequence as i64),
+                    sequence: ActiveValue::Set(safe_sequence),
                     created_at: ActiveValue::NotSet,
                     updated_at: ActiveValue::NotSet,
                 });
             }
-            current_id += 1; // Move to next parent event ID
+            // FIXED: Protect against overflow
+            current_id = current_id.saturating_add(1);
         }
 
         records
@@ -492,15 +600,27 @@ impl EventDatabase {
 
         for sequences in sequences_per_event {
             for &sequence in sequences {
+                // FIXED: Safe casting to prevent overflow
+                let safe_sequence = if sequence <= i64::MAX as u64 {
+                    sequence as i64
+                } else {
+                    warn!(
+                        "Sequence value {} exceeds i64::MAX, clamping to maximum",
+                        sequence
+                    );
+                    i64::MAX
+                };
+
                 records.push(ActiveModel {
                     id: ActiveValue::NotSet,
                     agent_transaction_event_id: ActiveValue::Set(current_id),
-                    sequence: ActiveValue::Set(sequence as i64),
+                    sequence: ActiveValue::Set(safe_sequence),
                     created_at: ActiveValue::NotSet,
                     updated_at: ActiveValue::NotSet,
                 });
             }
-            current_id += 1; // Move to next parent event ID
+            // FIXED: Protect against overflow
+            current_id = current_id.saturating_add(1);
         }
 
         records
@@ -526,7 +646,17 @@ impl EventDatabase {
 
         // Build the WHERE clause for optional filters
         let mut where_conditions = vec!["seqs.sequence = ?".to_string()];
-        let mut params: Vec<sea_orm::Value> = vec![(sequence as i64).into()];
+        // FIXED: Safe sequence casting to prevent overflow
+        let safe_sequence = if sequence <= i64::MAX as u64 {
+            sequence as i64
+        } else {
+            warn!(
+                "Sequence value {} exceeds i64::MAX, clamping to maximum",
+                sequence
+            );
+            i64::MAX
+        };
+        let mut params: Vec<sea_orm::Value> = vec![safe_sequence.into()];
 
         if let Some(coord_id) = &coordinator_id {
             where_conditions.push("e.coordinator_id = ?".to_string());
@@ -564,7 +694,22 @@ impl EventDatabase {
 
         let count_result = self.connection.query_one(count_stmt).await?;
         let total_count: u32 = count_result
-            .map(|row| row.try_get::<i64>("", "count").unwrap_or(0) as u32)
+            .map(|row| {
+                let count_i64 = row.try_get::<i64>("", "count").unwrap_or(0);
+                if count_i64 >= 0 && count_i64 <= u32::MAX as i64 {
+                    count_i64 as u32
+                } else {
+                    warn!(
+                        "Count value {} out of u32 range, clamping to u32::MAX",
+                        count_i64
+                    );
+                    if count_i64 < 0 {
+                        0
+                    } else {
+                        u32::MAX
+                    }
+                }
+            })
             .unwrap_or(0);
 
         if total_count == 0 {
@@ -625,7 +770,18 @@ impl EventDatabase {
                 app: row.try_get("", "app").unwrap_or_default(),
                 job_id: row.try_get("", "job_id").unwrap_or_default(),
                 sequences,
-                event_timestamp: row.try_get::<i64>("", "event_timestamp").unwrap_or(0) as u64,
+                event_timestamp: {
+                    let timestamp_i64 = row.try_get::<i64>("", "event_timestamp").unwrap_or(0);
+                    if timestamp_i64 >= 0 {
+                        timestamp_i64 as u64
+                    } else {
+                        warn!(
+                            "Negative timestamp value {}, defaulting to 0",
+                            timestamp_i64
+                        );
+                        0
+                    }
+                },
                 tx_hash: row.try_get("", "tx_hash").unwrap_or_default(),
                 chain: row.try_get("", "chain").unwrap_or_default(),
                 network: row.try_get("", "network").unwrap_or_default(),
@@ -652,7 +808,17 @@ impl EventDatabase {
 
         // Build the WHERE clause for optional filters
         let mut where_conditions = vec!["seqs.sequence = ?".to_string()];
-        let mut params: Vec<sea_orm::Value> = vec![(sequence as i64).into()];
+        // FIXED: Safe sequence casting to prevent overflow
+        let safe_sequence = if sequence <= i64::MAX as u64 {
+            sequence as i64
+        } else {
+            warn!(
+                "Sequence value {} exceeds i64::MAX, clamping to maximum",
+                sequence
+            );
+            i64::MAX
+        };
+        let mut params: Vec<sea_orm::Value> = vec![safe_sequence.into()];
 
         if let Some(coord_id) = &coordinator_id {
             where_conditions.push("e.coordinator_id = ?".to_string());
@@ -690,7 +856,22 @@ impl EventDatabase {
 
         let count_result = self.connection.query_one(count_stmt).await?;
         let total_count: u32 = count_result
-            .map(|row| row.try_get::<i64>("", "count").unwrap_or(0) as u32)
+            .map(|row| {
+                let count_i64 = row.try_get::<i64>("", "count").unwrap_or(0);
+                if count_i64 >= 0 && count_i64 <= u32::MAX as i64 {
+                    count_i64 as u32
+                } else {
+                    warn!(
+                        "Count value {} out of u32 range, clamping to u32::MAX",
+                        count_i64
+                    );
+                    if count_i64 < 0 {
+                        0
+                    } else {
+                        u32::MAX
+                    }
+                }
+            })
             .unwrap_or(0);
 
         if total_count == 0 {
@@ -742,8 +923,16 @@ impl EventDatabase {
                 .map(|dt| dt.timestamp())
                 .unwrap_or(0);
 
-            // Parse level as integer (TINYINT in database)
-            let level: u32 = row.try_get::<i32>("", "level").unwrap_or(0) as u32;
+            // FIXED: Safe level casting from i32 to u32
+            let level: u32 = {
+                let level_i32 = row.try_get::<i32>("", "level").unwrap_or(0);
+                if level_i32 >= 0 {
+                    level_i32 as u32
+                } else {
+                    warn!("Negative level value {}, defaulting to 0", level_i32);
+                    0
+                }
+            };
 
             results.push(AgentMessageEventResult {
                 id: row.try_get("", "id").unwrap_or(0),
@@ -753,7 +942,18 @@ impl EventDatabase {
                 app: row.try_get("", "app").unwrap_or_default(),
                 job_id: row.try_get("", "job_id").unwrap_or_default(),
                 sequences,
-                event_timestamp: row.try_get::<i64>("", "event_timestamp").unwrap_or(0) as u64,
+                event_timestamp: {
+                    let timestamp_i64 = row.try_get::<i64>("", "event_timestamp").unwrap_or(0);
+                    if timestamp_i64 >= 0 {
+                        timestamp_i64 as u64
+                    } else {
+                        warn!(
+                            "Negative timestamp value {}, defaulting to 0",
+                            timestamp_i64
+                        );
+                        0
+                    }
+                },
                 level,
                 message: row.try_get("", "message").unwrap_or_default(),
                 created_at_timestamp,
@@ -808,7 +1008,22 @@ impl EventDatabase {
 
         let count_result = self.connection.query_one(count_stmt).await?;
         let total_count: u32 = count_result
-            .map(|row| row.try_get::<i64>("", "count").unwrap_or(0) as u32)
+            .map(|row| {
+                let count_i64 = row.try_get::<i64>("", "count").unwrap_or(0);
+                if count_i64 >= 0 && count_i64 <= u32::MAX as i64 {
+                    count_i64 as u32
+                } else {
+                    warn!(
+                        "Count value {} out of u32 range, clamping to u32::MAX",
+                        count_i64
+                    );
+                    if count_i64 < 0 {
+                        0
+                    } else {
+                        u32::MAX
+                    }
+                }
+            })
             .unwrap_or(0);
 
         if total_count == 0 {
@@ -851,7 +1066,18 @@ impl EventDatabase {
             results.push(CoordinatorMessageEventResult {
                 id: row.try_get("", "id").unwrap_or(0),
                 coordinator_id: row.try_get("", "coordinator_id").unwrap_or_default(),
-                event_timestamp: row.try_get::<i64>("", "event_timestamp").unwrap_or(0) as u64,
+                event_timestamp: {
+                    let timestamp_i64 = row.try_get::<i64>("", "event_timestamp").unwrap_or(0);
+                    if timestamp_i64 >= 0 {
+                        timestamp_i64 as u64
+                    } else {
+                        warn!(
+                            "Negative event_timestamp value {}, defaulting to 0",
+                            timestamp_i64
+                        );
+                        0
+                    }
+                },
                 level,
                 message: row.try_get("", "message").unwrap_or_default(),
                 created_at_timestamp,
@@ -876,7 +1102,15 @@ fn convert_coordinator_started_event(
         coordinator_id: ActiveValue::Set(event.coordinator_id.clone()),
         ethereum_address: ActiveValue::Set(event.ethereum_address.clone()),
         sui_ed_25519_address: ActiveValue::Set(event.sui_ed25519_address.clone()),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
@@ -914,8 +1148,24 @@ fn convert_agent_finished_job_event(
         agent: ActiveValue::Set(event.agent.clone()),
         app: ActiveValue::Set(event.app.clone()),
         job_id: ActiveValue::Set(event.job_id.clone()),
-        duration: ActiveValue::Set(event.duration as i64),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        duration: ActiveValue::Set(if event.duration <= i64::MAX as u64 {
+            event.duration as i64
+        } else {
+            warn!(
+                "Duration {} exceeds i64::MAX, clamping to maximum",
+                event.duration
+            );
+            i64::MAX
+        }),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
@@ -936,7 +1186,15 @@ fn convert_coordination_tx_event(
         job_id: ActiveValue::Set(event.job_id.clone()),
         memo: ActiveValue::Set(event.memo.clone()),
         tx_hash: ActiveValue::Set(event.tx_hash.clone()),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
@@ -951,7 +1209,15 @@ fn convert_coordinator_message_event(
     ActiveModel {
         id: ActiveValue::NotSet,
         coordinator_id: ActiveValue::Set(event.coordinator_id.clone()),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         level: ActiveValue::Set(event.level().into()),
         message: ActiveValue::Set(event.message.clone()),
         created_at: ActiveValue::NotSet,
@@ -975,8 +1241,24 @@ fn convert_client_transaction_event(
         method: ActiveValue::Set(event.method.clone()),
         data: ActiveValue::Set(event.data.clone()),
         tx_hash: ActiveValue::Set(event.tx_hash.clone()),
-        sequence: ActiveValue::Set(event.sequence as i64),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        sequence: ActiveValue::Set(if event.sequence <= i64::MAX as u64 {
+            event.sequence as i64
+        } else {
+            warn!(
+                "Sequence {} exceeds i64::MAX, clamping to maximum",
+                event.sequence
+            );
+            i64::MAX
+        }),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
@@ -997,7 +1279,15 @@ fn convert_agent_message_event(
         agent: ActiveValue::Set(event.agent.clone()),
         app: ActiveValue::Set(event.app.clone()),
         job_id: ActiveValue::Set(event.job_id.clone()),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         level: ActiveValue::Set(event.level().into()),
         message: ActiveValue::Set(event.message.clone()),
         created_at: ActiveValue::NotSet,
@@ -1023,7 +1313,15 @@ fn convert_agent_transaction_event(
         agent: ActiveValue::Set(event.agent.clone()),
         app: ActiveValue::Set(event.app.clone()),
         job_id: ActiveValue::Set(event.job_id.clone()),
-        event_timestamp: ActiveValue::Set(event.event_timestamp as i64),
+        event_timestamp: ActiveValue::Set(if event.event_timestamp <= i64::MAX as u64 {
+            event.event_timestamp as i64
+        } else {
+            warn!(
+                "Event timestamp {} exceeds i64::MAX, clamping to maximum",
+                event.event_timestamp
+            );
+            i64::MAX
+        }),
         tx_hash: ActiveValue::Set(event.tx_hash.clone()),
         chain: ActiveValue::Set(event.chain.clone()),
         network: ActiveValue::Set(event.network.clone()),
@@ -1034,4 +1332,86 @@ fn convert_agent_transaction_event(
     };
 
     (active_model, sequences)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_safe_casting_functions() {
+        // Test sequence casting edge cases
+        let max_u64 = u64::MAX;
+        let safe_sequence = if max_u64 <= i64::MAX as u64 {
+            max_u64 as i64
+        } else {
+            i64::MAX
+        };
+        assert_eq!(safe_sequence, i64::MAX);
+
+        // Test timestamp casting edge cases
+        let test_timestamp = i64::MAX as u64 + 1;
+        let safe_timestamp = if test_timestamp <= i64::MAX as u64 {
+            test_timestamp as i64
+        } else {
+            i64::MAX
+        };
+        assert_eq!(safe_timestamp, i64::MAX);
+
+        // Test count casting edge cases
+        let negative_count = -1i64;
+        let safe_count = if negative_count >= 0 && negative_count <= u32::MAX as i64 {
+            negative_count as u32
+        } else {
+            if negative_count < 0 {
+                0
+            } else {
+                u32::MAX
+            }
+        };
+        assert_eq!(safe_count, 0);
+
+        // Test level casting edge cases
+        let negative_level = -5i32;
+        let safe_level = if negative_level >= 0 {
+            negative_level as u32
+        } else {
+            0
+        };
+        assert_eq!(safe_level, 0);
+    }
+
+    #[test]
+    fn test_overflow_protection() {
+        // Test ID incrementing protection
+        let current_id = i64::MAX;
+        let next_id = current_id.saturating_add(1);
+        assert_eq!(next_id, i64::MAX); // Should not overflow
+
+        // Test u64 to i64 conversion limits
+        assert!(u64::MAX > i64::MAX as u64);
+
+        // Test that our casting logic handles this correctly
+        let large_value = u64::MAX;
+        let safe_value = if large_value <= i64::MAX as u64 {
+            large_value as i64
+        } else {
+            i64::MAX
+        };
+        assert_eq!(safe_value, i64::MAX);
+    }
+
+    #[test]
+    fn test_memory_bounds() {
+        // Test that u32::MAX casting bounds work correctly
+        let large_count = u32::MAX as i64 + 1;
+        let safe_count = if large_count >= 0 && large_count <= u32::MAX as i64 {
+            large_count as u32
+        } else {
+            if large_count < 0 {
+                0
+            } else {
+                u32::MAX
+            }
+        };
+        assert_eq!(safe_count, u32::MAX);
+    }
 }

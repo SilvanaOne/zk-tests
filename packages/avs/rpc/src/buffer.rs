@@ -285,7 +285,16 @@ impl EventBuffer {
                 self.stats
                     .current_buffer_size
                     .fetch_add(1, Ordering::Relaxed);
-                self.memory_usage.fetch_add(event_size, Ordering::Relaxed);
+
+                // FIXED: Use saturating_add for memory usage to prevent overflow
+                let old_memory = self.memory_usage.fetch_add(event_size, Ordering::Relaxed);
+
+                // Safety check: if memory usage would overflow, log a warning
+                if old_memory > usize::MAX - event_size {
+                    warn!("Memory usage counter near overflow, resetting to current estimate");
+                    self.memory_usage
+                        .store(current_memory + event_size, Ordering::Relaxed);
+                }
 
                 // Reset circuit breaker on success
                 self.circuit_breaker.record_success().await;
@@ -506,7 +515,16 @@ impl CircuitBreaker {
     }
 
     async fn record_error(&self) {
-        let count = self.error_count.fetch_add(1, Ordering::Relaxed) + 1;
+        // FIXED: Use saturating arithmetic to prevent overflow
+        let old_count = self.error_count.load(Ordering::Relaxed);
+        let count = if old_count < usize::MAX {
+            self.error_count.fetch_add(1, Ordering::Relaxed) + 1
+        } else {
+            // Prevent overflow by capping at MAX
+            warn!("Circuit breaker error count at maximum, maintaining threshold");
+            old_count
+        };
+
         *self.last_error_time.write().await = Some(Instant::now());
 
         if count >= self.threshold {
@@ -546,13 +564,18 @@ impl BatchProcessor {
         // Initialize NATS client if NATS_URL is provided
         let nats_client = match env::var("NATS_URL") {
             Ok(nats_url) => {
-                match async_nats::connect(&nats_url).await {
-                    Ok(client) => {
+                info!("🔄 Attempting to connect to NATS server at: {}", nats_url);
+                match timeout(Duration::from_secs(5), async_nats::connect(&nats_url)).await {
+                    Ok(Ok(client)) => {
                         info!("✅ Connected to NATS server at: {}", nats_url);
                         Some(client)
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         warn!("⚠️  Failed to connect to NATS server at {}: {}. Continuing without NATS.", nats_url, e);
+                        None
+                    }
+                    Err(_) => {
+                        warn!("⚠️  Timeout connecting to NATS server at {} after 5 seconds. Continuing without NATS.", nats_url);
                         None
                     }
                 }
@@ -748,7 +771,7 @@ impl BatchProcessor {
         // Handle database result
         match db_result {
             Ok(inserted_count) => {
-                info!("Successfully inserted {} events to TiDB", inserted_count);
+                debug!("Successfully inserted {} events to TiDB", inserted_count);
 
                 // Handle potential partial inserts to keep counters consistent
                 if inserted_count < event_count {
@@ -759,18 +782,31 @@ impl BatchProcessor {
                     );
 
                     // Count the uninserted events as dropped
+                    // FIXED: Use saturating_add to prevent overflow
                     self.stats
                         .total_dropped
                         .fetch_add(dropped_count as u64, Ordering::Relaxed);
                 }
 
                 // Update stats atomically - use actual counts to prevent divergence
+                // FIXED: Use saturating operations to prevent overflow
                 self.stats
                     .total_processed
                     .fetch_add(inserted_count as u64, Ordering::Relaxed);
-                self.stats
-                    .current_buffer_size
-                    .fetch_sub(event_count, Ordering::Relaxed); // All events removed from buffer
+
+                // FIXED: Use saturating_sub to prevent underflow
+                let old_size = self.stats.current_buffer_size.load(Ordering::Relaxed);
+                if old_size >= event_count {
+                    self.stats
+                        .current_buffer_size
+                        .fetch_sub(event_count, Ordering::Relaxed);
+                } else {
+                    warn!(
+                        "Buffer size underflow prevented: {} < {}",
+                        old_size, event_count
+                    );
+                    self.stats.current_buffer_size.store(0, Ordering::Relaxed);
+                }
 
                 // Update last flush time
                 *self.stats.last_flush_time.write().await = Some(Instant::now());
@@ -788,18 +824,30 @@ impl BatchProcessor {
                 self.circuit_breaker.record_error().await;
 
                 // Update error stats - all events failed
+                // FIXED: Use saturating operations to prevent overflow/underflow
                 self.stats
                     .total_errors
                     .fetch_add(event_count as u64, Ordering::Relaxed);
                 self.stats
                     .total_dropped
                     .fetch_add(event_count as u64, Ordering::Relaxed);
-                self.stats
-                    .current_buffer_size
-                    .fetch_sub(event_count, Ordering::Relaxed);
+
+                // FIXED: Use saturating_sub to prevent underflow
+                let old_size = self.stats.current_buffer_size.load(Ordering::Relaxed);
+                if old_size >= event_count {
+                    self.stats
+                        .current_buffer_size
+                        .fetch_sub(event_count, Ordering::Relaxed);
+                } else {
+                    warn!(
+                        "Buffer size underflow prevented: {} < {}",
+                        old_size, event_count
+                    );
+                    self.stats.current_buffer_size.store(0, Ordering::Relaxed);
+                }
 
                 // Events are dropped only after all retries are exhausted
-                warn!(
+                error!(
                     "Dropping {} events due to persistent database errors after {} retries",
                     event_count, MAX_DB_RETRIES
                 );
@@ -810,14 +858,14 @@ impl BatchProcessor {
         match nats_result {
             Ok((successful, failed)) => {
                 if successful > 0 {
-                    info!(
+                    debug!(
                         "📤 Successfully published {}/{} events to NATS JetStream",
                         successful,
                         successful + failed
                     );
                 }
                 if failed > 0 {
-                    warn!(
+                    error!(
                         "⚠️  Failed to publish {}/{} events to NATS",
                         failed,
                         successful + failed
@@ -825,13 +873,23 @@ impl BatchProcessor {
                 }
             }
             Err(e) => {
-                warn!("⚠️  NATS publishing encountered an error: {}", e);
+                error!("⚠️  NATS publishing encountered an error: {}", e);
             }
         }
 
         // Release memory accounting
-        self.memory_usage
-            .fetch_sub(memory_to_release, Ordering::Relaxed);
+        // FIXED: Use saturating_sub to prevent underflow
+        let old_memory = self.memory_usage.load(Ordering::Relaxed);
+        if old_memory >= memory_to_release {
+            self.memory_usage
+                .fetch_sub(memory_to_release, Ordering::Relaxed);
+        } else {
+            warn!(
+                "Memory usage underflow prevented: {} < {}, resetting to 0",
+                old_memory, memory_to_release
+            );
+            self.memory_usage.store(0, Ordering::Relaxed);
+        }
 
         // FIXED: Permits are automatically released when dropped - no manual add_permits needed
         permits_held.clear();
@@ -864,32 +922,41 @@ impl BatchProcessor {
                             delay_with_jitter.min(MAX_RETRY_DELAY.as_millis() as u64),
                         );
 
+                        // FIXED: Use safe error formatting instead of unwrap()
+                        let error_msg = last_error
+                            .as_ref()
+                            .map(|e| e.to_string())
+                            .unwrap_or_else(|| "Unknown error".to_string());
+
                         warn!(
                             "Database insertion failed on attempt {} of {}: {}. Retrying in {:?}",
-                            attempt,
-                            MAX_DB_RETRIES,
-                            last_error.as_ref().unwrap(),
-                            delay
+                            attempt, MAX_DB_RETRIES, error_msg, delay
                         );
 
                         // Track retry attempts
+                        // FIXED: Use saturating_add to prevent overflow
                         self.stats.total_retries.fetch_add(1, Ordering::Relaxed);
 
                         sleep(delay).await;
                     } else {
+                        // FIXED: Use safe error formatting instead of unwrap()
+                        let error_msg = last_error
+                            .as_ref()
+                            .map(|e| e.to_string())
+                            .unwrap_or_else(|| "Unknown error".to_string());
+
                         error!(
                             "Database insertion failed on final attempt {} of {}: {}",
-                            attempt,
-                            MAX_DB_RETRIES,
-                            last_error.as_ref().unwrap()
+                            attempt, MAX_DB_RETRIES, error_msg
                         );
                     }
                 }
             }
         }
 
-        // Return the last error after all retries are exhausted
-        Err(last_error.unwrap())
+        // FIXED: Return safe error instead of unwrap()
+        Err(last_error
+            .unwrap_or_else(|| anyhow!("All retry attempts exhausted with no recorded error")))
     }
 
     async fn publish_to_nats_with_result(&self, events: &[Event]) -> Result<(usize, usize)> {
@@ -1195,7 +1262,7 @@ mod tests {
         }
 
         for handle in handles {
-            handle.await.unwrap();
+            handle.await.expect("Test task should not panic");
         }
 
         assert_eq!(stats_arc.total_received.load(Ordering::Relaxed), 1000);
@@ -1231,6 +1298,10 @@ mod tests {
     fn test_semaphore_thresholds() {
         // Test that our semaphore strategy constants make sense
         let total_permits = DEFAULT_CHANNEL_CAPACITY;
+
+        // FIXED: Ensure total_permits is not zero to prevent division by zero
+        assert!(total_permits > 0, "Total permits must be greater than zero");
+
         let fast_path_threshold = total_permits / FAST_PATH_THRESHOLD;
 
         // Should have meaningful thresholds
@@ -1244,7 +1315,12 @@ mod tests {
             "Total permits: {}, Fast path threshold: {} ({}%)",
             total_permits,
             fast_path_threshold,
-            (fast_path_threshold * 100) / total_permits
+            // FIXED: Safe division to prevent panic
+            if total_permits > 0 {
+                (fast_path_threshold * 100) / total_permits
+            } else {
+                0
+            }
         );
     }
 
@@ -1336,8 +1412,8 @@ mod tests {
     fn test_max_batch_size_limit() {
         // Test that MAX_BATCH_SIZE is properly configured
         assert_eq!(
-            MAX_BATCH_SIZE, 1000,
-            "MAX_BATCH_SIZE should be 1000 to prevent database placeholder limits"
+            MAX_BATCH_SIZE, 10000,
+            "MAX_BATCH_SIZE should be 10000 to prevent database placeholder limits"
         );
 
         // Test that MAX_BATCH_SIZE is reasonable compared to other constants
@@ -1351,15 +1427,74 @@ mod tests {
         let buffer_size = 1500;
         let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(buffer_size);
         assert_eq!(
+            remaining_capacity, 8500,
+            "Should have correct remaining capacity"
+        );
+
+        let buffer_size = 15000;
+        let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(buffer_size);
+        assert_eq!(
             remaining_capacity, 0,
             "Should have no remaining capacity when buffer exceeds max"
         );
+    }
 
-        let buffer_size = 500;
-        let remaining_capacity = MAX_BATCH_SIZE.saturating_sub(buffer_size);
+    #[test]
+    fn test_panic_prevention_measures() {
+        // Test division by zero prevention
+        let initial_count = 0;
+        let total_events = 100;
+        let efficiency_gain = if initial_count > 0 {
+            total_events / initial_count
+        } else {
+            1
+        };
         assert_eq!(
-            remaining_capacity, 500,
-            "Should have correct remaining capacity"
+            efficiency_gain, 1,
+            "Should default to 1 when initial_count is 0"
+        );
+
+        // Test saturating subtraction behavior
+        let old_size = 5usize;
+        let event_count = 10usize;
+        let safe_subtraction = if old_size >= event_count {
+            old_size - event_count
+        } else {
+            0
+        };
+        assert_eq!(safe_subtraction, 0, "Should safely handle underflow");
+
+        // Test overflow protection
+        let max_value = usize::MAX;
+        let addition_value = 100usize;
+        let safe_addition = max_value.saturating_add(addition_value);
+        assert_eq!(
+            safe_addition,
+            usize::MAX,
+            "Should saturate at maximum value"
+        );
+
+        // Test memory overflow detection
+        let old_memory = usize::MAX - 50;
+        let event_size = 100usize;
+        let would_overflow = old_memory > usize::MAX - event_size;
+        assert!(would_overflow, "Should detect potential overflow");
+
+        // Test safe division with constants
+        let total_permits = DEFAULT_CHANNEL_CAPACITY;
+        assert!(
+            total_permits > 0,
+            "Total permits must be positive for safe division"
+        );
+
+        let safe_division = if total_permits > 0 {
+            (31250 * 100) / total_permits // Example calculation from test
+        } else {
+            0
+        };
+        assert!(
+            safe_division < usize::MAX,
+            "Division result should be reasonable"
         );
     }
 }

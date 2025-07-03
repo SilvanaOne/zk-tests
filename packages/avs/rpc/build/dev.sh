@@ -5,6 +5,13 @@
 # Called from user-data.sh after basic system preparation
 
 set -e  # Exit on any error
+sudo dnf install -y git make protobuf-compiler protobuf-devel  --skip-broken
+
+# Verify git is installed before proceeding
+if ! command -v git >/dev/null 2>&1; then
+    echo "Git installation failed, retrying..."
+    sudo dnf install -y git-all
+fi
 
 echo "Installing Rust and Cargo..."
 sudo -u ec2-user -i bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'

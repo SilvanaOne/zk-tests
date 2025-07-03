@@ -63,6 +63,10 @@ help: ## Show this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+	@echo "Build Information:"
+	@echo "  The 'build' target creates ARM64 binaries for AWS Graviton processors"
+	@echo "  Requires Docker with BuildKit and cross-compilation support"
+	@echo ""
 	@echo "Configuration:"
 	@echo "  .env file       Contains DATABASE_URL (REQUIRED)"
 	@echo "                  Format: DATABASE_URL=mysql://user:pass@tcp(host:port)/database"
@@ -106,15 +110,15 @@ setup: ## Create necessary directories
 	@mkdir -p $(ENTITY_DIR)
 	@echo "✅ Directories created"
 
-build: ## Build RPC and create tar archive, upload to S3 (optional .env.build with AWS credentials)
-	@echo "🐳 Building RPC and creating deployment archive for Amazon Linux 2023..."
+build: ## Build ARM64 RPC for Graviton and create tar archive, upload to S3 (optional .env.build with AWS credentials)
+	@echo "🐳 Building RPC and creating deployment archive for Amazon Linux 2023 ARM64..."
 	@mkdir -p build
-	@echo "🔨 Building Docker image, compiling RPC, and creating tar archive..."
-	@DOCKER_BUILDKIT=1 docker build --secret id=aws,src=.env.build -f Dockerfile -t rpc-builder:al2023 --progress=plain .
+	@echo "🔨 Building Docker image for ARM64 (Graviton), compiling RPC, and creating tar archive..."
+	@DOCKER_BUILDKIT=1 docker build --platform linux/arm64 --secret id=aws,src=.env.build -f Dockerfile -t rpc-builder:al2023-arm64 .
 	@echo "🧹 Cleaning up Docker image..."
-	@docker rmi rpc-builder:al2023 2>/dev/null || true
-	@echo "✅ RPC deployment archive built successfully"
-	@echo "📦 Archive: rpc.tar.gz (contains rpc folder + RPC executable)"
+	@docker rmi rpc-builder:al2023-arm64 2>/dev/null || true
+	@echo "✅ RPC deployment archive built successfully for ARM64"
+	@echo "📦 Archive: rpc.tar.gz (contains rpc folder + ARM64 RPC executable)"
 
 
 regen: check-database-url check-tools setup proto2entities apply-ddl ## Complete regeneration: proto → DDL+entities → DB

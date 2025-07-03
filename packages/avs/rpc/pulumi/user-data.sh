@@ -16,19 +16,13 @@ sudo dnf update -y
 # Install required packages (using dnf consistently for Amazon Linux 2023)
 # Note: Skip curl since curl-minimal provides the functionality and conflicts with curl package
 echo "Installing required packages..."
-sudo dnf install -y awscli nano git make gcc protobuf-compiler protobuf-devel libcap --skip-broken
-
-
-# Verify git is installed before proceeding
-if ! command -v git >/dev/null 2>&1; then
-    echo "Git installation failed, retrying..."
-    sudo dnf install -y git-all
-fi
+sudo dnf install -y awscli nano gcc libcap --skip-broken
 
 echo "Downloading RPC app and scripts"
 if aws s3 cp s3://silvana-tee-images/rpc.tar.gz /home/ec2-user/rpc.tar.gz 2>/dev/null; then
     echo "✅ Found existing rpc app in S3, extracting..."
-    sudo tar -xzf /home/ec2-user/rpc.tar.gz -C /home/ec2-user
+    sudo tar -xzf /home/ec2-user/rpc.tar.gz -C /home/ec2-user/
+    sudo chown -R ec2-user:ec2-user /home/ec2-user/rpc
     sudo setcap 'cap_net_bind_service=+ep' /home/ec2-user/rpc/rpc
 else
     echo "📋 No existing rpc app found in S3"
@@ -38,7 +32,7 @@ fi
 # Run the main setup script from the cloned repository
 echo "Running Silvana RPC setup script..."
 if [ -f "/home/ec2-user/rpc/start.sh" ]; then
-    sudo -u ec2-user bash /home/ec2-user/rpc/start.sh
+    sudo bash /home/ec2-user/rpc/start.sh
     setup_exit_code=$?
     if [ $setup_exit_code -eq 0 ]; then
         echo "✅ Silvana RPC setup completed successfully"

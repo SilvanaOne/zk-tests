@@ -258,7 +258,7 @@ export = async () => {
     "silvana-rpc-instance",
     {
       ami: amiIdArm64,
-      instanceType: "t4g.micro", //c7g.4xlarge", // Graviton processor t4g.micro - 1 GB RAM
+      instanceType: "t4g.nano", //c7g.4xlarge", // Graviton processor t4g.micro - 1 GB RAM
       keyName: keyPairName,
       vpcSecurityGroupIds: [securityGroup.id],
       iamInstanceProfile: instanceProfile.name,
@@ -266,7 +266,7 @@ export = async () => {
       // NO Nitro Enclaves enabled (removed enclaveOptions)
 
       rootBlockDevice: {
-        volumeSize: 20,
+        volumeSize: 10,
         volumeType: "gp3",
         deleteOnTermination: true,
       },

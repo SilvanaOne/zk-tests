@@ -9,7 +9,6 @@ use tonic::transport::{Identity, Server, ServerTlsConfig};
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Include the generated protobuf code
 pub mod events {
@@ -21,6 +20,7 @@ mod buffer;
 mod database;
 #[path = "entity/mod.rs"]
 mod entities;
+mod log;
 mod monitoring;
 mod rpc;
 
@@ -32,31 +32,30 @@ use rpc::SilvanaEventsServiceImpl;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("🚀 Starting Silvana RPC server");
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // Initialize logging
+    log::init_logging().await?;
+    //println!("✅ Logging initialized");
+    info!("✅ Logging initialized");
 
     // Initialize monitoring system
     init_monitoring()?;
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = env::var("DATABASE_URL")
+        .map_err(|_| anyhow::anyhow!("DATABASE_URL environment variable must be set"))?;
 
     let server_address = env::var("SERVER_ADDRESS")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()
-        .expect("Invalid SERVER_ADDRESS format");
+        .map_err(|e| anyhow::anyhow!("Invalid SERVER_ADDRESS format: {}", e))?;
 
     let metrics_addr = env::var("METRICS_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:9090".to_string())
         .parse()
-        .expect("Invalid METRICS_ADDR format");
+        .map_err(|e| anyhow::anyhow!("Invalid METRICS_ADDR format: {}", e))?;
 
     // TLS configuration
     let tls_cert_path = env::var("TLS_CERT_PATH");
@@ -79,7 +78,6 @@ async fn main() -> Result<()> {
         .parse::<usize>()
         .unwrap_or(500000);
 
-    info!("🚀 Starting Silvana RPC server");
     info!("📡 Server address: {} (gRPC + gRPC-Web)", server_address);
     info!("📊 Metrics address: {}", metrics_addr);
     if enable_tls {
@@ -101,7 +99,7 @@ async fn main() -> Result<()> {
     let database = Arc::new(
         EventDatabase::new(&database_url)
             .await
-            .expect("Failed to connect to database"),
+            .map_err(|e| anyhow::anyhow!("Failed to connect to database: {}", e))?,
     );
 
     info!("✅ Connected to TiDB successfully");
@@ -140,14 +138,16 @@ async fn main() -> Result<()> {
 
     // Configure TLS if certificates are available
     if enable_tls {
-        match load_tls_config(&tls_cert_path.unwrap(), &tls_key_path.unwrap()).await {
-            Ok(tls_config) => {
-                info!("✅ TLS certificates loaded successfully");
-                server_builder = server_builder.tls_config(tls_config)?;
-            }
-            Err(e) => {
-                warn!("⚠️  Failed to load TLS certificates: {}", e);
-                warn!("�� Falling back to unencrypted gRPC");
+        if let (Ok(cert_path), Ok(key_path)) = (&tls_cert_path, &tls_key_path) {
+            match load_tls_config(cert_path, key_path).await {
+                Ok(tls_config) => {
+                    info!("✅ TLS certificates loaded successfully");
+                    server_builder = server_builder.tls_config(tls_config)?;
+                }
+                Err(e) => {
+                    warn!("⚠️  Failed to load TLS certificates: {}", e);
+                    warn!(" Falling back to unencrypted gRPC");
+                }
             }
         }
     }

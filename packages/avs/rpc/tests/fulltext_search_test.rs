@@ -10,7 +10,7 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Test configuration
-const SERVER_ADDR: &str = "http://127.0.0.1:50051";
+const SERVER_ADDR: &str = "https://rpc-dev.silvana.dev";
 
 // Generate a unique coordinator ID for each test run to avoid data contamination
 fn get_unique_coordinator_id() -> String {

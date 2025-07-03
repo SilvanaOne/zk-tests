@@ -15,7 +15,7 @@ use events::silvana_events_service_client::SilvanaEventsServiceClient;
 use events::*;
 
 // Configuration - easily changeable parameters
-const NUM_EVENTS: usize = 100;
+const NUM_EVENTS: usize = 10000;
 const SERVER_ADDR: &str = "https://rpc-dev.silvana.dev"; // "http://18.194.39.156:50051";
 const COORDINATOR_ID: &str = "test-coordinator-001";
 const NATS_URL: &str = "nats://rpc-dev.silvana.dev:4222";

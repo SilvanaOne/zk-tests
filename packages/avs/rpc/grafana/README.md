@@ -59,7 +59,7 @@ The dashboard includes these key panels:
 
 ```
 grafana/
-├── docker-compose.yml          # Docker services configuration
+├── docker compose.yml          # Docker services configuration
 ├── prometheus.yml              # Prometheus scraping configuration
 ├── provisioning/
 │   ├── datasources/
@@ -134,7 +134,7 @@ Set up alerts for:
 
 ### Dashboard not loading?
 
-1. Check Grafana logs: `docker-compose logs grafana`
+1. Check Grafana logs: `docker compose logs grafana`
 2. Verify datasource connection in Grafana UI
 3. Check if dashboard is in the "Silvana RPC" folder
 
@@ -148,20 +148,20 @@ Set up alerts for:
 ### Start monitoring
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Stop monitoring
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### View logs
 
 ```bash
-docker-compose logs -f grafana
-docker-compose logs -f prometheus
+docker compose logs -f grafana
+docker compose logs -f prometheus
 ```
 
 ### Update dashboard
@@ -169,7 +169,7 @@ docker-compose logs -f prometheus
 Edit `dashboards/silvana-rpc-dashboard.json` and restart:
 
 ```bash
-docker-compose restart grafana
+docker compose restart grafana
 ```
 
 ## 🎨 Customization
@@ -179,7 +179,7 @@ docker-compose restart grafana
 1. Add metrics to your Rust code using the `prometheus` crate
 2. Update `src/monitoring.rs` to register new metrics
 3. Add panels to the Grafana dashboard JSON
-4. Restart Grafana: `docker-compose restart grafana`
+4. Restart Grafana: `docker compose restart grafana`
 
 ### Change refresh rate
 

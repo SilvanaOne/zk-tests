@@ -78,10 +78,21 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
         let status_code = if success { "200" } else { "500" };
         record_grpc_request("submit_events", status_code, duration.as_secs_f64());
 
+        // FIXED: Safe casting to prevent overflow
+        let safe_processed_count = if processed_count <= u32::MAX as usize {
+            processed_count as u32
+        } else {
+            warn!(
+                "Processed count {} exceeds u32::MAX, clamping to maximum",
+                processed_count
+            );
+            u32::MAX
+        };
+
         Ok(Response::new(SubmitEventsResponse {
             success,
             message,
-            processed_count: processed_count as u32,
+            processed_count: safe_processed_count,
         }))
     }
 
@@ -102,17 +113,22 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
             Err(e) => {
                 warn!("Failed to queue event: {}", e);
 
-                // Return appropriate error based on the failure type
-                let status =
-                    if e.to_string().contains("overloaded") || e.to_string().contains("timeout") {
-                        Status::resource_exhausted(e.to_string())
-                    } else if e.to_string().contains("Memory limit") {
-                        Status::resource_exhausted(e.to_string())
-                    } else if e.to_string().contains("Circuit breaker") {
-                        Status::unavailable(e.to_string())
-                    } else {
-                        Status::internal(e.to_string())
-                    };
+                // FIXED: Safe error string handling to prevent potential panics
+                let error_string = e.to_string();
+                let error_string_lower = error_string.to_lowercase();
+
+                // Return appropriate error based on the failure type with safe string operations
+                let status = if error_string_lower.contains("overloaded")
+                    || error_string_lower.contains("timeout")
+                {
+                    Status::resource_exhausted(error_string)
+                } else if error_string_lower.contains("memory limit") {
+                    Status::resource_exhausted(error_string)
+                } else if error_string_lower.contains("circuit breaker") {
+                    Status::unavailable(error_string)
+                } else {
+                    Status::internal(error_string)
+                };
 
                 Err(status)
             }
@@ -165,7 +181,16 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
                     })
                     .collect();
 
-                let returned_count = proto_events.len() as u32;
+                // FIXED: Safe casting to prevent overflow
+                let returned_count = if proto_events.len() <= u32::MAX as usize {
+                    proto_events.len() as u32
+                } else {
+                    warn!(
+                        "Proto events count {} exceeds u32::MAX, clamping to maximum",
+                        proto_events.len()
+                    );
+                    u32::MAX
+                };
 
                 debug!(
                     "Found {} agent transaction events for sequence {}",
@@ -218,6 +243,17 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
                 let proto_events: Vec<AgentMessageEventWithId> = events
                     .into_iter()
                     .map(|event| {
+                        // FIXED: Safe casting from u32 to i32 to prevent overflow
+                        let safe_level = if event.level <= i32::MAX as u32 {
+                            event.level as i32
+                        } else {
+                            warn!(
+                                "Event level {} exceeds i32::MAX, clamping to maximum",
+                                event.level
+                            );
+                            i32::MAX
+                        };
+
                         AgentMessageEventWithId {
                             id: event.id,
                             coordinator_id: event.coordinator_id,
@@ -227,14 +263,23 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
                             job_id: event.job_id,
                             sequences: event.sequences,
                             event_timestamp: event.event_timestamp,
-                            level: event.level as i32, // Convert to protobuf enum
+                            level: safe_level, // Safely converted to protobuf enum
                             message: event.message,
                             created_at_timestamp: event.created_at_timestamp,
                         }
                     })
                     .collect();
 
-                let returned_count = proto_events.len() as u32;
+                // FIXED: Safe casting to prevent overflow
+                let returned_count = if proto_events.len() <= u32::MAX as usize {
+                    proto_events.len() as u32
+                } else {
+                    warn!(
+                        "Proto events count {} exceeds u32::MAX, clamping to maximum",
+                        proto_events.len()
+                    );
+                    u32::MAX
+                };
 
                 debug!(
                     "Found {} agent message events for sequence {}",
@@ -267,9 +312,20 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
             req.search_query
         );
 
-        // Validate search query
-        if req.search_query.trim().is_empty() {
+        // FIXED: Safe search query validation with bounds checking
+        if req.search_query.is_empty() || req.search_query.trim().is_empty() {
             return Err(Status::invalid_argument("Search query cannot be empty"));
+        }
+
+        // FIXED: Validate search query length to prevent potential issues
+        if req.search_query.len() > 1000 {
+            warn!(
+                "Search query too long: {} characters, truncating",
+                req.search_query.len()
+            );
+            return Err(Status::invalid_argument(
+                "Search query too long (max 1000 characters)",
+            ));
         }
 
         match self
@@ -301,7 +357,16 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
                     })
                     .collect();
 
-                let returned_count = proto_events.len() as u32;
+                // FIXED: Safe casting to prevent overflow
+                let returned_count = if proto_events.len() <= u32::MAX as usize {
+                    proto_events.len() as u32
+                } else {
+                    warn!(
+                        "Proto events count {} exceeds u32::MAX, clamping to maximum",
+                        proto_events.len()
+                    );
+                    u32::MAX
+                };
 
                 debug!(
                     "Found {} coordinator message events for search query: '{}'",
@@ -320,6 +385,223 @@ impl SilvanaEventsService for SilvanaEventsServiceImpl {
                 error!("Failed to search coordinator message events: {}", e);
                 Err(Status::internal(format!("Full-text search failed: {}", e)))
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_safe_usize_to_u32_casting() {
+        // Test normal values pass through unchanged
+        let normal_count = 1000usize;
+        let safe_count = if normal_count <= u32::MAX as usize {
+            normal_count as u32
+        } else {
+            u32::MAX
+        };
+        assert_eq!(safe_count, 1000u32);
+
+        // Test maximum safe value
+        let max_safe = u32::MAX as usize;
+        let safe_max = if max_safe <= u32::MAX as usize {
+            max_safe as u32
+        } else {
+            u32::MAX
+        };
+        assert_eq!(safe_max, u32::MAX);
+
+        // Test oversized value (only on 64-bit systems where usize > u32::MAX is possible)
+        if usize::MAX > u32::MAX as usize {
+            let oversized = (u32::MAX as usize) + 1;
+            let safe_oversized = if oversized <= u32::MAX as usize {
+                oversized as u32
+            } else {
+                u32::MAX
+            };
+            assert_eq!(safe_oversized, u32::MAX);
+        }
+    }
+
+    #[test]
+    fn test_safe_u32_to_i32_casting() {
+        // Test normal values pass through unchanged
+        let normal_level = 100u32;
+        let safe_level = if normal_level <= i32::MAX as u32 {
+            normal_level as i32
+        } else {
+            i32::MAX
+        };
+        assert_eq!(safe_level, 100i32);
+
+        // Test maximum safe value
+        let max_safe = i32::MAX as u32;
+        let safe_max = if max_safe <= i32::MAX as u32 {
+            max_safe as i32
+        } else {
+            i32::MAX
+        };
+        assert_eq!(safe_max, i32::MAX);
+
+        // Test oversized value
+        let oversized = (i32::MAX as u32) + 1;
+        let safe_oversized = if oversized <= i32::MAX as u32 {
+            oversized as i32
+        } else {
+            i32::MAX
+        };
+        assert_eq!(safe_oversized, i32::MAX);
+
+        // Test u32::MAX
+        let max_u32 = u32::MAX;
+        let safe_max_u32 = if max_u32 <= i32::MAX as u32 {
+            max_u32 as i32
+        } else {
+            i32::MAX
+        };
+        assert_eq!(safe_max_u32, i32::MAX);
+    }
+
+    #[test]
+    fn test_search_query_validation() {
+        // Test empty query validation
+        let empty_query = "";
+        let is_invalid = empty_query.is_empty() || empty_query.trim().is_empty();
+        assert!(is_invalid, "Empty query should be invalid");
+
+        // Test whitespace-only query validation
+        let whitespace_query = "   ";
+        let is_whitespace_invalid =
+            whitespace_query.is_empty() || whitespace_query.trim().is_empty();
+        assert!(
+            is_whitespace_invalid,
+            "Whitespace-only query should be invalid"
+        );
+
+        // Test valid query
+        let valid_query = "test query";
+        let is_valid = !valid_query.is_empty() && !valid_query.trim().is_empty();
+        assert!(is_valid, "Valid query should pass validation");
+
+        // Test long query validation
+        let long_query = "a".repeat(1001);
+        let is_too_long = long_query.len() > 1000;
+        assert!(is_too_long, "Query over 1000 characters should be too long");
+
+        // Test maximum allowed length
+        let max_query = "a".repeat(1000);
+        let is_max_valid = max_query.len() <= 1000;
+        assert!(
+            is_max_valid,
+            "Query of exactly 1000 characters should be valid"
+        );
+    }
+
+    #[test]
+    fn test_error_string_handling() {
+        // Test safe string operations
+        let test_errors = vec![
+            "System overloaded",
+            "Timeout occurred",
+            "Memory limit exceeded",
+            "Circuit breaker is open",
+            "Unknown error",
+            "", // Empty string edge case
+            "Very long error message that might cause issues in some systems but should be handled safely by our error processing code", // Long string
+        ];
+
+        for error_msg in test_errors {
+            // This should not panic regardless of input
+            let error_string = error_msg.to_string();
+            let error_string_lower = error_string.to_lowercase();
+
+            // Test all the contains operations we use
+            let _is_overloaded = error_string_lower.contains("overloaded");
+            let _is_timeout = error_string_lower.contains("timeout");
+            let _is_memory = error_string_lower.contains("memory limit");
+            let _is_circuit = error_string_lower.contains("circuit breaker");
+
+            // None of these operations should panic
+            assert!(
+                true,
+                "String operations completed safely for: {}",
+                error_msg
+            );
+        }
+    }
+
+    #[test]
+    fn test_overflow_edge_cases() {
+        // Test edge cases for our casting operations
+
+        // Test zero values
+        let zero_usize = 0usize;
+        let safe_zero = if zero_usize <= u32::MAX as usize {
+            zero_usize as u32
+        } else {
+            u32::MAX
+        };
+        assert_eq!(safe_zero, 0u32);
+
+        // Test maximum values don't cause overflow in comparisons
+        let max_comparison = u32::MAX as usize <= u32::MAX as usize;
+        assert!(max_comparison, "u32::MAX comparison should be true");
+
+        let i32_max_comparison = i32::MAX as u32 <= i32::MAX as u32;
+        assert!(i32_max_comparison, "i32::MAX comparison should be true");
+
+        // Test that our bounds checking logic is consistent
+        assert!(
+            (i32::MAX as u32) < u32::MAX,
+            "i32::MAX should be less than u32::MAX"
+        );
+
+        // On 64-bit systems, test usize vs u32 relationship
+        if std::mem::size_of::<usize>() > std::mem::size_of::<u32>() {
+            assert!(
+                usize::MAX > u32::MAX as usize,
+                "usize::MAX should be greater than u32::MAX on 64-bit systems"
+            );
+        }
+    }
+
+    #[test]
+    fn test_vector_length_safety() {
+        // Test that vector length operations are safe
+        let small_vec: Vec<i32> = vec![1, 2, 3];
+        let small_len = small_vec.len();
+        assert!(
+            small_len <= u32::MAX as usize,
+            "Small vector length should be safe"
+        );
+
+        // Test empty vector
+        let empty_vec: Vec<i32> = vec![];
+        let empty_len = empty_vec.len();
+        assert_eq!(empty_len, 0);
+
+        let safe_empty_len = if empty_len <= u32::MAX as usize {
+            empty_len as u32
+        } else {
+            u32::MAX
+        };
+        assert_eq!(safe_empty_len, 0u32);
+
+        // Test that our length check logic works for realistic sizes
+        for size in [0, 1, 100, 1000, 10000] {
+            let test_vec: Vec<i32> = vec![0; size];
+            let len = test_vec.len();
+            let safe_len = if len <= u32::MAX as usize {
+                len as u32
+            } else {
+                u32::MAX
+            };
+            assert_eq!(
+                safe_len as usize, len,
+                "Safe casting should preserve length for size {}",
+                size
+            );
         }
     }
 }

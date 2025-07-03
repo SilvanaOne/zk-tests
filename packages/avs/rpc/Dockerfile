@@ -1,13 +1,17 @@
-FROM amazonlinux:2023
+FROM --platform=linux/arm64 amazonlinux:2023
 
 # Install development tools, dependencies, and AWS CLI
 RUN dnf update -y && \
     dnf groupinstall -y "Development Tools" && \
     dnf install -y git openssl-devel pkg-config protobuf-compiler protobuf-devel awscli
 
-# Install Rust and Cargo
+# Install Rust and Cargo with ARM64 support
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
+
+# Explicitly set target for ARM64 compilation
+RUN rustup target add aarch64-unknown-linux-gnu
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc
 
 # Set working directory
 WORKDIR /app
@@ -24,13 +28,16 @@ COPY src/ ./src/
 
 COPY build.rs ./
 
-# Build in release mode
-RUN cargo build --release
+# Build in release mode for ARM64
+RUN cargo build --release --target aarch64-unknown-linux-gnu
 
 # Create build directory and copy contents
 RUN mkdir -p /app/rpc
 COPY build/ /app/rpc/
-RUN cp target/release/rpc /app/rpc/
+RUN cp target/aarch64-unknown-linux-gnu/release/rpc /app/rpc/
+
+# Verify ARM64 binary architecture
+RUN file /app/rpc/rpc && echo "✅ Binary architecture verified"
 RUN ls -lh /app/rpc/
 
 
