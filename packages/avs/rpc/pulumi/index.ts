@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
 import * as fs from "fs";
+import * as path from "path";
 
 export = async () => {
   // Get ARM64 AMI for eu-central-1 region
@@ -75,7 +76,7 @@ export = async () => {
         {
           Effect: "Allow",
           Action: ["s3:GetObject", "s3:PutObject"],
-          Resource: "arn:aws:s3:::silvana-tee-images/rpc-cert.tar.gz",
+          Resource: "arn:aws:s3:::silvana-tee-images/*",
         },
       ],
     }),
@@ -84,6 +85,43 @@ export = async () => {
       Project: "silvana-rpc",
     },
   });
+
+  // -------------------------
+  // IAM User for S3 uploads (API keys)
+  // -------------------------
+  const s3UploaderUser = new aws.iam.User("silvana-rpc-s3-uploader", {
+    tags: {
+      Name: "silvana-rpc-s3-uploader",
+      Project: "silvana-rpc",
+    },
+  });
+
+  // Attach S3 policy to the user so the generated API keys have upload permissions
+  new aws.iam.UserPolicyAttachment("silvana-rpc-s3-uploader-attachment", {
+    user: s3UploaderUser.name,
+    policyArn: s3Policy.arn,
+  });
+
+  // Create an access key (AccessKeyId / SecretAccessKey) for the user
+  const s3UploaderAccessKey = new aws.iam.AccessKey(
+    "silvana-rpc-s3-uploader-access-key",
+    {
+      user: s3UploaderUser.name,
+    }
+  );
+
+  // Persist the new API keys locally for the build pipeline in standard AWS credentials format
+  // NOTE: This writes the keys in plaintext; ensure .env.build is Git‑ignored.
+  pulumi
+    .all([s3UploaderAccessKey.id, s3UploaderAccessKey.secret])
+    .apply(([accessKeyId, secretAccessKey]) => {
+      const envFilePath = path.resolve(__dirname, "../.env.build");
+      fs.writeFileSync(
+        envFilePath,
+        `[default]\naws_access_key_id     = ${accessKeyId}\naws_secret_access_key = ${secretAccessKey}\n`,
+        { mode: 0o600 } // restrict permissions
+      );
+    });
 
   // Attach policies to the role
   new aws.iam.RolePolicyAttachment("silvana-rpc-parameter-store-attachment", {
@@ -220,7 +258,7 @@ export = async () => {
     "silvana-rpc-instance",
     {
       ami: amiIdArm64,
-      instanceType: "c7g.4xlarge", // Graviton processor t4g.micro - 1 GB RAM
+      instanceType: "t4g.micro", //c7g.4xlarge", // Graviton processor t4g.micro - 1 GB RAM
       keyName: keyPairName,
       vpcSecurityGroupIds: [securityGroup.id],
       iamInstanceProfile: instanceProfile.name,
@@ -228,7 +266,7 @@ export = async () => {
       // NO Nitro Enclaves enabled (removed enclaveOptions)
 
       rootBlockDevice: {
-        volumeSize: 100,
+        volumeSize: 20,
         volumeType: "gp3",
         deleteOnTermination: true,
       },
@@ -270,5 +308,7 @@ export = async () => {
     keyPairName: keyPairName,
     iamRoleArn: ec2Role.arn,
     parameterStoreArn: envParameter.arn,
+    s3UploaderAccessKeyId: pulumi.secret(s3UploaderAccessKey.id),
+    s3UploaderSecretAccessKey: pulumi.secret(s3UploaderAccessKey.secret),
   };
 };

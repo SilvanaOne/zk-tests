@@ -27,11 +27,11 @@ aws ssm get-parameter \
      --name "/silvana-rpc/dev/env" \
      --with-decryption \
      --query Parameter.Value \
-     --output text > /home/ec2-user/zk-tests/packages/avs/rpc/.env
+     --output text > /home/ec2-user/rpc/.env
 
 # Lock down permissions
-sudo chown ec2-user:ec2-user /home/ec2-user/zk-tests/packages/avs/rpc/.env
-sudo chmod 600 /home/ec2-user/zk-tests/packages/avs/rpc/.env
+sudo chown ec2-user:ec2-user /home/ec2-user/rpc/.env
+sudo chmod 600 /home/ec2-user/rpc/.env
 
 # Update NATS_URL to use the actual domain instead of localhost
 echo "Updating NATS_URL to use domain ${DOMAIN_NAME}..."
@@ -189,22 +189,22 @@ fi
 echo "Copying SSL certificates to RPC project directory..."
 if sudo test -f "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem"; then
     # Create certificates directory in RPC project
-    sudo -u ec2-user mkdir -p /home/ec2-user/zk-tests/packages/avs/rpc/certs
+    sudo -u ec2-user mkdir -p /home/ec2-user/rpc/certs
     
     # Copy certificates to RPC project directory with proper ownership
-    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" /home/ec2-user/zk-tests/packages/avs/rpc/certs/
-    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem" /home/ec2-user/zk-tests/packages/avs/rpc/certs/
+    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" /home/ec2-user/rpc/certs/
+    sudo cp "/etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem" /home/ec2-user/rpc/certs/
     
     # Set proper ownership and permissions
-    sudo chown ec2-user:ec2-user /home/ec2-user/zk-tests/packages/avs/rpc/certs/*
-    sudo chmod 600 /home/ec2-user/zk-tests/packages/avs/rpc/certs/*
+    sudo chown ec2-user:ec2-user /home/ec2-user/rpc/certs/*
+    sudo chmod 600 /home/ec2-user/rpc/certs/*
     
     echo "✅ SSL certificates copied to RPC project directory"
-    echo "   📁 Location: /home/ec2-user/zk-tests/packages/avs/rpc/certs/"
+    echo "   📁 Location: /home/ec2-user/rpc/certs/"
     
     # Add certs directory to .gitignore to prevent accidental commit of certificates
-    if ! grep -q "^certs/" /home/ec2-user/zk-tests/packages/avs/rpc/.gitignore 2>/dev/null; then
-        echo "certs/" | sudo -u ec2-user tee -a /home/ec2-user/zk-tests/packages/avs/rpc/.gitignore > /dev/null
+    if ! grep -q "^certs/" /home/ec2-user/rpc/.gitignore 2>/dev/null; then
+        echo "certs/" | sudo -u ec2-user tee -a /home/ec2-user/rpc/.gitignore > /dev/null
         echo "   🔒 Added certs/ to .gitignore for security"
     fi
 else
@@ -268,7 +268,7 @@ cat <<UPDATE_RPC_SCRIPT | sudo tee /usr/local/bin/update-rpc-certs.sh
 #!/bin/bash
 # Script to update RPC project certificates after renewal
 DOMAIN_NAME="${DOMAIN_NAME}"
-RPC_CERTS_DIR="/home/ec2-user/zk-tests/packages/avs/rpc/certs"
+RPC_CERTS_DIR="/home/ec2-user/rpc/certs"
 
 echo "\$(date): Updating RPC project certificates..."
 
@@ -359,9 +359,9 @@ websocket {
 
 jetstream {
     store_dir: "/var/lib/nats/jetstream"
-    max_memory_store: 1GB
-    max_file_store: 10GB
-    sync_interval: 2s
+    max_memory_store: 100MB
+    max_file_store: 1GB
+    sync_interval: 1s
 }
 
 log_file: "/var/log/nats/nats-server.log"
@@ -390,9 +390,9 @@ websocket {
 
 jetstream {
     store_dir: "/var/lib/nats/jetstream"
-    max_memory_store: 1GB
-    max_file_store: 10GB
-    sync_interval: 2s
+    max_memory_store: 100MB
+    max_file_store: 1GB
+    sync_interval: 1s
 }
 
 log_file: "/var/log/nats/nats-server.log"
@@ -499,10 +499,9 @@ echo "Ready for RPC server deployment! 🚀"
 # cargo build --release
 
 echo "🔄 Note: After deployment, start the RPC server with:"
-echo "   cd /home/ec2-user/zk-tests/packages/avs/rpc"
-echo "   cargo build --release"
-echo "   sudo setcap CAP_NET_BIND_SERVICE=+eip target/release/rpc"
-echo "   cargo run --release"
+echo "   cd /home/ec2-user/rpc"
+echo "   sudo setcap CAP_NET_BIND_SERVICE=+eip rpc"
+echo "   rpc"
 echo ""
 echo "🔒 The gRPC server will automatically detect TLS certificates and enable HTTPS on port 443"
 echo "⚡ setcap grants port 443 binding permission without running as root"

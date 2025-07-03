@@ -16,7 +16,7 @@ use events::*;
 
 // Configuration - easily changeable parameters
 const NUM_EVENTS: usize = 100;
-const SERVER_ADDR: &str = "http://127.0.0.1:50051"; // "http://18.194.39.156:50051";
+const SERVER_ADDR: &str = "https://rpc-dev.silvana.dev"; // "http://18.194.39.156:50051";
 const COORDINATOR_ID: &str = "test-coordinator-001";
 const NATS_URL: &str = "nats://rpc-dev.silvana.dev:4222";
 const NATS_STREAM_NAME: &str = "silvana-events";

@@ -728,7 +728,10 @@ impl BatchProcessor {
         let events_to_process = std::mem::take(&mut self.buffer);
         let event_count = events_to_process.len();
 
-        debug!("Flushing batch of {} events", event_count);
+        debug!(
+            "Flushing batch of {} events in parallel to TiDB and NATS",
+            event_count
+        );
 
         // Calculate memory to release more accurately
         let memory_to_release = events_to_process
@@ -736,8 +739,14 @@ impl BatchProcessor {
             .map(|event| self.estimate_event_memory_usage(event))
             .sum::<usize>();
 
-        // Process database insertion with retry logic
-        match self.insert_with_retry(&events_to_process).await {
+        // Process database insertion and NATS publishing in parallel
+        let (db_result, nats_result) = tokio::join!(
+            self.insert_with_retry(&events_to_process),
+            self.publish_to_nats_with_result(&events_to_process)
+        );
+
+        // Handle database result
+        match db_result {
             Ok(inserted_count) => {
                 info!("Successfully inserted {} events to TiDB", inserted_count);
 
@@ -797,15 +806,35 @@ impl BatchProcessor {
             }
         }
 
+        // Handle NATS result (independent of database result)
+        match nats_result {
+            Ok((successful, failed)) => {
+                if successful > 0 {
+                    info!(
+                        "📤 Successfully published {}/{} events to NATS JetStream",
+                        successful,
+                        successful + failed
+                    );
+                }
+                if failed > 0 {
+                    warn!(
+                        "⚠️  Failed to publish {}/{} events to NATS",
+                        failed,
+                        successful + failed
+                    );
+                }
+            }
+            Err(e) => {
+                warn!("⚠️  NATS publishing encountered an error: {}", e);
+            }
+        }
+
         // Release memory accounting
         self.memory_usage
             .fetch_sub(memory_to_release, Ordering::Relaxed);
 
         // FIXED: Permits are automatically released when dropped - no manual add_permits needed
         permits_held.clear();
-
-        // Process NATS publishing - pass by reference to avoid clone
-        self.publish_to_nats(&events_to_process).await;
     }
 
     async fn insert_with_retry(&self, events: &[Event]) -> Result<usize> {
@@ -863,9 +892,9 @@ impl BatchProcessor {
         Err(last_error.unwrap())
     }
 
-    async fn publish_to_nats(&self, events: &[Event]) {
+    async fn publish_to_nats_with_result(&self, events: &[Event]) -> Result<(usize, usize)> {
         if events.is_empty() {
-            return;
+            return Ok((0, 0));
         }
 
         let Some(ref client) = self.nats_client else {
@@ -873,7 +902,7 @@ impl BatchProcessor {
                 "ℹ️  NATS client not available. Skipping publishing {} events.",
                 events.len()
             );
-            return;
+            return Ok((0, events.len())); // Treat as "failed" if no client
         };
 
         debug!(
@@ -905,40 +934,50 @@ impl BatchProcessor {
                         }
                         Ok(Err(e)) => {
                             failed_publishes += 1;
-                            warn!(
+                            debug!(
                                 "❌ Failed to publish event to NATS subject {}: {}",
                                 subject, e
                             );
                         }
                         Err(_) => {
                             failed_publishes += 1;
-                            warn!("⏰ Timeout publishing event to NATS subject: {}", subject);
+                            debug!("⏰ Timeout publishing event to NATS subject: {}", subject);
                         }
                     }
                 }
                 Err(e) => {
                     failed_publishes += 1;
-                    error!("🔥 Failed to serialize event for NATS publishing: {}", e);
+                    debug!("🔥 Failed to serialize event for NATS publishing: {}", e);
                 }
             }
         }
 
-        if successful_publishes > 0 {
-            info!(
-                "📤 Successfully published {}/{} events to NATS JetStream",
-                successful_publishes,
-                events.len()
-            );
-        }
-
-        if failed_publishes > 0 {
-            warn!(
-                "⚠️  Failed to publish {}/{} events to NATS",
-                failed_publishes,
-                events.len()
-            );
-        }
+        Ok((successful_publishes, failed_publishes))
     }
+
+    // async fn publish_to_nats(&self, events: &[Event]) {
+    //     match self.publish_to_nats_with_result(events).await {
+    //         Ok((successful, failed)) => {
+    //             if successful > 0 {
+    //                 info!(
+    //                     "📤 Successfully published {}/{} events to NATS JetStream",
+    //                     successful,
+    //                     successful + failed
+    //                 );
+    //             }
+    //             if failed > 0 {
+    //                 warn!(
+    //                     "⚠️  Failed to publish {}/{} events to NATS",
+    //                     failed,
+    //                     successful + failed
+    //                 );
+    //             }
+    //         }
+    //         Err(e) => {
+    //             warn!("⚠️  NATS publishing encountered an error: {}", e);
+    //         }
+    //     }
+    // }
 
     fn create_nats_subject(&self, event: &Event) -> String {
         let base_subject = format!("{}.events", self.nats_stream_name);

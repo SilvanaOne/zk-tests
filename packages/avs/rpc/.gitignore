@@ -4,3 +4,4 @@ ssh/
 certs/
 .env.rpc
 .env
+.env.build

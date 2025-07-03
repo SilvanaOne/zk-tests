@@ -53,7 +53,7 @@ check-database-url:
 
 # mysqldef supports DATABASE_URL directly, no parsing needed
 
-.PHONY: help install-tools regen proto2sql entities clean-dev setup check-tools check-database-url validate-schema check-schema show-tables show-schema apply-ddl proto2entities dev-reset
+.PHONY: help install-tools regen proto2sql entities clean-dev setup check-tools check-database-url validate-schema check-schema show-tables show-schema apply-ddl proto2entities dev-reset build
 
 # Default target
 help: ## Show this help message
@@ -66,10 +66,17 @@ help: ## Show this help message
 	@echo "Configuration:"
 	@echo "  .env file       Contains DATABASE_URL (REQUIRED)"
 	@echo "                  Format: DATABASE_URL=mysql://user:pass@tcp(host:port)/database"
+	@echo "  .env.build      Contains AWS credentials for build process (OPTIONAL for S3 upload)"
+	@echo "                  Format: AWS_ACCESS_KEY_ID=key, AWS_SECRET_ACCESS_KEY=secret, AWS_DEFAULT_REGION=region"
 	@echo ""
 	@echo "Examples for .env file:"
 	@echo "  DATABASE_URL=mysql://root:@tcp(localhost:4000)/silvana_rpc"
 	@echo "  DATABASE_URL=mysql://user:pass@tcp(myhost.com:3306)/mydb"
+	@echo ""
+	@echo "Examples for .env.build file:"
+	@echo "  AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+	@echo "  AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+	@echo "  AWS_DEFAULT_REGION=us-east-1"
 	@echo ""
 	@if [ -f .env ] && grep -q "^DATABASE_URL=" .env; then \
 		echo "Current DATABASE_URL: $$(grep "^DATABASE_URL=" .env | cut -d'=' -f2- | sed 's/^["'"'"']//;s/["'"'"']$$//')"; \
@@ -98,6 +105,17 @@ setup: ## Create necessary directories
 	@mkdir -p $(MIGR_DIR)
 	@mkdir -p $(ENTITY_DIR)
 	@echo "✅ Directories created"
+
+build: ## Build RPC and create tar archive, upload to S3 (optional .env.build with AWS credentials)
+	@echo "🐳 Building RPC and creating deployment archive for Amazon Linux 2023..."
+	@mkdir -p build
+	@echo "🔨 Building Docker image, compiling RPC, and creating tar archive..."
+	@DOCKER_BUILDKIT=1 docker build --secret id=aws,src=.env.build -f Dockerfile -t rpc-builder:al2023 --progress=plain .
+	@echo "🧹 Cleaning up Docker image..."
+	@docker rmi rpc-builder:al2023 2>/dev/null || true
+	@echo "✅ RPC deployment archive built successfully"
+	@echo "📦 Archive: rpc.tar.gz (contains rpc folder + RPC executable)"
+
 
 regen: check-database-url check-tools setup proto2entities apply-ddl ## Complete regeneration: proto → DDL+entities → DB
 	@echo "🎉 Regeneration complete!"

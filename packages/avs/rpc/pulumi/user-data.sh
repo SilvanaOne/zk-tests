@@ -1,7 +1,8 @@
 #!/bin/bash
 
+
 # AWS EC2 User Data Script for Silvana RPC Server
-# This script performs initial system setup and then calls start.sh from the git repository
+# This script performs initial system setup and then calls start.sh from the S3 bucket
 
 # Set up logging
 exec > >(tee /var/log/user-data.log)
@@ -17,36 +18,6 @@ sudo dnf update -y
 echo "Installing required packages..."
 sudo dnf install -y awscli nano git make gcc protobuf-compiler protobuf-devel libcap --skip-broken
 
-# Install nginx with HTTP/2 support (critical for gRPC proxy)
-echo "Installing nginx with HTTP/2 support..."
-if ! sudo dnf install -y nginx; then
-    echo "Standard nginx installation failed, trying alternative approach..."
-    # Enable nginx from Amazon Linux extras if available
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install nginx1 -y
-    else
-        # For Amazon Linux 2023, try installing from AppStream
-        sudo dnf install -y nginx
-    fi
-fi
-
-# Verify nginx has HTTP/2 support compiled in
-echo "Verifying nginx HTTP/2 support..."
-if nginx -V 2>&1 | grep -q "with-http_v2_module"; then
-    echo "✅ nginx has HTTP/2 support compiled in"
-else
-    echo "⚠️  nginx does not have HTTP/2 support, trying to install additional modules..."
-    # Try to install nginx modules package if available
-    sudo dnf install -y nginx-all-modules nginx-mod-http2 || echo "HTTP/2 modules not available via package manager"
-    
-    # Check again after module installation
-    if nginx -V 2>&1 | grep -q "with-http_v2_module"; then
-        echo "✅ nginx HTTP/2 support enabled via modules"
-    else
-        echo "❌ WARNING: nginx HTTP/2 support not available - HTTPS gRPC proxy may not work"
-        echo "    Consider using direct gRPC port (50051) instead of HTTPS (443)"
-    fi
-fi
 
 # Verify git is installed before proceeding
 if ! command -v git >/dev/null 2>&1; then
@@ -54,22 +25,20 @@ if ! command -v git >/dev/null 2>&1; then
     sudo dnf install -y git-all
 fi
 
-echo "Installing Rust and Cargo..."
-sudo -u ec2-user -i bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
-sudo -u ec2-user -i bash -c 'source ~/.cargo/env && rustc --version && cargo --version'
-
-echo "Cloning zk-tests repository as ec2-user into /home/ec2-user..."
-if command -v git >/dev/null 2>&1; then
-    sudo -u ec2-user -i bash -c 'cd /home/ec2-user && git clone --quiet --no-progress --depth 1 https://github.com/SilvanaOne/zk-tests'
+echo "Downloading RPC app and scripts"
+if aws s3 cp s3://silvana-tee-images/rpc.tar.gz /home/ec2-user/rpc.tar.gz 2>/dev/null; then
+    echo "✅ Found existing rpc app in S3, extracting..."
+    sudo tar -xzf /home/ec2-user/rpc.tar.gz -C /home/ec2-user
+    sudo setcap 'cap_net_bind_service=+ep' /home/ec2-user/rpc/rpc
 else
-    echo "ERROR: Git is still not available after installation attempts"
+    echo "📋 No existing rpc app found in S3"
     exit 1
 fi
 
 # Run the main setup script from the cloned repository
 echo "Running Silvana RPC setup script..."
-if [ -f "/home/ec2-user/zk-tests/packages/avs/rpc/pulumi/start.sh" ]; then
-    sudo -u ec2-user bash /home/ec2-user/zk-tests/packages/avs/rpc/pulumi/start.sh
+if [ -f "/home/ec2-user/rpc/start.sh" ]; then
+    sudo -u ec2-user bash /home/ec2-user/rpc/start.sh
     setup_exit_code=$?
     if [ $setup_exit_code -eq 0 ]; then
         echo "✅ Silvana RPC setup completed successfully"
@@ -79,9 +48,9 @@ if [ -f "/home/ec2-user/zk-tests/packages/avs/rpc/pulumi/start.sh" ]; then
         exit 1
     fi
 else
-    echo "ERROR: start.sh script not found in cloned repository"
-    echo "Expected location: /home/ec2-user/zk-tests/packages/avs/rpc/pulumi/start.sh"
-    ls -la /home/ec2-user/zk-tests/packages/avs/rpc/pulumi/ || echo "Directory listing failed"
+    echo "ERROR: start.sh script not found in rpc folder"
+    echo "Expected location: /home/ec2-user/rpc/start.sh"
+    ls -la /home/ec2-user/rpc/ || echo "Directory listing failed"
     exit 1
 fi
 
