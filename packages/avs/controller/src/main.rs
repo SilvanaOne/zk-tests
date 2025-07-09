@@ -1,6 +1,7 @@
 mod agent;
 mod coordination;
 mod docker;
+mod fargate;
 mod layers;
 use bollard::Docker;
 use dotenv::dotenv;

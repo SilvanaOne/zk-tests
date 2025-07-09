@@ -1,5 +1,6 @@
 use crate::layers::get_image_info;
 use bollard::Docker;
+use bollard::auth::DockerCredentials;
 use bollard::models::ContainerCreateBody;
 use bollard::models::{HostConfig, PortBinding};
 use bollard::query_parameters::{
@@ -52,9 +53,9 @@ pub async fn load_container(
         println!("Images: {:?}", images);
     } else {
         println!("Pulling Docker image from registry: {}", image_source);
-        let (layers_number, digest) = get_image_info(image_source).await?;
-        println!("Registry: Number of layers: {:?}", layers_number);
-        println!("Registry: Digest: {:?}", digest);
+        // let (layers_number, digest) = get_image_info(image_source).await?;
+        // println!("Registry: Number of layers: {:?}", layers_number);
+        // println!("Registry: Digest: {:?}", digest);
 
         // Create options for pulling the image
         let options = CreateImageOptions {
@@ -67,9 +68,25 @@ pub async fn load_container(
             platform: "linux/arm64".to_string(),
         };
 
+        // Prepare auth config if credentials are present
+        let auth_config = match (
+            std::env::var("DOCKER_USERNAME").ok(),
+            std::env::var("DOCKER_PASSWORD").ok(),
+        ) {
+            (Some(user), Some(pass)) => Some(DockerCredentials {
+                username: Some(user),
+                password: Some(pass),
+                serveraddress: Some("https://index.docker.io/v1/".to_string()),
+                ..Default::default()
+            }),
+            _ => None,
+        };
+
+        println!("Auth config: {:?}", auth_config);
+
         // Pull the image
         let pull_result = async {
-            let mut pull_stream = docker.create_image(Some(options), None, None);
+            let mut pull_stream = docker.create_image(Some(options), None, auth_config);
 
             while let Some(progress) = pull_stream.try_next().await? {
                 if let Some(status) = progress.status {

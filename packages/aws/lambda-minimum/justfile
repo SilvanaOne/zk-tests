@@ -1,0 +1,23 @@
+# Build the lambda function
+build:
+    ulimit -n 10240 && \
+    ulimit -n && \
+    cargo lambda build --release --arm64
+
+# Deploy the lambda function
+deploy:
+    cargo lambda deploy --iam-role arn:aws:iam::977098992151:role/cargo-lambda-role-ce60a47c-8141-464a-b963-6d70cc21aee6
+
+# Run the lambda function
+run:
+    cargo lambda invoke --remote --data-ascii '{"command": "hello world"}' --output-format json lambda-minimum
+
+# Clean the build artifacts
+clean:
+    cargo clean
+    rm -rf target
+    rm Cargo.lock
+
+# List available commands
+list:
+    @just --list 

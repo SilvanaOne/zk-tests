@@ -25,6 +25,11 @@ import {
 import { faucet } from "../src/faucet.js";
 import { sleep } from "../src/sleep.js";
 import { pushEvent, emptyEvents } from "../src/events/events.js";
+import { fetchZekoFee } from "../src/zeko-fee.js";
+import { formatTime } from "../src/time.js";
+
+const MAX_FEE = 1000n;
+const NUMBER_OF_ITERATIONS = 1000;
 
 const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;
@@ -35,7 +40,7 @@ let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
-const NUMBER_OF_ITERATIONS = 100;
+
 let retries = 0;
 
 function arraysEqual(a: number[], b: number[]) {
@@ -144,6 +149,7 @@ describe("Based rollup", async () => {
     console.log("sender", sender.toJSON());
     console.log("sender balance", await accountBalanceMina(sender));
     let nonce = Number(Mina.getAccount(sender).nonce.toBigint());
+    const start = Date.now();
 
     for (let i = 0; i < NUMBER_OF_ITERATIONS; i++) {
       console.log("iteration", i);
@@ -163,7 +169,7 @@ describe("Based rollup", async () => {
       console.log("receiptChainHash", receiptChainHash.toJSON());
 
       const tx = await Mina.transaction(
-        { sender, fee: 200_000_000, memo: `event3_${i}`, nonce: nonce++ },
+        { sender, fee: 100_000_000, memo: `event3_${i}`, nonce: nonce++ },
         async () => {
           const update = AccountUpdate.create(sender);
           update.body.events = events;
@@ -174,6 +180,15 @@ describe("Based rollup", async () => {
         }
       );
       console.timeEnd("prepared");
+      const fee = await fetchZekoFee({ txn: tx });
+
+      if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
+        console.log(
+          "fee:",
+          Number((fee?.toBigInt() * 1000n) / 1_000_000_000n) / 1000
+        );
+        tx.setFee(fee);
+      }
 
       console.time("signed");
       tx.sign([sender.key]);
@@ -184,6 +199,18 @@ describe("Based rollup", async () => {
       while (txSent.status !== "pending") {
         console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
         await sleep(5000);
+        const fee = await fetchZekoFee({ txn: tx });
+        if (fee) {
+          console.log(
+            "fee:",
+            Number((fee?.toBigInt() * 1000n) / 1_000_000_000n) / 1000
+          );
+        }
+        if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
+          tx.setFee(fee);
+          tx.sign([sender.key]);
+        }
+
         txSent = await tx.safeSend();
         retries++;
       }
@@ -216,5 +243,18 @@ describe("Based rollup", async () => {
       }
       console.log("retries", retries);
     }
+    const end = Date.now();
+    console.log(
+      `time for ${NUMBER_OF_ITERATIONS} iterations`,
+      formatTime(end - start)
+    );
+    console.log(
+      `time per iteration`,
+      formatTime((end - start) / Number(NUMBER_OF_ITERATIONS))
+    );
+    console.log(
+      `txs per minute`,
+      (NUMBER_OF_ITERATIONS * 60000) / (end - start)
+    );
   });
 });
