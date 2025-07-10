@@ -10,7 +10,7 @@ export async function fetchZekoFee(params: {
   const { txn, buffer = 0.1, url = "https://devnet.zeko.io/graphql" } = params;
   const weight =
     typeof txn === "number" ? txn : txn.transaction.accountUpdates.length + 1;
-  //console.log("fetchZekoFee weight", weight);
+  console.log("fetchZekoFee weight", weight);
   try {
     const response = await fetch(url, {
       method: "POST",

@@ -10,14 +10,15 @@ import {
   Provable,
   Mina,
   fetchAccount,
+  fetchLastBlock,
 } from "o1js";
 import { fetchMinaAccount, accountBalanceMina } from "@silvana-one/mina-utils";
 import { sleep } from "../src/sleep.js";
 import { formatTime } from "../src/time.js";
 import { fetchZekoFee } from "../src/zeko-fee.js";
 
-const MAX_FEE = 10000n;
-const COUNT = 1000;
+const MAX_FEE = 10n;
+const COUNT = 100;
 
 const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;
@@ -81,6 +82,8 @@ describe("balance instability check", () => {
     console.log("sender", sender.toJSON());
     console.log("sender balance", await accountBalanceMina(sender));
     console.log("contract", zkKey.toBase58());
+    // const lastBlock = await fetchLastBlock();
+    // console.log("last slot", lastBlock.globalSlotSinceGenesis);
     const tx = await Mina.transaction(
       { sender, fee: 100_000_000, memo: "balance contract deploy" },
       async () => {

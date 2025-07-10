@@ -22,6 +22,7 @@
     "zkapp:zeko": "CHAIN=zeko npm run test test/zkapp.zeko.test.ts",
     "fee:zeko": "CHAIN=zeko npm run test test/fee.zeko.test.ts",
     "status": "CHAIN=zeko npm run test test/status.test.ts",
+    "slot": "npm run test test/slot.test.ts",
     "vk": "npm run test test/vk.test.ts",
     "poseidon": "npm run test test/poseidon.test.ts",
     "nonce": "npm run test test/nonce.test.ts",

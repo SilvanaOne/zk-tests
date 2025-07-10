@@ -3,12 +3,12 @@ import assert from "node:assert";
 import { sleep } from "../src/sleep.js";
 import { fetchZekoFee } from "../src/zeko-fee.js";
 
-const MAX_FEE = 50_000_000n;
+const MAX_FEE = 1_000_000n;
 
 describe("Zeko fee", async () => {
   it(`should wait for low fee`, async () => {
     while (true) {
-      const fee = await fetchZekoFee({ txn: 2 });
+      const fee = await fetchZekoFee({ txn: 2, buffer: 0 });
 
       if (fee && fee.toBigInt() < MAX_FEE) {
         console.log(
