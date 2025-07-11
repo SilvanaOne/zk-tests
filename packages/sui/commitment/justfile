@@ -1,0 +1,3 @@
+# Run all tests
+test:
+    sui move test --gas-limit 20000000

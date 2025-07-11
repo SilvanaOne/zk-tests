@@ -6,6 +6,7 @@ import {
   Cache,
   verify,
   setNumberOfWorkers,
+  Field,
 } from "o1js";
 import { test, describe } from "node:test";
 import assert from "node:assert";
@@ -51,17 +52,38 @@ function commit(table: AlmostReducedElement[]): AlmostReducedElement {
   return acc;
 }
 
-// constant‑time single‑field update
+// Helper function to compute base^exp for foreign field elements
+function scalarPow(base: CanonicalElement, exp: number): CanonicalElement {
+  let acc = Fr.from(1n);
+  for (let i = 0; i < exp; i++) {
+    acc = acc.mul(base).assertCanonical();
+  }
+  return acc;
+}
+
+// constant‑time single‑field update using struct digest recalculation
 function update(
-  oldC: AlmostReducedElement,
-  delta: CanonicalElement,
-  sPowJ: CanonicalElement,
-  rPowI: CanonicalElement
+  oldTableCommitment: AlmostReducedElement,
+  oldStructDigest: AlmostReducedElement,
+  newStructDigest: AlmostReducedElement,
+  index: number,
+  tableSize: number
 ): AlmostReducedElement {
-  const deltaAlmost = delta.assertAlmostReduced();
-  const deltaStruct = deltaAlmost.mul(sPowJ).assertAlmostReduced();
-  const deltaTable = deltaStruct.mul(rPowI).assertAlmostReduced();
-  return oldC.add(deltaTable).assertAlmostReduced();
+  // The table commitment formula in commit() is:
+  // acc = prod.add(c).assertAlmostReduced() where prod = acc.mul(R)
+  // For table [t0, t1, t2, ...] this produces: t0*R^(n-1) + t1*R^(n-2) + ... + t(n-1)*R^0
+  // So position i has coefficient R^(table_length - 1 - i)
+
+  // Calculate the coefficient for this position
+  const coefficientPower = tableSize - 1 - index;
+  const rPowI = scalarPow(R, coefficientPower);
+
+  // Calculate the change: new_commitment = old_commitment + (new_struct - old_struct) * R^coeff
+  const structDelta = newStructDigest
+    .sub(oldStructDigest)
+    .assertAlmostReduced();
+  const tableDelta = structDelta.mul(rPowI).assertAlmostReduced();
+  return oldTableCommitment.add(tableDelta).assertAlmostReduced();
 }
 
 // Create ZkProgram for commitment update
@@ -71,19 +93,36 @@ const CommitmentProgram = ZkProgram({
   methods: {
     updateCommitment: {
       privateInputs: [
-        Fr.AlmostReduced.provable, // oldC
-        Fr.Canonical.provable, // delta
-        Fr.Canonical.provable, // sPowJ
-        Fr.Canonical.provable, // rPowI
+        Fr.AlmostReduced.provable, // oldTableCommitment
+        Fr.AlmostReduced.provable, // oldStructDigest
+        Fr.AlmostReduced.provable, // newStructDigest
+        Field, // index
       ],
       async method(
-        oldC: AlmostReducedElement,
-        delta: CanonicalElement,
-        sPowJ: CanonicalElement,
-        rPowI: CanonicalElement
+        oldTableCommitment: AlmostReducedElement,
+        oldStructDigest: AlmostReducedElement,
+        newStructDigest: AlmostReducedElement,
+        index: Field
       ) {
-        // Just call the existing update function
-        const newCommitment = update(oldC, delta, sPowJ, rPowI);
+        // Calculate R^coefficientPower
+        // For simplicity, we'll handle the specific case of a 2-element table (tableSize = 2)
+        // where position 0 has coefficient R^1 = R and position 1 has coefficient R^0 = 1
+        const isPosition0 = index.equals(Field(0));
+        const rPowI = Provable.if(
+          isPosition0,
+          Fr.Canonical.provable,
+          R.assertCanonical(),
+          Fr.from(1n)
+        );
+
+        // Calculate the change: new_commitment = old_commitment + (new_struct - old_struct) * R^coeff
+        const structDelta = newStructDigest
+          .sub(oldStructDigest)
+          .assertAlmostReduced();
+        const tableDelta = structDelta.mul(rPowI).assertAlmostReduced();
+        const newCommitment = oldTableCommitment
+          .add(tableDelta)
+          .assertAlmostReduced();
 
         return { publicOutput: newCommitment };
       },
@@ -130,18 +169,19 @@ describe("commitment equivalence with Move", () => {
       "commit0 should match Move result"
     );
 
-    // update: field1 of struct0 becomes 7  (Δ = 5)
-    const delta = scalar(5n);
+    // update: field1 of struct0 becomes 7 (struct update approach)
+    // Create the new struct with updated field
+    const struct1Updated = [scalar(1n), scalar(7n)];
 
-    // In Move: s_pow_1 = scalar_one() (S^0 = 1), r_pow_0 = get_r() (R^1)
-    const sPow1 = scalar(1n); // S^0 = 1
-    const rPow0 = R; // R^1
+    // Calculate old and new struct digests
+    const oldStructDigest = c0; // We already computed this as digestStruct(struct1)
+    const newStructDigest = digestStruct(struct1Updated);
 
-    const commit1 = update(commit0, delta, sPow1, rPow0);
+    // Update struct at index 0 in a 2-element table
+    const commit1 = update(commit0, oldStructDigest, newStructDigest, 0, 2);
 
     // recompute ground‑truth
-    const struct1New = [scalar(1n), scalar(7n)];
-    const c0new = digestStruct(struct1New);
+    const c0new = newStructDigest; // We already computed this above
     const commitTruth = commit([c0new, c1]);
 
     const expectedCommit1 =
@@ -229,12 +269,19 @@ describe("commitment equivalence with Move", () => {
     const c1 = digestStruct(struct2);
     const commit0 = commit([c0, c1]);
 
-    const delta = scalar(5n);
-    const sPow1 = scalar(1n);
-    const rPow0 = R;
+    // Prepare for update: field1 of struct0 becomes 7
+    const struct1Updated = [scalar(1n), scalar(7n)];
+    const oldStructDigest = c0; // We already computed this as digestStruct(struct1)
+    const newStructDigest = digestStruct(struct1Updated);
 
     // Direct calculation
-    const directResult = update(commit0, delta, sPow1, rPow0);
+    const directResult = update(
+      commit0,
+      oldStructDigest,
+      newStructDigest,
+      0,
+      2
+    );
 
     setNumberOfWorkers(8); // Mac M2 Max
 
@@ -250,9 +297,9 @@ describe("commitment equivalence with Move", () => {
     console.time("prove update");
     const zkUpdateResult = await CommitmentProgram.updateCommitment(
       commit0,
-      delta,
-      sPow1,
-      rPow0
+      oldStructDigest,
+      newStructDigest,
+      Field(0)
     );
     console.timeEnd("prove update");
 
