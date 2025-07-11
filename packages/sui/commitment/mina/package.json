@@ -1,0 +1,23 @@
+{
+  "name": "commitment",
+  "version": "0.1.0",
+  "author": "DFST",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test commitment.ts",
+    "test:all": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test *.ts",
+    "commitment": "npm run test"
+  },
+  "node": {
+    "version": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "o1js": "^2.7.0"
+  }
+}
