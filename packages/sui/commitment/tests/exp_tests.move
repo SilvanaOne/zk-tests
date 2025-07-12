@@ -13,7 +13,7 @@ use sui::test_scenario as test;
 use sui::random;
 
 /// Naive scalar exponentiation for comparison (similar to polynomial.move's scalar_pow)
-fun scalar_pow(base: &Element<Scalar>, exp: u64): Element<Scalar> {
+fun scalar_pow(base: &Element<Scalar>, exp: u32): Element<Scalar> {
     let mut acc = scalar_from_u64(1); // Start with 1
     let mut i = 0;
     while (i < exp) {
@@ -27,8 +27,8 @@ fun scalar_pow(base: &Element<Scalar>, exp: u64): Element<Scalar> {
 fun compare_and_debug_on_error(
     optimized_result: &Element<Scalar>,
     naive_result: &Element<Scalar>,
-    exp: u64,
-    test_number: u64,
+    exp: u32,
+    test_number: u32,
 ): bool {
     let are_equal = *optimized_result == *naive_result;
 
@@ -62,7 +62,7 @@ fun test_r_scalar_pow_vs_naive_random_exponents() {
     while (test_count < 100) {
         // Generate random exponent in reasonable range
         // Use smaller range to avoid timeout with naive implementation
-        let exp = random::generate_u64_in_range(&mut rng, 0, 5000);
+        let exp = random::generate_u32_in_range(&mut rng, 0, 5000);
 
         // Call both functions
         let optimized_result = r_scalar_pow(exp);
@@ -104,7 +104,7 @@ fun test_r_scalar_pow_vs_legacy_random_exponents() {
 
     while (test_count < 100) {
         // Generate smaller random exponent for legacy function (to avoid timeout)
-        let exp = random::generate_u64_in_range(&mut rng, 0, 1000);
+        let exp = random::generate_u32_in_range(&mut rng, 0, 1000);
 
         // Call both functions
         let optimized_result = r_scalar_pow(exp);
@@ -146,7 +146,7 @@ fun test_r_scalar_pow_large_random_exponents() {
 
     while (test_count < 100) {
         // Generate large random exponent to test the optimized function's range
-        let exp = random::generate_u64_in_range(&mut rng, 1000, 1000000);
+        let exp = random::generate_u32_in_range(&mut rng, 1000, 1000000);
 
         // Call optimized function
         let optimized_result = r_scalar_pow(exp);
