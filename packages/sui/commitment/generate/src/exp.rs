@@ -113,29 +113,6 @@ fn generate_table2(r: &BigUint, modulus: &BigUint) -> Vec<String> {
     table
 }
 
-/// Generate TABLE3: R^(1024^3*i) for i = 0..1023
-fn generate_table3(r: &BigUint, modulus: &BigUint) -> Vec<String> {
-    println!("Generating TABLE3: R^(1024^3*i) for i = 0..1023");
-    let mut table = Vec::with_capacity(1024);
-
-    // First compute R^(1024^3) = R^1073741824
-    let r_1024_cubed = mod_pow(r, &BigUint::from(1024u64 * 1024u64 * 1024u64), modulus);
-    let mut power = BigUint::one(); // Start with R^0 = 1
-
-    for i in 0..1024 {
-        table.push(to_move_hex(&power));
-        if i < 1023 {
-            power = (&power * &r_1024_cubed) % modulus; // Multiply by R^(1024^3) for next power
-        }
-
-        if i % 100 == 0 {
-            println!("  Generated {} entries", i + 1);
-        }
-    }
-
-    table
-}
-
 /// Format table for Move constant declaration
 fn format_table_for_move(table_name: &str, table: &[String]) -> String {
     let mut result = format!(
@@ -144,7 +121,6 @@ fn format_table_for_move(table_name: &str, table: &[String]) -> String {
             "TABLE0_BYTES" => "R^i for i = 0..1023 (base powers)",
             "TABLE1_BYTES" => "R^(1024*i) for i = 0..1023 (powers of R^1024)",
             "TABLE2_BYTES" => "R^(1024^2*i) for i = 0..1023 (powers of R^(1024^2))",
-            "TABLE3_BYTES" => "R^(1024^3*i) for i = 0..1023 (powers of R^(1024^3))",
             _ => "Lookup table",
         }
     );
@@ -163,7 +139,6 @@ fn format_table_for_move(table_name: &str, table: &[String]) -> String {
                 s if s.contains("TABLE0") => format!("R^{}", i),
                 s if s.contains("TABLE1") => format!("R^{}", i * 1024),
                 s if s.contains("TABLE2") => format!("R^{}", i * 1024 * 1024),
-                s if s.contains("TABLE3") => format!("R^{}", i * 1024 * 1024 * 1024),
                 _ => format!("entry {}", i),
             };
             result.push_str(&format!("    {}, // {}\n", hex_str, comment));
@@ -175,12 +150,7 @@ fn format_table_for_move(table_name: &str, table: &[String]) -> String {
 }
 
 /// Generate the complete constants.move file
-fn generate_constants_move_file(
-    table0: &[String],
-    table1: &[String],
-    table2: &[String],
-    table3: &[String],
-) -> String {
+fn generate_constants_move_file(table0: &[String], table1: &[String], table2: &[String]) -> String {
     let mut content = String::new();
 
     // File header
@@ -189,17 +159,16 @@ fn generate_constants_move_file(
 /// Generated using R = 0x{}
 /// BLS12-381 scalar field modulus: {}
 /// 
-/// This module provides 4 lookup tables for O(1) exponentiation:
+/// This module provides 3 lookup tables for O(1) exponentiation:
 /// - TABLE0_BYTES: R^i for i = 0..1023 (base powers)
 /// - TABLE1_BYTES: R^(1024*i) for i = 0..1023 (powers of R^1024)
 /// - TABLE2_BYTES: R^(1024^2*i) for i = 0..1023 (powers of R^(1024^2))
-/// - TABLE3_BYTES: R^(1024^3*i) for i = 0..1023 (powers of R^(1024^3))
 ///
-/// Usage: exp = i0 + 1024*i1 + 1024^2*i2 + 1024^3*i3
-///        R^exp = TABLE3[i3] * TABLE2[i2] * TABLE1[i1] * TABLE0[i0]
+/// Usage: exp = i0 + 1024*i1 + 1024^2*i2
+///        R^exp = TABLE2[i2] * TABLE1[i1] * TABLE0[i0]
 ///
-/// Maximum supported exponent: 1024^4 - 1 = 1,099,511,627,775
-/// Total storage: 128 KiB (4 * 1024 * 32 bytes)
+/// Maximum supported exponent: 1024^3 - 1 = 1,073,741,823
+/// Total storage: 96 KiB (3 * 1024 * 32 bytes)
 
 module commitment::constants;
 
@@ -219,14 +188,13 @@ public fun get_r(): Element<Scalar> {{
         R_HEX, BLS12_381_SCALAR_MODULUS, R_HEX
     ));
 
-    // Add all four tables
+    // Add getter functions
+    content.push_str(&generate_getter_functions());
+
+    // Add all three tables
     content.push_str(&format_table_for_move("TABLE0_BYTES", table0));
     content.push_str(&format_table_for_move("TABLE1_BYTES", table1));
     content.push_str(&format_table_for_move("TABLE2_BYTES", table2));
-    content.push_str(&format_table_for_move("TABLE3_BYTES", table3));
-
-    // Add getter functions
-    content.push_str(&generate_getter_functions());
 
     content
 }
@@ -234,35 +202,146 @@ public fun get_r(): Element<Scalar> {{
 /// Generate getter functions that return Element<Scalar> directly
 fn generate_getter_functions() -> String {
     r#"/// Get entry from TABLE0 (R^i for i = 0..1023)
-public fun get_table0_entry(index: u64): Element<Scalar> {
+public fun get_table0_entry(index: u32): Element<Scalar> {
     assert!(index < 1024, 0);
     let table = TABLE0_BYTES;
-    let bytes = vector::borrow(&table, index);
+    let bytes = vector::borrow(&table, index as u64);
     scalar_from_bytes(bytes)
 }
 
 /// Get entry from TABLE1 (R^(1024*i) for i = 0..1023)
-public fun get_table1_entry(index: u64): Element<Scalar> {
+public fun get_table1_entry(index: u32): Element<Scalar> {
     assert!(index < 1024, 1);
     let table = TABLE1_BYTES;
-    let bytes = vector::borrow(&table, index);
+    let bytes = vector::borrow(&table, index as u64);
     scalar_from_bytes(bytes)
 }
 
 /// Get entry from TABLE2 (R^(1024^2*i) for i = 0..1023)
-public fun get_table2_entry(index: u64): Element<Scalar> {
+public fun get_table2_entry(index: u32): Element<Scalar> {
     assert!(index < 1024, 2);
     let table = TABLE2_BYTES;
-    let bytes = vector::borrow(&table, index);
+    let bytes = vector::borrow(&table, index as u64);
     scalar_from_bytes(bytes)
 }
+"#
+    .to_string()
+}
 
-/// Get entry from TABLE3 (R^(1024^3*i) for i = 0..1023)
-public fun get_table3_entry(index: u64): Element<Scalar> {
-    assert!(index < 1024, 3);
-    let table = TABLE3_BYTES;
-    let bytes = vector::borrow(&table, index);
-    scalar_from_bytes(bytes)
+/// Format table for TypeScript constant declaration
+fn format_table_for_typescript(table_name: &str, table: &[String]) -> String {
+    let mut result = format!(
+        "// {}: Lookup table for efficient scalar exponentiation\n",
+        match table_name {
+            "TABLE0" => "R^i for i = 0..1023 (base powers)",
+            "TABLE1" => "R^(1024*i) for i = 0..1023 (powers of R^1024)",
+            "TABLE2" => "R^(1024^2*i) for i = 0..1023 (powers of R^(1024^2))",
+            _ => "Lookup table",
+        }
+    );
+    result.push_str(&format!("const {}: readonly bigint[] = [\n", table_name));
+
+    for (i, hex_str) in table.iter().enumerate() {
+        // Remove the 'x"' prefix and '"' suffix from Move hex format
+        let hex_without_quotes = hex_str.trim_start_matches("x\"").trim_end_matches("\"");
+
+        if i == 0 {
+            result.push_str(&format!("  0x{}n, // R^0 = 1\n", hex_without_quotes));
+        } else if i == 1 && table_name.contains("TABLE0") {
+            result.push_str(&format!("  0x{}n, // R^1 = R\n", hex_without_quotes));
+        } else {
+            let comment = match table_name {
+                s if s.contains("TABLE0") => format!("R^{}", i),
+                s if s.contains("TABLE1") => format!("R^{}", i * 1024),
+                s if s.contains("TABLE2") => format!("R^{}", i * 1024 * 1024),
+                _ => format!("entry {}", i),
+            };
+            result.push_str(&format!("  0x{}n, // {}\n", hex_without_quotes, comment));
+        }
+    }
+
+    result.push_str("] as const;\n\n");
+    result
+}
+
+/// Generate the complete constants.ts file
+fn generate_constants_typescript_file(
+    table0: &[String],
+    table1: &[String],
+    table2: &[String],
+) -> String {
+    let mut content = String::new();
+
+    // File header
+    let r_hex_without_quotes = R_HEX;
+    content.push_str(&format!(
+        r#"/// Auto-generated lookup tables for optimized scalar exponentiation
+/// Generated using R = 0x{}
+/// BLS12-381 scalar field modulus: {}
+/// 
+/// This module provides 3 lookup tables for O(1) exponentiation:
+/// - TABLE0: R^i for i = 0..1023 (base powers)
+/// - TABLE1: R^(1024*i) for i = 0..1023 (powers of R^1024)
+/// - TABLE2: R^(1024^2*i) for i = 0..1023 (powers of R^(1024^2))
+///
+/// Usage: exp = i0 + 1024*i1 + 1024^2*i2
+///        R^exp = TABLE2[i2] * TABLE1[i1] * TABLE0[i0]
+///
+/// Maximum supported exponent: 1024^3 - 1 = 1,073,741,823
+/// Total storage: 96 KiB (3 * 1024 * 32 bytes)
+
+import {{ createForeignField }} from "o1js";
+
+export {{ Fr, BLS_FR, TABLE0, TABLE1, TABLE2 }};
+
+// BLS12‑381 scalar field prime
+const BLS_FR = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n;
+const Fr = createForeignField(BLS_FR);
+
+// Use the proper types from the foreign field system
+type CanonicalElement = InstanceType<typeof Fr.Canonical>;
+
+/// The R constant used for exponentiation (raw bigint value)
+const R_VALUE: bigint = 0x{}n;
+
+/// Get the R constant as CanonicalElement
+export function getR(): CanonicalElement {{
+  return Fr.from(R_VALUE);
+}}
+
+"#,
+        r_hex_without_quotes, BLS12_381_SCALAR_MODULUS, r_hex_without_quotes
+    ));
+
+    // Add getter functions
+    content.push_str(&generate_typescript_getter_functions());
+
+    // Add all three tables
+    content.push_str(&format_table_for_typescript("TABLE0", table0));
+    content.push_str(&format_table_for_typescript("TABLE1", table1));
+    content.push_str(&format_table_for_typescript("TABLE2", table2));
+
+    content
+}
+
+/// Generate TypeScript getter functions
+fn generate_typescript_getter_functions() -> String {
+    r#"/// Get entry from TABLE0 (R^i for i = 0..1023)
+export function getTable0Entry(index: number): CanonicalElement {
+  if (index >= 1024) throw new Error("TABLE0 index out of bounds");
+  return Fr.from(TABLE0[index]);
+}
+
+/// Get entry from TABLE1 (R^(1024*i) for i = 0..1023)
+export function getTable1Entry(index: number): CanonicalElement {
+  if (index >= 1024) throw new Error("TABLE1 index out of bounds");
+  return Fr.from(TABLE1[index]);
+}
+
+/// Get entry from TABLE2 (R^(1024^2*i) for i = 0..1023)
+export function getTable2Entry(index: number): CanonicalElement {
+  if (index >= 1024) throw new Error("TABLE2 index out of bounds");
+  return Fr.from(TABLE2[index]);
 }
 "#
     .to_string()
@@ -282,7 +361,7 @@ pub fn main() {
     println!("Parsed R: {}", r);
     println!();
 
-    // Generate all four tables
+    // Generate all three tables
     let table0 = generate_table0(&r, &modulus);
     println!("TABLE0 generated with {} entries\n", table0.len());
 
@@ -292,11 +371,8 @@ pub fn main() {
     let table2 = generate_table2(&r, &modulus);
     println!("TABLE2 generated with {} entries\n", table2.len());
 
-    let table3 = generate_table3(&r, &modulus);
-    println!("TABLE3 generated with {} entries\n", table3.len());
-
     // Generate the complete Move file
-    let move_file_content = generate_constants_move_file(&table0, &table1, &table2, &table3);
+    let move_file_content = generate_constants_move_file(&table0, &table1, &table2);
 
     // Write to constants.move file
     let constants_path = Path::new("../sources/constants.move");
@@ -314,15 +390,36 @@ pub fn main() {
         }
     }
 
+    // Generate the complete TypeScript file
+    let typescript_file_content = generate_constants_typescript_file(&table0, &table1, &table2);
+
+    // Write to constants.ts file (exp.ts is manually maintained)
+    let constants_ts_path = Path::new("../mina/src/constants.ts");
+
+    match fs::write(constants_ts_path, &typescript_file_content) {
+        Ok(_) => {
+            println!("✓ Successfully generated ../mina/src/constants.ts");
+            println!("  File size: {} bytes", typescript_file_content.len());
+        }
+        Err(e) => {
+            eprintln!("✗ Failed to write constants.ts: {}", e);
+            println!("\n{}", "=".repeat(80));
+            println!("TYPESCRIPT FILE CONTENT (copy manually to ../mina/src/constants.ts):");
+            println!("{}", "=".repeat(80));
+            println!("{}", typescript_file_content);
+        }
+    }
+
     println!("\n{}", "=".repeat(80));
     println!("Generation complete!");
+    println!("Generated: constants.ts (exp.ts is manually maintained)");
     println!(
-        "Total storage: {} bytes (4 * 1024 * 32 bytes)",
-        4 * 1024 * 32
+        "Total storage: {} bytes (3 * 1024 * 32 bytes)",
+        3 * 1024 * 32
     );
     println!(
-        "Maximum supported exponent: {} (2^40 - 1)",
-        (1u64 << 40) - 1
+        "Maximum supported exponent: {} (2^30 - 1)",
+        1024u64.pow(3) - 1
     );
     println!("{}", "=".repeat(80));
 }

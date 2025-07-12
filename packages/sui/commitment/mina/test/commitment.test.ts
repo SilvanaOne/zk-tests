@@ -1,153 +1,17 @@
-/// <reference types="node" />
-import {
-  createForeignField,
-  ZkProgram,
-  Provable,
-  Cache,
-  verify,
-  setNumberOfWorkers,
-  Field,
-} from "o1js";
+import { Cache, verify, setNumberOfWorkers, Field, UInt32 } from "o1js";
 import { test, describe } from "node:test";
 import assert from "node:assert";
-
-// BLS12‑381 scalar field prime
-const BLS_FR =
-  0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n;
-
-const Fr = createForeignField(BLS_FR);
-
-// Use the proper types from the foreign field system
-type CanonicalElement = InstanceType<typeof Fr.Canonical>;
-type AlmostReducedElement = InstanceType<typeof Fr.AlmostReduced>;
-
-// ----- constants taken from Move code (big‑endian hex) -----
-const S: CanonicalElement =
-  Fr.from(0x1582695da6689f26db7bb3eb32907ecd0ac3af032aefad31a069352705f0d459n);
-const R: CanonicalElement =
-  Fr.from(0x149fa8c209ab655fd480a3aff7d16dc72b6a3943e4b95fcf7909f42d9c17a552n);
-
-// ----- helpers -----
-function scalar(n: bigint): CanonicalElement {
-  return Fr.from(n);
-}
-
-// inner: digest one struct
-function digestStruct(fields: CanonicalElement[]): AlmostReducedElement {
-  let d: AlmostReducedElement = Fr.from(0n).assertAlmostReduced();
-  for (const f of fields) {
-    const prod = d.mul(S); // returns Unreduced
-    d = prod.add(f).assertAlmostReduced(); // reduce for next iteration
-  }
-  return d;
-}
-
-// outer: commit whole table (vector of digests)
-function commit(table: AlmostReducedElement[]): AlmostReducedElement {
-  let acc: AlmostReducedElement = Fr.from(0n).assertAlmostReduced();
-  for (const c of table) {
-    const prod = acc.mul(R); // returns Unreduced
-    acc = prod.add(c).assertAlmostReduced(); // reduce for next iteration
-  }
-  return acc;
-}
-
-// Helper function to compute base^exp for foreign field elements
-function scalarPow(base: CanonicalElement, exp: number): CanonicalElement {
-  let acc = Fr.from(1n);
-  for (let i = 0; i < exp; i++) {
-    acc = acc.mul(base).assertCanonical();
-  }
-  return acc;
-}
-
-// constant‑time single‑field update using struct digest recalculation
-function update(
-  oldTableCommitment: AlmostReducedElement,
-  oldStructDigest: AlmostReducedElement,
-  newStructDigest: AlmostReducedElement,
-  index: number,
-  tableSize: number
-): AlmostReducedElement {
-  // The table commitment formula in commit() is:
-  // acc = prod.add(c).assertAlmostReduced() where prod = acc.mul(R)
-  // For table [t0, t1, t2, ...] this produces: t0*R^(n-1) + t1*R^(n-2) + ... + t(n-1)*R^0
-  // So position i has coefficient R^(table_length - 1 - i)
-
-  // Calculate the coefficient for this position
-  const coefficientPower = tableSize - 1 - index;
-  const rPowI = scalarPow(R, coefficientPower);
-
-  // Calculate the change: new_commitment = old_commitment + (new_struct - old_struct) * R^coeff
-  const structDelta = newStructDigest
-    .sub(oldStructDigest)
-    .assertAlmostReduced();
-  const tableDelta = structDelta.mul(rPowI).assertAlmostReduced();
-  return oldTableCommitment.add(tableDelta).assertAlmostReduced();
-}
-
-// Create ZkProgram for commitment update
-const CommitmentProgram = ZkProgram({
-  name: "CommitmentUpdate",
-  publicOutput: Fr.AlmostReduced.provable,
-  methods: {
-    updateCommitment: {
-      privateInputs: [
-        Fr.AlmostReduced.provable, // oldTableCommitment
-        Fr.AlmostReduced.provable, // oldStructDigest
-        Fr.AlmostReduced.provable, // newStructDigest
-        Field, // index
-      ],
-      async method(
-        oldTableCommitment: AlmostReducedElement,
-        oldStructDigest: AlmostReducedElement,
-        newStructDigest: AlmostReducedElement,
-        index: Field
-      ) {
-        // Calculate R^coefficientPower
-        // For simplicity, we'll handle the specific case of a 2-element table (tableSize = 2)
-        // where position 0 has coefficient R^1 = R and position 1 has coefficient R^0 = 1
-        const isPosition0 = index.equals(Field(0));
-        const rPowI = Provable.if(
-          isPosition0,
-          Fr.Canonical.provable,
-          R.assertCanonical(),
-          Fr.from(1n)
-        );
-
-        // Calculate the change: new_commitment = old_commitment + (new_struct - old_struct) * R^coeff
-        const structDelta = newStructDigest
-          .sub(oldStructDigest)
-          .assertAlmostReduced();
-        const tableDelta = structDelta.mul(rPowI).assertAlmostReduced();
-        const newCommitment = oldTableCommitment
-          .add(tableDelta)
-          .assertAlmostReduced();
-
-        return { publicOutput: newCommitment };
-      },
-    },
-    commitFromScratch: {
-      privateInputs: [
-        Provable.Array(Fr.Canonical.provable, 2), // struct1 [field0, field1]
-        Provable.Array(Fr.Canonical.provable, 2), // struct2 [field0, field1]
-      ],
-      async method(struct1: CanonicalElement[], struct2: CanonicalElement[]) {
-        // Digest each struct
-        const c0 = digestStruct(struct1);
-        const c1 = digestStruct(struct2);
-
-        // Commit the table of digests
-        const commitment = commit([c0, c1]);
-
-        return { publicOutput: commitment };
-      },
-    },
-  },
-});
+import {
+  scalar,
+  digestStruct,
+  commit,
+  update,
+  CommitmentProgram,
+} from "../src/commitment.js";
 
 describe("commitment equivalence with Move", () => {
-  test("digest‑and‑update matches Move result", () => {
+  test("digest and update matches Move result", () => {
+    console.log("Random field:", Field.random().toBigInt());
     console.log("Testing commitment equivalence with Move...");
 
     // two structs, each 2 fields
@@ -159,7 +23,7 @@ describe("commitment equivalence with Move", () => {
     const commit0 = commit([c0, c1]);
 
     const expectedCommit0 =
-      "0x69b424994bc0beb82c845b7e2b69d994e640671ee5787a1a6373929df04953eb";
+      "0x67c9d15a9ca6783200ae2bc0fe16bac805cf4abb8f79452334fd264669260e4b";
     const actualCommit0 =
       "0x" + commit0.toBigInt().toString(16).padStart(64, "0");
     console.log("commit0:", actualCommit0);
@@ -178,14 +42,19 @@ describe("commitment equivalence with Move", () => {
     const newStructDigest = digestStruct(struct1Updated);
 
     // Update struct at index 0 in a 2-element table
-    const commit1 = update(commit0, oldStructDigest, newStructDigest, 0, 2);
+    const commit1 = update(
+      commit0,
+      oldStructDigest,
+      newStructDigest,
+      UInt32.from(0n)
+    );
 
     // recompute ground‑truth
     const c0new = newStructDigest; // We already computed this above
     const commitTruth = commit([c0new, c1]);
 
     const expectedCommit1 =
-      "0x5ce4c910527c3c4f1fcdb5e5f8df26736b95e16f5d18fd28c0a55782fcbf8e84";
+      "0x67c9d15a9ca6783200ae2bc0fe16bac805cf4abb8f79452334fd264669260e50";
     const actualCommit1 =
       "0x" + commit1.toBigInt().toString(16).padStart(64, "0");
     const actualCommitTruth =
@@ -279,13 +148,12 @@ describe("commitment equivalence with Move", () => {
       commit0,
       oldStructDigest,
       newStructDigest,
-      0,
-      2
+      UInt32.zero
     );
 
     setNumberOfWorkers(8); // Mac M2 Max
 
-    const cache = Cache.FileSystem("./cache");
+    const cache = Cache.FileSystem("../cache");
 
     console.log("\ncompiling...");
     console.time("compile");
@@ -299,7 +167,7 @@ describe("commitment equivalence with Move", () => {
       commit0,
       oldStructDigest,
       newStructDigest,
-      Field(0)
+      UInt32.from(0n)
     );
     console.timeEnd("prove update");
 

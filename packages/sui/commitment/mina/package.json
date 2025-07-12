@@ -5,8 +5,14 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test commitment.ts",
-    "test:all": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test *.ts",
+    "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test",
+    "test:tree": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/tree.test.ts",
+    "test:witnesses": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/tree_witnesses.test.ts",
+    "test:commitment": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/commitment.test.ts",
+    "test:all": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/*.ts",
+    "test:large-indices": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps test/test_large_indices.ts",
+    "test:cross-platform": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps test/test_cross_platform.ts",
+    "test:zkprogram-large": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps test/test_zkprogram_large_index.ts",
     "commitment": "npm run test"
   },
   "node": {
@@ -18,6 +24,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@silvana-one/mina-utils": "^1.0.23",
     "o1js": "^2.7.0"
   }
 }

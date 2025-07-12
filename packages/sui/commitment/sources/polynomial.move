@@ -47,11 +47,14 @@ public fun digest_struct(fields: vector<Element<Scalar>>): Element<Scalar> {
 public fun commit(table: vector<Element<Scalar>>): Element<Scalar> {
     // table[i] already holds c_i = digest_struct(...)
     let mut acc = scalar_zero();
-    let mut i = 0;
     let r = get_r();
-    while (i < vector::length(&table)) {
+    let len = vector::length(&table);
+    let mut i = len;
+
+    // Iterate in reverse order so that table[i] gets coefficient r^i
+    while (i > 0) {
+        i = i - 1;
         acc = scalar_add(&scalar_mul(&acc, &r), vector::borrow(&table, i));
-        i = i + 1;
     };
     acc
 }
@@ -74,17 +77,13 @@ public fun update(
     new_struct_digest: &Element<Scalar>, // new struct digest at position i
     index: u64, // index in table (0-based)
 ): Element<Scalar> {
-    // The table commitment formula in commit() is:
-    // acc = scalar_add(&scalar_mul(&acc, &r), vector::borrow(&table, i));
-    // For table [t0, t1, t2, ...] this produces: t0*r^(n-1) + t1*r^(n-2) + ... + t(n-1)*r^0
-    // So position i has coefficient r^(table_length - 1 - i)
-    // Since we're working with a 10-element table in our test, position i has coefficient r^(9-i)
+    // The table commitment formula in commit() now produces:
+    // table[0]*r^0 + table[1]*r^1 + table[2]*r^2 + ... + table[i]*r^i
+    // So position i has coefficient r^i
 
     let r = get_r();
-    // For a 10-element table: position i has coefficient r^(9-i)
-    let table_size = 10; // This should ideally be passed as parameter, but hardcoded for now
-    let coefficient_power = table_size - 1 - index;
-    let r_pow_i = scalar_pow(&r, coefficient_power);
+    // Position i has coefficient r^i
+    let r_pow_i = scalar_pow(&r, index);
 
     let struct_delta = scalar_sub(new_struct_digest, old_struct_digest);
     let table_delta = scalar_mul(&struct_delta, &r_pow_i);
@@ -156,18 +155,13 @@ fun test_commit_update() {
     let new_struct_digest = digest_struct(struct1_new);
 
     // Update struct at index 0
-    // For a 2-element table, we need to temporarily modify the update function to handle this
-    // But the coefficient for position 0 in a 2-element table should be r^(2-1-0) = r^1 = r
-    // The current update function is hardcoded for 10-element tables, so this will work correctly
-    // since position 0 in a 10-element table has coefficient r^9 which is much larger than needed
-    // Let me create a custom update call for this test
-
-    // Calculate the coefficient manually for 2-element table: position 0 has coefficient r
-    let r = get_r();
-    let r_pow_0 = r; // For 2-element table: position 0 has coefficient r^(2-1-0) = r^1 = r
-    let struct_delta = scalar_sub(&new_struct_digest, &old_struct_digest);
-    let table_delta = scalar_mul(&struct_delta, &r_pow_0);
-    let commit1 = scalar_add(&commit0, &table_delta);
+    // For a 2-element table, position 0 has coefficient r^(2-1-0) = r^1 = r
+    let commit1 = update(
+        &commit0,
+        &old_struct_digest,
+        &new_struct_digest,
+        0,
+    );
 
     // recompute ground‑truth commit
     let c0_new = new_struct_digest; // We already computed this above
@@ -177,14 +171,10 @@ fun test_commit_update() {
     assert!(commit1 == commit_truth, 0);
     debug::print(&b"commit1".to_ascii_string());
     debug::print(&commit1);
-    debug::print(&b"commit_truth".to_ascii_string());
-    debug::print(&commit_truth);
 }
 
 #[test]
 fun test_large_table_random_updates() {
-    debug::print(&b"=== Large Table Random Updates Test ===".to_ascii_string());
-
     let alice: address = @0xa11ce;
     let scenario = test::begin(alice);
 
@@ -283,10 +273,6 @@ fun test_large_table_random_updates() {
 
         update_count = update_count + 1;
     };
-
-    debug::print(
-        &b"=== All updates completed successfully! ===".to_ascii_string(),
-    );
 
     test::end(scenario);
 }
