@@ -35,3 +35,15 @@ Job for nitro-enclaves-allocator.service failed because the control process exit
 See "systemctl status nitro-enclaves-allocator.service" and "journalctl -xeu nitro-enclaves-allocator.service" for details.
 
 "Token has expired: claim.iat:1750893282 claim.exp:1750896882 now:1750917839"
+
+# Requires Docker ≥ 23 with BuildKit / buildx
+
+docker buildx imagetools inspect --raw docker.io/library/rust:1.87-alpine \
+ | jq -r '.manifests[]
+| select(.platform.os=="linux" and .platform.architecture=="arm64")
+| .digest'
+
+docker buildx imagetools inspect --raw docker.io/library/alpine:3.22 \
+ | jq -r '.manifests[]
+| select(.platform.os=="linux" and .platform.architecture=="arm64")
+| .digest'
