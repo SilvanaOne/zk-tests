@@ -47,3 +47,26 @@ docker buildx imagetools inspect --raw docker.io/library/alpine:3.22 \
  | jq -r '.manifests[]
 | select(.platform.os=="linux" and .platform.architecture=="arm64")
 | .digest'
+
+docker buildx imagetools inspect --raw docker.io/library/amazonlinux:2023 \
+ | jq -r '.manifests[]
+| select(.platform.os=="linux" and .platform.architecture=="arm64")
+| .digest'
+sha256:2ae982a3cc43011aaf80f42b086451c0c562a319b2e020e089f35338dfda1360
+
+cargo generate-lockfile
+mkdir -p vendor
+cargo vendor vendor/ --versioned-dirs
+
+```
+Start building the Enclave Image...
+Using the locally available Docker image...
+{
+  "Measurements": {
+    "HashAlgorithm": "Sha384 { ... }",
+    "PCR0": "a7123f036c74fa7d92c105180e1b42608a921e57a219bae4065b6df55a1a5342693077ae9744ee93622cd0833769bb9e",
+    "PCR1": "745004eab9a0fb4a67973b261c6e7fa5418dc870292927591574385649338e54686cdeb659f3c6c2e72ba11aba2158a8",
+    "PCR2": "56031752985921fa72af0c56fe8685aeea9d2bb5823788625c4eaba2d8919680a5950d9281446a146dc6459df24fdf2f"
+  }
+}
+```

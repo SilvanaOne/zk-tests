@@ -4,6 +4,7 @@
 
 # Tunables ----------------------------------------------------
 IMAGE_NAME := tee-arm:latest
+NITRO_BUILDER_IMAGE := tee-arm-nitro-builder:latest
 OUT_DIR := out
 EIF_NAME := $(OUT_DIR)/tee-arm.eif
 CPU_COUNT := 1
@@ -11,21 +12,38 @@ MEMORY := 3072 # MiB
 ENCLAVE_CID := 16
 
 # Default target ------------------------------------------------
-.DEFAULT_GOAL :=
+.DEFAULT_GOAL := build
 .PHONY: default
 default: $(EIF_NAME)
+
+# Build target for full reproducible build ---------------------
+.PHONY: build
+build: $(EIF_NAME)
 
 # Build the container image ------------------------------------
 .PHONY: image
 image:
-	mkdir -p out
-	docker buildx build --platform linux/arm64 -t $(IMAGE_NAME) -f Containerfile .
-# Create the Enclave Image File (EIF) ---------------------------
-$(EIF_NAME): image
 	mkdir -p $(OUT_DIR)
-	nitro-cli build-enclave \
-		--docker-uri $(IMAGE_NAME) \
-		--output-file $(EIF_NAME)
+	docker buildx build --platform linux/arm64 --output type=docker -t $(IMAGE_NAME) --target runtime -f Containerfile .
+
+# Build the nitro-cli builder image ----------------------------
+.PHONY: nitro-builder-image
+nitro-builder-image:
+	docker buildx build --platform linux/arm64 --output type=docker -t $(NITRO_BUILDER_IMAGE) --target nitro-builder -f Containerfile .
+
+# Create the Enclave Image File (EIF) using Docker -------------
+$(EIF_NAME): image nitro-builder-image
+	mkdir -p $(OUT_DIR)
+	@echo "Building EIF with nitro-cli (using image present in host daemon)..."
+	docker run --rm \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(PWD)/$(OUT_DIR):/workspace/out \
+		--platform linux/arm64 \
+		$(NITRO_BUILDER_IMAGE) \
+		sh -c "mkdir -p /var/log/nitro_enclaves && \
+		       nitro-cli build-enclave \
+		           --docker-uri $(IMAGE_NAME) \
+		           --output-file /workspace/out/tee-arm.eif"
 
 .PHONY: eif
 eif: $(EIF_NAME)
@@ -62,6 +80,15 @@ stop:
 	sudo nitro-cli terminate-enclave --all
 	sudo killall socat || true
 
+# Docker-based nitro-cli operations ----------------------------
+.PHONY: nitro-version
+nitro-version: nitro-builder-image
+	docker run --rm $(NITRO_BUILDER_IMAGE) nitro-cli --version
+
+.PHONY: nitro-help
+nitro-help: nitro-builder-image
+	docker run --rm $(NITRO_BUILDER_IMAGE) nitro-cli --help
+
 # Expose enclave ports via socat --------------------------------
 .PHONY: expose
 expose:
@@ -87,14 +114,18 @@ vsock:
 # Clean targets -------------------------------------------------
 .PHONY: clean
 clean:
-	rm -rf $(OUT_DIR) 
+	rm -rf $(OUT_DIR)
+	docker rmi $(IMAGE_NAME) $(NITRO_BUILDER_IMAGE) 2>/dev/null || true
+
+.PHONY: clean-images
+clean-images:
+	docker rmi $(IMAGE_NAME) $(NITRO_BUILDER_IMAGE) 2>/dev/null || true
 
 .PHONY: update
 update:
-	git pull origin main && rm -rf out
+	git pull origin main && rm -rf $(OUT_DIR)
 
 .PHONY: upgrade
 upgrade:
-	git pull origin main && rm -rf out
-	$(MAKE) image
-	$(MAKE) eif
+	git pull origin main && rm -rf $(OUT_DIR)
+	$(MAKE) build

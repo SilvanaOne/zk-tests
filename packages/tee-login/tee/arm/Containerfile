@@ -1,9 +1,11 @@
+ARG TARGETPLATFORM=linux/arm64
+
 ### Stage 1 – Build ########################################################
 # Use the official Rust Alpine image for the arm64 architecture as the
 # builder stage. This already contains a musl-based toolchain which lets us
 # build statically-linked binaries that are ideal for Nitro Enclaves.
 # 1.87-alpine
-FROM --platform=linux/arm64 docker.io/library/rust@sha256:fa3f412044d347294ad9c21eb3c9922a5e12e57b645ae53bbd27b8bc26173a7e AS builder
+FROM docker.io/library/rust@sha256:fa3f412044d347294ad9c21eb3c9922a5e12e57b645ae53bbd27b8bc26173a7e AS builder
 
 # Install build dependencies
 ENV SOURCE_DATE_EPOCH=0  
@@ -22,22 +24,26 @@ RUN mkdir -p server
 RUN mkdir -p forwarder
 COPY server/Cargo.toml server/Cargo.lock ./server
 COPY server/src ./server/src
+COPY server/vendor ./server/vendor
+COPY server/.cargo ./server/.cargo
 COPY forwarder/Cargo.toml forwarder/Cargo.lock ./forwarder
 COPY forwarder/src ./forwarder/src
+COPY forwarder/vendor ./forwarder/vendor
+COPY forwarder/.cargo ./forwarder/.cargo
 
 ENV TARGET=aarch64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-Wl,--build-id=none"
 ENV CARGO_INCREMENTAL=0
 ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
 # Build in release mode for arm64 musl target
-RUN cd server && cargo build --release --target aarch64-unknown-linux-musl
-RUN cd forwarder && cargo build --release --target aarch64-unknown-linux-musl
+RUN cd server && cargo build --release --locked --offline --target aarch64-unknown-linux-musl
+RUN cd forwarder && cargo build --release --locked --offline --target aarch64-unknown-linux-musl
 
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
 # alpine:3.22
-FROM --platform=linux/arm64 docker.io/library/alpine@sha256:008448246686fe28544e36ba89e7bc7fbe6dad8a2ccdef576875c74298c46348 AS runtime
+FROM docker.io/library/alpine@sha256:008448246686fe28544e36ba89e7bc7fbe6dad8a2ccdef576875c74298c46348 AS runtime
 
 # Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing)
 RUN apk add --no-cache socat jq
@@ -63,3 +69,39 @@ USER app
 
 # The Nitro Enclave entrypoint is simply the application binary
 ENTRYPOINT ["/app/run.sh"] 
+
+
+### Stage 3 – Nitro CLI Builder ############################################
+# Use Amazon Linux 2023 for nitro-cli to build EIF files
+FROM amazonlinux:2023@sha256:2ae982a3cc43011aaf80f42b086451c0c562a319b2e020e089f35338dfda1360 AS nitro-builder
+
+ARG NITRO_COMMIT=7994931902bf4cd88eb63cabb8f4c49dae9f3655
+ENV SOURCE_DATE_EPOCH=0 \
+    RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
+    CARGO_INCREMENTAL=0
+
+# Minimal tool-chain for a static binary
+RUN yum install -y --setopt=install_weak_deps=False \
+    git clang rust cargo openssl-devel tar && \
+    yum clean all
+
+# Clone + checkout exactly one commit, then build with --locked
+RUN git clone https://github.com/aws/aws-nitro-enclaves-cli.git /src/nitro-cli && \
+    cd /src/nitro-cli && \
+    git checkout ${NITRO_COMMIT} && \
+    cargo build --release --locked --target aarch64-unknown-linux-gnu && \
+    strip target/aarch64-unknown-linux-gnu/release/nitro-cli && \
+    mv target/aarch64-unknown-linux-gnu/release/nitro-cli /usr/local/bin && \
+    /usr/local/bin/nitro-cli --version
+# Verify nitro-cli installation
+RUN nitro-cli --version
+
+# Copy default kernel / ramdisk / cmdline blobs expected by nitro-cli
+RUN mkdir -p /usr/share/nitro_enclaves/blobs && \
+    cp /src/nitro-cli/blobs/aarch64/* /usr/share/nitro_enclaves/blobs/
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["/bin/bash"]
