@@ -8,21 +8,33 @@ use system::{dmesg, SystemError};
 fn nitro_heartbeat() {
     use libc::{close, read, write, AF_VSOCK};
     use system::socket_connect;
+
+    println!("=== HEARTBEAT: Starting Nitro heartbeat ===");
     let mut buf: [u8; 1] = [0; 1];
     buf[0] = 0xB7; // AWS Nitro heartbeat value
+
+    println!("=== HEARTBEAT: Connecting to VSOCK ===");
     let fd = match socket_connect(AF_VSOCK, 9000, 3) {
-        Ok(f) => f,
+        Ok(f) => {
+            println!("=== HEARTBEAT: VSOCK connection successful ===");
+            f
+        }
         Err(e) => {
             eprintln!("{}", e);
+            println!("=== HEARTBEAT: VSOCK connection failed: {} ===", e);
             return;
         }
     };
+
+    println!("=== HEARTBEAT: Sending heartbeat data ===");
     unsafe {
         write(fd, buf.as_ptr() as _, 1);
         read(fd, buf.as_ptr() as _, 1);
         close(fd);
     }
+
     dmesg(format!("Sent NSM heartbeat"));
+    println!("=== HEARTBEAT: Heartbeat completed successfully ===");
 }
 
 // Get entropy sample from Nitro device
@@ -57,10 +69,21 @@ pub fn get_entropy(size: usize) -> Result<Vec<u8>, SystemError> {
 // Initialize nitro device
 pub fn init_platform() {
     use system::insmod;
-    nitro_heartbeat();
 
+    println!("=== PLATFORM: Starting Nitro heartbeat ===");
+    nitro_heartbeat();
+    println!("=== PLATFORM: Nitro heartbeat completed ===");
+
+    println!("=== PLATFORM: Loading NSM driver ===");
     match insmod("/nsm.ko") {
-        Ok(()) => dmesg(format!("Loaded nsm.ko")),
-        Err(e) => eprintln!("{}", e),
+        Ok(()) => {
+            dmesg(format!("Loaded nsm.ko"));
+            println!("=== PLATFORM: NSM driver loaded successfully ===");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            println!("=== PLATFORM: Failed to load NSM driver: {} ===", e);
+        }
     };
+    println!("=== PLATFORM: Platform initialization completed ===");
 }

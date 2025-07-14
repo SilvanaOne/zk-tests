@@ -10,11 +10,15 @@
 # - Launches server
 
 set -e # Exit immediately if a command exits with a non-zero status
-echo "run.sh script is running"
+echo "=== RUN.SH: Starting run.sh script ==="
+echo "=== RUN.SH: Script is running ==="
 
 # Assign an IP address to local loopback
+echo "=== RUN.SH: Configuring loopback interface ==="
 busybox ip addr add 127.0.0.1/32 dev lo
+echo "=== RUN.SH: Added IP address to loopback ==="
 busybox ip link set dev lo up
+echo "=== RUN.SH: Loopback interface is up ==="
 
 # Add a hosts record, pointing target site calls to local loopback
 echo "127.0.0.1   localhost" > /etc/hosts
@@ -28,9 +32,10 @@ echo "127.0.0.68   fullnode.devnet.sui.io" >> /etc/hosts
 cat /etc/hosts
 
 # Get a json blob with key/value pair for secrets
-echo "Getting Configuration"
+echo "=== RUN.SH: Getting Configuration ==="
+echo "=== RUN.SH: Waiting for configuration on VSOCK port 7777 ==="
 JSON_RESPONSE=$(socat - VSOCK-LISTEN:7777,reuseaddr)
-echo "Configuration received:"
+echo "=== RUN.SH: Configuration received ==="
 echo "$JSON_RESPONSE"
 # Sets all key value pairs as env variables that will be referred by the server
 # This is shown as a example below. For production usecases, it's best to set the
