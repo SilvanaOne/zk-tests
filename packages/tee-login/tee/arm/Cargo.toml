@@ -1,0 +1,14 @@
+[workspace]
+members = [
+  "src/aws",
+  "src/init",
+  "src/system"
+]
+
+exclude = [
+  "server",
+  "forwarder"
+]
+
+# Set default resolver to version 2
+resolver = "2" 
