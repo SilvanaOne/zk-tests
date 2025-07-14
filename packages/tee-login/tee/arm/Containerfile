@@ -95,6 +95,7 @@ RUN <<-EOF
     mkdir -p initramfs/proc initramfs/sys initramfs/dev initramfs/tmp initramfs/run initramfs/var/log
     mkdir -p initramfs/etc/ssl/certs
     mkdir -p initramfs/opt/aws/acm/lib initramfs/opt/aws/acm
+    mkdir -p initramfs/lib initramfs/usr/lib
     
     # Copy NSM driver
     cp /nsm.ko initramfs/nsm.ko
@@ -110,6 +111,42 @@ RUN <<-EOF
     cp /bin/sh initramfs/sh
     cp /usr/bin/jq initramfs/jq
     cp /usr/bin/socat initramfs/socat
+    
+    # Copy busybox and create essential symlinks
+    cp /bin/busybox initramfs/busybox
+    ln -sf busybox initramfs/ip
+    ln -sf busybox initramfs/ifconfig
+    ln -sf busybox initramfs/ps
+    ln -sf busybox initramfs/ls
+    ln -sf busybox initramfs/cat
+    ln -sf busybox initramfs/echo
+    ln -sf busybox initramfs/mount
+    ln -sf busybox initramfs/umount
+    ln -sf busybox initramfs/mkdir
+    ln -sf busybox initramfs/rmdir
+    ln -sf busybox initramfs/chmod
+    ln -sf busybox initramfs/chown
+    ln -sf busybox initramfs/cp
+    ln -sf busybox initramfs/mv
+    ln -sf busybox initramfs/rm
+    ln -sf busybox initramfs/kill
+    ln -sf busybox initramfs/killall
+    ln -sf busybox initramfs/ps
+    ln -sf busybox initramfs/top
+    ln -sf busybox initramfs/sleep
+    ln -sf busybox initramfs/test
+    ln -sf busybox initramfs/[
+    ln -sf busybox initramfs/grep
+    ln -sf busybox initramfs/sed
+    ln -sf busybox initramfs/awk
+    ln -sf busybox initramfs/tr
+    ln -sf busybox initramfs/sort
+    ln -sf busybox initramfs/head
+    ln -sf busybox initramfs/tail
+    
+    # Copy musl libc
+    cp /lib/libc.musl-aarch64.so.1 initramfs/lib/libc.musl-aarch64.so.1 || true
+    cp /lib/ld-musl-aarch64.so.1 initramfs/lib/ld-musl-aarch64.so.1 || true
     
     # Copy SSL certificates
     cp -r /etc/ssl/certs/* initramfs/etc/ssl/certs/ 2>/dev/null || true
