@@ -24,12 +24,12 @@ build: $(EIF_NAME)
 .PHONY: image
 image:
 	mkdir -p $(OUT_DIR)
-	docker buildx build --platform linux/arm64 --output type=docker -t $(IMAGE_NAME) --target runtime -f Containerfile .
+	docker buildx build --progress=plain --platform linux/arm64 --output type=docker -t $(IMAGE_NAME) --target runtime -f Containerfile .
 
 # Build the nitro-cli builder image ----------------------------
 .PHONY: nitro-builder-image
 nitro-builder-image:
-	docker buildx build --platform linux/arm64 --output type=docker -t $(NITRO_BUILDER_IMAGE) --target nitro-builder -f Containerfile .
+	docker buildx build --progress=plain --platform linux/arm64 --output type=docker -t $(NITRO_BUILDER_IMAGE) --target nitro-builder -f Containerfile .
 
 # Create the Enclave Image File (EIF) using Docker -------------
 $(EIF_NAME): image nitro-builder-image
