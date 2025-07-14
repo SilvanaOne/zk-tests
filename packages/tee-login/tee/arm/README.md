@@ -70,5 +70,11 @@ Output file: /workspace/out/tee-arm.eif
 ```
 
 ```
-
+Output file: /workspace/out/tee-arm.eif
+{
+  "HashAlgorithm": "Sha384 { ... }",
+  "PCR0": "c89982b4508c5e686560bf624af9180102f2d87fe9ecd747b5582a9c6022f6fdd88ab50e3fd7b2ba8554b511983fecdb",
+  "PCR1": "c89982b4508c5e686560bf624af9180102f2d87fe9ecd747b5582a9c6022f6fdd88ab50e3fd7b2ba8554b511983fecdb",
+  "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"
+}
 ```
