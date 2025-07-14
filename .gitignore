@@ -19,10 +19,8 @@ node_modules/
 .pnp.cjs
 .pnp.loader.mjs
 .vscode/
-cache/
 dist/
 packages/*/data/
-packages/*/cache/
 packages/sui/add-client/.env.contracts
 
 # Swap the comments on the following lines if you wish to use zero-installs
