@@ -63,6 +63,23 @@ const RESPONSE_OBJECT_ID: &str =
 
 pub async fn get_request() -> Result<RequestData, Box<dyn std::error::Error>> {
     let sui_client = get_sui_client().await?;
+    let http = sui_client.http();
+    println!("http: {:?}", http);
+    let ws = sui_client.ws();
+    println!("ws: {:?}", ws);
+    let rpc_methods = sui_client.available_rpc_methods();
+    println!("rpc_methods: {:?}", rpc_methods);
+    let checkpoint_number = sui_client
+        .read_api()
+        .get_latest_checkpoint_sequence_number()
+        .await?;
+    println!("checkpoint number: {:?}", checkpoint_number);
+    let state = sui_client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
+    println!("state: {:?}", state);
+
     let response = sui_client
         .read_api()
         .get_object_with_options(

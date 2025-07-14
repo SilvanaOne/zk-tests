@@ -1,7 +1,7 @@
 /// Auto-generated lookup tables for optimized scalar exponentiation
 /// Generated using R = 0x149fa8c209ab655fd480a3aff7d16dc72b6a3943e4b95fcf7909f42d9c17a552
 /// BLS12-381 scalar field modulus: 52435875175126190479447740508185965837690552500527637822603658699938581184513
-/// 
+///
 /// This module provides 3 lookup tables for O(1) exponentiation:
 /// - TABLE0_BYTES: R^i for i = 0..1023 (base powers)
 /// - TABLE1_BYTES: R^(1024*i) for i = 0..1023 (powers of R^1024)
@@ -19,7 +19,8 @@ use sui::bls12381::{Scalar, scalar_from_bytes};
 use sui::group_ops::Element;
 
 /// The R constant used for exponentiation
-const R_BYTES: vector<u8> = x"149fa8c209ab655fd480a3aff7d16dc72b6a3943e4b95fcf7909f42d9c17a552";
+const R_BYTES: vector<u8> =
+    x"149fa8c209ab655fd480a3aff7d16dc72b6a3943e4b95fcf7909f42d9c17a552";
 
 /// Get the R constant as Element<Scalar>
 public fun get_r(): Element<Scalar> {
@@ -50,6 +51,7 @@ public fun get_table2_entry(index: u32): Element<Scalar> {
     let bytes = vector::borrow(&table, index as u64);
     scalar_from_bytes(bytes)
 }
+
 /// R^i for i = 0..1023 (base powers): Lookup table for efficient scalar exponentiation
 const TABLE0_BYTES: vector<vector<u8>> = vector[
     x"0000000000000000000000000000000000000000000000000000000000000001", // R^0 = 1
@@ -3133,4 +3135,3 @@ const TABLE2_BYTES: vector<vector<u8>> = vector[
     x"4a3dc6e6db8e54e71160b98a060f1a2f898e4561f5b6e53745a636ad4b5728be", // R^1071644672
     x"13a5fd7d9eacaedaae3eae3df5fc7eff552d0d44b9d9e51c1a3e9893703b9206", // R^1072693248
 ];
-

@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "test": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test",
+    "test:string": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/string.test.ts",
     "test:tree": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/tree.test.ts",
     "test:witnesses": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/tree_witnesses.test.ts",
     "test:commitment": "NODE_NO_WARNINGS=1 node --loader=ts-node/esm --enable-source-maps --test test/commitment.test.ts",
