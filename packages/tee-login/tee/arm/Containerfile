@@ -56,7 +56,8 @@ WORKDIR /app
 ENV KBUILD_BUILD_TIMESTAMP=1
 
 # Create a simple init process for the enclave
-RUN cat > /app/init << 'EOF'
+RUN <<-EOF
+cat > /app/init << 'INIT_SCRIPT'
 #!/bin/sh
 # Simple init process for ARM64 enclave
 set -e
@@ -77,10 +78,10 @@ mknod /dev/null c 1 3 2>/dev/null || true
 mknod /dev/zero c 1 5 2>/dev/null || true
 
 # Start the application
-exec /app/run.sh "$@"
+exec /app/run.sh "\$@"
+INIT_SCRIPT
+chmod +x /app/init
 EOF
-
-RUN chmod +x /app/init
 
 # Copy the statically-linked executable from the builder stage
 COPY --from=builder /app/server/target/aarch64-unknown-linux-musl/release/server /app/server
