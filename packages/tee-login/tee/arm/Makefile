@@ -41,9 +41,15 @@ $(EIF_NAME): image nitro-builder-image
 		--platform linux/arm64 \
 		$(NITRO_BUILDER_IMAGE) \
 		sh -c "mkdir -p /var/log/nitro_enclaves && \
-		       nitro-cli build-enclave \
-		           --docker-uri $(IMAGE_NAME) \
-		           --output-file /workspace/out/tee-arm.eif"
+		eif_build \
+			--kernel /Image \
+			--kernel_config /Image.config \
+			--ramdisk /app/rootfs.cpio \
+			--output /workspace/out/tee-arm.eif \
+			--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'"
+		      #  nitro-cli build-enclave \
+		      #      --docker-uri $(IMAGE_NAME) \
+		      #      --output-file /workspace/out/tee-arm.eif
 
 .PHONY: eif
 eif: $(EIF_NAME)

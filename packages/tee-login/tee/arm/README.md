@@ -59,14 +59,16 @@ mkdir -p vendor
 cargo vendor vendor/ --versioned-dirs
 
 ```
-Start building the Enclave Image...
-Using the locally available Docker image...
+Output file: /workspace/out/tee-arm.eif
 {
-  "Measurements": {
-    "HashAlgorithm": "Sha384 { ... }",
-    "PCR0": "a7123f036c74fa7d92c105180e1b42608a921e57a219bae4065b6df55a1a5342693077ae9744ee93622cd0833769bb9e",
-    "PCR1": "745004eab9a0fb4a67973b261c6e7fa5418dc870292927591574385649338e54686cdeb659f3c6c2e72ba11aba2158a8",
-    "PCR2": "56031752985921fa72af0c56fe8685aeea9d2bb5823788625c4eaba2d8919680a5950d9281446a146dc6459df24fdf2f"
-  }
+  "HashAlgorithm": "Sha384 { ... }",
+  "PCR0": "78ae7cd712a8d5c861c066710b2454a740dc9d977f71531bf2d3dd9821f2d88510ae6205840a2b5b77f2ead24dca970a",
+  "PCR1": "78ae7cd712a8d5c861c066710b2454a740dc9d977f71531bf2d3dd9821f2d88510ae6205840a2b5b77f2ead24dca970a",
+  "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"
 }
+
+```
+
+```
+
 ```

@@ -45,14 +45,15 @@ RUN cd forwarder && cargo build --release --locked --offline --target aarch64-un
 # alpine:3.22
 FROM docker.io/library/alpine@sha256:008448246686fe28544e36ba89e7bc7fbe6dad8a2ccdef576875c74298c46348 AS runtime
 
-# Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing)
-RUN apk add --no-cache socat jq
+# Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing, GNU cpio for reproducible builds)
+RUN apk add --no-cache socat jq cpio
 
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app
 
 # Application directory
 WORKDIR /app
+ENV KBUILD_BUILD_TIMESTAMP=1
 
 # Copy the statically-linked executable from the builder stage
 COPY --from=builder /app/server/target/aarch64-unknown-linux-musl/release/server /app/server
@@ -64,7 +65,21 @@ COPY data/run.sh /app/run.sh
 RUN chmod +x /app/server && chown app:app /app/server
 RUN chmod +x /app/forwarder && chown app:app /app/forwarder
 RUN chmod +x /app/run.sh && chown app:app /app/run.sh
-RUN find /app -exec touch -hcd '@0' {} +
+# RUN find /app -exec touch -hcd '@0' {} +
+RUN <<-EOF
+    set -eux
+    cd /app
+    find . -exec touch -hcd "@0" "{}" +
+    find . -print0 \
+    | sort -z \
+    | cpio \
+        --null \
+        --create \
+        --verbose \
+        --reproducible \
+        --format=newc \
+    > /app/rootfs.cpio
+EOF
 USER app
 
 # The Nitro Enclave entrypoint is simply the application binary
@@ -75,30 +90,30 @@ ENTRYPOINT ["/app/run.sh"]
 # Use Amazon Linux 2023 for nitro-cli to build EIF files
 FROM amazonlinux:2023@sha256:2ae982a3cc43011aaf80f42b086451c0c562a319b2e020e089f35338dfda1360 AS nitro-builder
 
-ARG NITRO_COMMIT=7994931902bf4cd88eb63cabb8f4c49dae9f3655
+ARG NITRO_COMMIT=483114f1da3bad913ad1fb7d5c00dadacc6cbae6
 ENV SOURCE_DATE_EPOCH=0 \
     RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
     CARGO_INCREMENTAL=0
 
 # Minimal tool-chain for a static binary
 RUN yum install -y --setopt=install_weak_deps=False \
-    git clang rust cargo openssl-devel tar && \
+    git clang rust cargo openssl-devel tar wget && \
     yum clean all
 
 # Clone + checkout exactly one commit, then build with --locked
-RUN git clone https://github.com/aws/aws-nitro-enclaves-cli.git /src/nitro-cli && \
-    cd /src/nitro-cli && \
+RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/nitro-cli && \
+    cd /src/nitro-cli/eif_build && \
     git checkout ${NITRO_COMMIT} && \
-    cargo build --release --locked --target aarch64-unknown-linux-gnu && \
-    strip target/aarch64-unknown-linux-gnu/release/nitro-cli && \
-    mv target/aarch64-unknown-linux-gnu/release/nitro-cli /usr/local/bin && \
-    /usr/local/bin/nitro-cli --version
-# Verify nitro-cli installation
-RUN nitro-cli --version
+    cargo build --release  --target aarch64-unknown-linux-gnu && \
+    strip ../target/aarch64-unknown-linux-gnu/release/eif_build && \
+    mv ../target/aarch64-unknown-linux-gnu/release/eif_build /usr/local/bin
 
-# Copy default kernel / ramdisk / cmdline blobs expected by nitro-cli
-RUN mkdir -p /usr/share/nitro_enclaves/blobs && \
-    cp /src/nitro-cli/blobs/aarch64/* /usr/share/nitro_enclaves/blobs/
+# Download ARM64 kernel files directly from AWS Nitro Enclaves CLI repository
+RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image && \
+    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image.config
+
+# Copy the rootfs.cpio from the runtime stage
+COPY --from=runtime /app/rootfs.cpio /app/rootfs.cpio
 
 # Set working directory
 WORKDIR /workspace
