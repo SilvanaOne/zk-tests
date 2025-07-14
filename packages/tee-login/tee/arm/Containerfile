@@ -96,12 +96,13 @@ RUN <<-EOF
     mkdir -p initramfs/etc/ssl/certs
     mkdir -p initramfs/opt/aws/acm/lib initramfs/opt/aws/acm
     mkdir -p initramfs/lib initramfs/usr/lib
+    mkdir -p initramfs/sbin initramfs/bin
     
     # Copy NSM driver
     cp /nsm.ko initramfs/nsm.ko
     
     # Copy binaries from app
-    cp /app/init initramfs/init
+    cp /app/init initramfs/sbin/init
     cp /app/server initramfs/server
     cp /app/forwarder initramfs/forwarder
     cp /app/run.sh initramfs/run.sh
@@ -157,7 +158,7 @@ RUN <<-EOF
     touch initramfs/opt/aws/acm/private_key.pem
     
     # Set proper permissions
-    chmod +x initramfs/init initramfs/server initramfs/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
+    chmod +x initramfs/sbin/init initramfs/server initramfs/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
     
     # Set timestamps for reproducible builds
     cd initramfs
