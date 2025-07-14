@@ -41,14 +41,13 @@ $(EIF_NAME): image nitro-builder-image
 		--platform linux/arm64 \
 		$(NITRO_BUILDER_IMAGE) \
 		sh -c "mkdir -p /var/log/nitro_enclaves && \
-		CPIO_SIZE=\$$(stat -c%s /app/rootfs.cpio) && \
-		echo \"CPIO size: \$$CPIO_SIZE\" && \
+		echo \"CPIO size: \$$(stat -c%s /app/rootfs.cpio)\" && \
 		eif_build \
 			--kernel /Image \
 			--kernel_config /Image.config \
 			--ramdisk /app/rootfs.cpio \
 			--output /workspace/out/tee-arm.eif \
-			--cmdline \"init=/init reboot=k initrd=0x2000000,\$CPIO_SIZE root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd\""
+			--cmdline \"init=/init reboot=k initrd=0x2000000,\$$(stat -c%s /app/rootfs.cpio) root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd\""
 		      #  nitro-cli build-enclave \
 		      #      --docker-uri $(IMAGE_NAME) \
 		      #      --output-file /workspace/out/tee-arm.eif
