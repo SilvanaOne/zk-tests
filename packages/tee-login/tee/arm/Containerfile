@@ -269,6 +269,7 @@ WORKDIR /workspace
 
 # Build the EIF file as final step
 RUN eif_build \
+    --arch aarch64 \
     --kernel /Image \
     --kernel_config /Image.config \
     --ramdisk /rootfs.cpio \
