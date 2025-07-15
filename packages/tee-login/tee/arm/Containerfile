@@ -93,7 +93,7 @@ USER root
 WORKDIR /build_cpio
 
 # Download NSM driver
-RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/nsm.ko
+RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/6e8512e4d9e1ba82e0e5c4c9d9d0b3987724f217/blobs/aarch64/nsm.ko
  # Download and use official AWS bootstrap init for ARM64
 # Build init binary (like x86 version) - no need to download AWS init
   
@@ -254,7 +254,7 @@ RUN <<-EOF
         --verbose \
         --reproducible \
         --format=newc \
-    | gzip --best \
+    | gzip --best --no-name\
     > /build_cpio/rootfs.cpio
 EOF
 
@@ -279,7 +279,8 @@ RUN yum install -y --setopt=install_weak_deps=False \
     wget-1.21.3-1.amzn2023.0.4 && \
     yum clean all
 
-# Clone + checkout exactly one commit, then build with --locked
+
+# TODO: vendor eif_build dependencies for mainnet
 RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/nitro-cli && \
     cd /src/nitro-cli/eif_build && \
     git checkout ${NITRO_COMMIT} && \
@@ -288,8 +289,8 @@ RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/ni
     mv ../target/aarch64-unknown-linux-gnu/release/eif_build /usr/local/bin
 
 # Download ARM64 kernel files from AWS Nitro Enclaves CLI repository
-RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image && \
-    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image.config
+RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/6e8512e4d9e1ba82e0e5c4c9d9d0b3987724f217/blobs/aarch64/Image && \
+    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/6e8512e4d9e1ba82e0e5c4c9d9d0b3987724f217/blobs/aarch64/Image.config
 
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)
 COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
