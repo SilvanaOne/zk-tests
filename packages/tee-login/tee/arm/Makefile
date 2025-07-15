@@ -48,7 +48,7 @@ $(EIF_NAME): image nitro-builder-image
 			--kernel_config /Image.config \
 			--ramdisk /rootfs.cpio \
 			--output /workspace/out/tee-arm.eif \
-			--cmdline \"reboot=k initrd=0x2000000,14620524 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd\""
+			--cmdline \"reboot=k initrd=0x2000000,14689729 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd\""
 		      #  nitro-cli build-enclave \
 		      #      --docker-uri $(IMAGE_NAME) \
 		      #      --output-file /workspace/out/tee-arm.eif
