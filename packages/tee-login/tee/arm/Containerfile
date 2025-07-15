@@ -159,12 +159,26 @@ RUN <<-EOF
     ln -sf busybox initramfs/head
     ln -sf busybox initramfs/tail
     
-    # Copy musl libc
-    cp /lib/libc.musl-aarch64.so.1 initramfs/lib/libc.musl-aarch64.so.1 || true
-    cp /lib/ld-musl-aarch64.so.1 initramfs/lib/ld-musl-aarch64.so.1 || true
+    # Copy musl libc (required for all binaries)
+    cp /lib/libc.musl-aarch64.so.1 initramfs/lib/libc.musl-aarch64.so.1
+    cp /lib/ld-musl-aarch64.so.1 initramfs/lib/ld-musl-aarch64.so.1
+    
+    # Create symlinks for compatibility
+    ln -sf libc.musl-aarch64.so.1 initramfs/lib/libc.so.6
+    ln -sf ld-musl-aarch64.so.1 initramfs/lib/ld-linux-aarch64.so.1
+    
+    # Verify libc files exist and are executable
+    ls -la initramfs/lib/libc.musl-aarch64.so.1
+    ls -la initramfs/lib/ld-musl-aarch64.so.1
+    
+    # Test that our binaries can find libc
+    echo "Testing binary dependencies:"
+    ldd initramfs/init 2>/dev/null || file initramfs/init
+    ldd initramfs/server 2>/dev/null || echo "server: statically linked or musl"
+    ldd initramfs/sh 2>/dev/null || echo "sh: statically linked or musl"
     
     # Copy SSL certificates
-    cp -r /etc/ssl/certs/* initramfs/etc/ssl/certs/ 2>/dev/null || true
+    cp -r /etc/ssl/certs/* initramfs/etc/ssl/certs/ 2>/dev/null 
     ln -sf /etc/ssl/certs/ca-certificates.crt initramfs/ca-certificates.crt
     
     # Copy ACM files from parent system if they exist
