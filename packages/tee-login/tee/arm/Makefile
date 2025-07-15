@@ -43,6 +43,7 @@ $(EIF_NAME): image nitro-builder-image
 		sh -c "mkdir -p /var/log/nitro_enclaves && \
 		echo \"CPIO size: \$$(stat -c%s /rootfs.cpio)\" && \
 		eif_build \
+			--arch aarch64 \
 			--kernel /Image \
 			--kernel_config /Image.config \
 			--ramdisk /rootfs.cpio \
