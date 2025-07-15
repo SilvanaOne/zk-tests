@@ -99,6 +99,7 @@ RUN <<-EOF
     mkdir -p initramfs/opt/aws/acm/lib initramfs/opt/aws/acm
     mkdir -p initramfs/lib initramfs/usr/lib
     mkdir -p initramfs/sbin initramfs/bin
+    mkdir -p initramfs/app
     
     # Create essential device files (similar to x86 version)
     mknod initramfs/dev/console c 5 1
@@ -117,10 +118,10 @@ RUN <<-EOF
     chmod +x initramfs/init
     
     # Copy application binaries
-    cp /app/server initramfs/server
-    cp /app/forwarder initramfs/forwarder
+    cp /app/server initramfs/app/server
+    cp /app/forwarder initramfs/app/forwarder
     cp /app/run.sh initramfs/run.sh
-    cp /app/allowed_endpoints.yaml initramfs/allowed_endpoints.yaml
+    cp /app/allowed_endpoints.yaml initramfs/app/allowed_endpoints.yaml
     
     # No need for cmd/env files - using custom init like x86 version
     
@@ -190,7 +191,8 @@ RUN <<-EOF
     # Test that our binaries can find libc
     echo "Testing binary dependencies:"
     ldd initramfs/init 2>/dev/null || echo "init: statically linked or musl (ldd not available)"
-    ldd initramfs/server 2>/dev/null || echo "server: statically linked or musl"
+    ldd initramfs/app/server 2>/dev/null || echo "server: statically linked or musl"
+    ldd initramfs/app/forwarder 2>/dev/null || echo "forwarder: statically linked or musl"
     ldd initramfs/sh 2>/dev/null || echo "sh: statically linked or musl"
     echo "Testing socat dependencies:"
     ldd initramfs/socat 2>/dev/null || echo "socat: ldd failed - checking manually"
@@ -199,7 +201,8 @@ RUN <<-EOF
     
     # Verify binaries are executable
     test -x initramfs/init && echo "init: executable" || echo "init: NOT executable"
-    test -x initramfs/server && echo "server: executable" || echo "server: NOT executable"
+    test -x initramfs/app/server && echo "server: executable" || echo "server: NOT executable"
+    test -x initramfs/app/forwarder && echo "forwarder: executable" || echo "forwarder: NOT executable"
     test -x initramfs/sh && echo "sh: executable" || echo "sh: NOT executable"
     test -x initramfs/jq && echo "jq: executable" || echo "jq: NOT executable"
     test -x initramfs/socat && echo "socat: executable" || echo "socat: NOT executable"
@@ -227,7 +230,7 @@ RUN <<-EOF
     fi
     
     # Set proper permissions
-    chmod +x initramfs/init initramfs/server initramfs/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
+    chmod +x initramfs/init initramfs/app/server initramfs/app/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
     
     # Set timestamps for reproducible builds
     cd initramfs
