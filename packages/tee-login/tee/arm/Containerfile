@@ -172,7 +172,7 @@ RUN <<-EOF
     cp /usr/lib/libssl.so.3 initramfs/lib/libssl.so.3
     cp /usr/lib/libcrypto.so.3 initramfs/lib/libcrypto.so.3  
     cp /usr/lib/libreadline.so.8 initramfs/lib/libreadline.so.8
-    cp /lib/libncursesw.so.6 initramfs/lib/libncursesw.so.6
+    cp /usr/lib/libncursesw.so.6 initramfs/lib/libncursesw.so.6
     
     # Verify libraries were copied
     ls -la initramfs/lib/lib{ssl,crypto,readline,ncursesw}*
