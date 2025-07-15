@@ -60,6 +60,7 @@ ENV KBUILD_BUILD_TIMESTAMP=1
 # Copy the statically-linked executables from the builder stage (no custom init needed)
 COPY --from=builder /app/server/target/aarch64-unknown-linux-musl/release/server /app/server
 COPY --from=builder /app/forwarder/target/aarch64-unknown-linux-musl/release/forwarder /app/forwarder
+COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/init /app/init
 COPY data/allowed_endpoints.yaml /app/allowed_endpoints.yaml
 COPY data/run.sh /app/run.sh
 
@@ -68,6 +69,7 @@ COPY data/run.sh /app/run.sh
 # Ensure the binaries are executable and owned by the non-root user
 RUN chmod +x /app/server && chown app:app /app/server
 RUN chmod +x /app/forwarder && chown app:app /app/forwarder
+RUN chmod +x /app/init && chown app:app /app/init
 RUN chmod +x /app/run.sh && chown app:app /app/run.sh
 # RUN find /app -exec touch -hcd '@0' {} +
 USER app
@@ -110,7 +112,7 @@ RUN <<-EOF
     cp /nsm.ko initramfs/nsm.ko
     
     # Copy built init binary (like x86 version)
-    cp /app/target/aarch64-unknown-linux-musl/release/init initramfs/init
+    cp /app/init initramfs/init
     
     chmod +x initramfs/init
     
