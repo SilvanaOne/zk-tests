@@ -27,8 +27,7 @@ ENV TARGET=aarch64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-Wl,--build-id=none"
 ENV CARGO_INCREMENTAL=0
 
-# Build the workspace (init, aws, system)
-RUN cargo build --workspace --release --target aarch64-unknown-linux-musl
+# Skip building custom init workspace since we'll use official AWS bootstrap init
 
 # Build server and forwarder separately
 WORKDIR /app/server
@@ -57,8 +56,7 @@ ENV KBUILD_BUILD_TIMESTAMP=1
 
 # The init process will be built from the Rust workspace
 
-# Copy the statically-linked executables from the builder stage
-COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/init /app/init
+# Copy the statically-linked executables from the builder stage (no custom init needed)
 COPY --from=builder /app/server/target/aarch64-unknown-linux-musl/release/server /app/server
 COPY --from=builder /app/forwarder/target/aarch64-unknown-linux-musl/release/forwarder /app/forwarder
 COPY data/allowed_endpoints.yaml /app/allowed_endpoints.yaml
@@ -67,7 +65,6 @@ COPY data/run.sh /app/run.sh
 # We'll copy the NSM driver in the nitro-builder stage since it's not available here yet
 
 # Ensure the binaries are executable and owned by the non-root user
-RUN chmod +x /app/init && chown app:app /app/init
 RUN chmod +x /app/server && chown app:app /app/server
 RUN chmod +x /app/forwarder && chown app:app /app/forwarder
 RUN chmod +x /app/run.sh && chown app:app /app/run.sh
@@ -109,12 +106,20 @@ RUN <<-EOF
     # Copy NSM driver
     cp /nsm.ko initramfs/nsm.ko
     
-    # Copy binaries from app
-    cp /app/init initramfs/sbin/init
+    # Download and use official AWS bootstrap init for ARM64
+    wget -O initramfs/sbin/init https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/init
+    chmod +x initramfs/sbin/init
+    
+    # Copy application binaries
     cp /app/server initramfs/server
     cp /app/forwarder initramfs/forwarder
     cp /app/run.sh initramfs/run.sh
     cp /app/allowed_endpoints.yaml initramfs/allowed_endpoints.yaml
+    
+    # Create cmd and env files for AWS bootstrap init
+    echo "/sh /run.sh" > initramfs/cmd
+    echo "SSL_CERT_FILE=/ca-certificates.crt" > initramfs/env
+    echo "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/" >> initramfs/env
     
     # Copy essential binaries
     cp /bin/sh initramfs/sh
