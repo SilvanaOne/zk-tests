@@ -83,7 +83,9 @@ WORKDIR /build_cpio
 
 # Download NSM driver
 RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/nsm.ko
-
+ # Download and use official AWS bootstrap init for ARM64
+RUN wget -O /init https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/init
+  
 # Create the complete initramfs structure similar to x86
 RUN <<-EOF
     set -eux
@@ -105,10 +107,9 @@ RUN <<-EOF
     
     # Copy NSM driver
     cp /nsm.ko initramfs/nsm.ko
+    cp /init initramfs/init
     
-    # Download and use official AWS bootstrap init for ARM64
-    wget -O initramfs/sbin/init https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/init
-    chmod +x initramfs/sbin/init
+    chmod +x initramfs/init
     
     # Copy application binaries
     cp /app/server initramfs/server
@@ -166,12 +167,26 @@ RUN <<-EOF
     cp -r /etc/ssl/certs/* initramfs/etc/ssl/certs/ 2>/dev/null || true
     ln -sf /etc/ssl/certs/ca-certificates.crt initramfs/ca-certificates.crt
     
-    # Create placeholder ACM files (like x86 version)
-    touch initramfs/opt/aws/acm/cert_chain.pem
-    touch initramfs/opt/aws/acm/private_key.pem
+    # Copy ACM files from parent system if they exist
+    # These files are created by the nitro-enclaves-acm service on the parent
+    if [ -f "/opt/aws/acm/cert_chain.pem" ]; then \
+        cp /opt/aws/acm/cert_chain.pem initramfs/opt/aws/acm/; \
+        echo "Copied certificate chain to enclave"; \
+    else \
+        echo "Warning: Certificate chain not found. Make sure nitro-enclaves-acm service is running."; \
+        touch initramfs/opt/aws/acm/cert_chain.pem; \
+    fi
+
+    if [ -f "/opt/aws/acm/private_key.pem" ]; then \
+        cp /opt/aws/acm/private_key.pem initramfs/opt/aws/acm/; \
+        echo "Copied private key to enclave"; \
+    else \
+        echo "Warning: Private key not found. Make sure nitro-enclaves-acm service is running."; \
+        touch initramfs/opt/aws/acm/private_key.pem; \
+    fi
     
     # Set proper permissions
-    chmod +x initramfs/sbin/init initramfs/server initramfs/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
+    chmod +x initramfs/init initramfs/server initramfs/forwarder initramfs/run.sh initramfs/sh initramfs/jq initramfs/socat
     
     # Set timestamps for reproducible builds
     cd initramfs
@@ -218,7 +233,7 @@ RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/
     wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image.config
 
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)
-COPY --from=initramfs-builder /build_cpio/rootfs.cpio /app/rootfs.cpio
+COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
 
 # Set working directory
 WORKDIR /workspace

@@ -45,7 +45,7 @@ $(EIF_NAME): image nitro-builder-image
 		eif_build \
 			--kernel /Image \
 			--kernel_config /Image.config \
-			--ramdisk /app/rootfs.cpio \
+			--ramdisk /rootfs.cpio \
 			--output /workspace/out/tee-arm.eif \
 			--cmdline \"reboot=k panic=30 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0\""
 		      #  nitro-cli build-enclave \
