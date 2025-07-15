@@ -34,20 +34,22 @@ nitro-builder-image:
 # Create the Enclave Image File (EIF) using Docker -------------
 $(EIF_NAME): image nitro-builder-image
 	mkdir -p $(OUT_DIR)
-	@echo "Building EIF with nitro-cli (using image present in host daemon)..."
+	@echo "Building EIF with local eif_build (using image present in host daemon)..."
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(PWD)/$(OUT_DIR):/workspace/out \
+		-v /Users/mike/Documents/Silvana/Tests/aws-nitro-enclaves-image-format/eif_build:/usr/local/bin/eif_build \
 		--platform linux/arm64 \
 		$(NITRO_BUILDER_IMAGE) \
 		sh -c "mkdir -p /var/log/nitro_enclaves && \
-		echo \"CPIO size: \$$(stat -c%s /app/rootfs.cpio)\" && \
+		echo \"CPIO size: \$$(stat -c%s /build_cpio/rootfs.cpio)\" && \
 		eif_build \
 			--kernel /Image \
 			--kernel_config /Image.config \
-			--ramdisk /rootfs.cpio \
+			--ramdisk /build_cpio/rootfs.cpio \
+			--pcrs_output /workspace/out/tee-arm.pcrs \
 			--output /workspace/out/tee-arm.eif \
-			--cmdline \"reboot=k panic=30 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0\""
+			--cmdline \"reboot=k panic=1 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0\""
 		      #  nitro-cli build-enclave \
 		      #      --docker-uri $(IMAGE_NAME) \
 		      #      --output-file /workspace/out/tee-arm.eif
