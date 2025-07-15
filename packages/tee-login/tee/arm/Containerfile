@@ -27,7 +27,8 @@ ENV TARGET=aarch64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-Wl,--build-id=none"
 ENV CARGO_INCREMENTAL=0
 
-# Skip building custom init workspace since we'll use official AWS bootstrap init
+# Build the workspace (init, aws, system) like x86 version
+RUN cargo build --workspace --release --target aarch64-unknown-linux-musl
 
 # Build server and forwarder separately
 WORKDIR /app/server
@@ -84,7 +85,7 @@ WORKDIR /build_cpio
 # Download NSM driver
 RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/nsm.ko
  # Download and use official AWS bootstrap init for ARM64
-RUN wget -O /init https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/init
+# Build init binary (like x86 version) - no need to download AWS init
   
 # Create the complete initramfs structure similar to x86
 RUN <<-EOF
@@ -107,7 +108,9 @@ RUN <<-EOF
     
     # Copy NSM driver
     cp /nsm.ko initramfs/nsm.ko
-    cp /init initramfs/init
+    
+    # Copy built init binary (like x86 version)
+    cp /app/target/aarch64-unknown-linux-musl/release/init initramfs/init
     
     chmod +x initramfs/init
     
@@ -117,10 +120,7 @@ RUN <<-EOF
     cp /app/run.sh initramfs/run.sh
     cp /app/allowed_endpoints.yaml initramfs/allowed_endpoints.yaml
     
-    # Create cmd and env files for AWS bootstrap init
-    echo "/sh /run.sh" > initramfs/cmd
-    echo "SSL_CERT_FILE=/ca-certificates.crt" > initramfs/env
-    echo "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/" >> initramfs/env
+    # No need for cmd/env files - using custom init like x86 version
     
     # Copy essential binaries
     cp /bin/sh initramfs/sh
