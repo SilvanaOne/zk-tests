@@ -85,7 +85,7 @@ USER root
 WORKDIR /build_cpio
 
 # Download NSM driver
-RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/nsm.ko
+RUN wget -O /nsm.ko https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/nsm.ko
  # Download and use official AWS bootstrap init for ARM64
 # Build init binary (like x86 version) - no need to download AWS init
   
@@ -274,10 +274,10 @@ RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/ni
     mv ../target/aarch64-unknown-linux-gnu/release/eif_build /usr/local/bin
 
 # Download ARM64 kernel files from AWS Nitro Enclaves CLI repository
-RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image && \
-    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image.config && \
-    wget -O /linuxkit https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/linuxkit && \
-    wget -O /cmdline https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/cmdline && \
+RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image && \
+    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image.config && \
+    wget -O /linuxkit https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/linuxkit && \
+    wget -O /cmdline https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/cmdline && \
     chmod +x /cmdline
 
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)

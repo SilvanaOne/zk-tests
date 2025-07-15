@@ -3,10 +3,13 @@ cd ../../../.. && git pull origin main && cd packages/tee-login/tee/arm && rm -r
 curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/health_check
 
 curl -H 'Content-Type: application/json' -X GET http://54.82.214.64:3000/stats
+curl -H 'Content-Type: application/json' -X GET http://54.82.214.64:3000/get_attestation
+curl -H 'Content-Type: application/json' -X GET http://54.82.214.64:3000/health_check
 curl -H 'Content-Type: application/json' -X GET https://tee2.silvana.dev/stats
 
 curl -H 'Content-Type: application/json' -X GET http://35.175.45.79:3000/get_attestation
 
+curl -H 'Content-Type: application/json' -X GET https://tee2.silvana.dev/get_attestation
 run:
 ssh -i "TEE.pem" ec2-user@35.175.45.79
 dev:
