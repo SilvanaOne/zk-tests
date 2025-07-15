@@ -32,17 +32,17 @@ export function blsCommitment(element: CanonicalElement): Field {
 }
 
 // inner: digest one struct
-export function digestStruct(fields: CanonicalElement[]): AlmostReducedElement {
+export function digestStruct(fields: CanonicalElement[]): CanonicalElement {
   let d: AlmostReducedElement = Fr.from(0n).assertAlmostReduced();
   for (const f of fields) {
     const prod = d.mul(S); // returns Unreduced
     d = prod.add(f).assertAlmostReduced(); // reduce for next iteration
   }
-  return d;
+  return d.assertCanonical();
 }
 
 // outer: commit whole table (vector of digests)
-export function commit(table: AlmostReducedElement[]): AlmostReducedElement {
+export function commit(table: CanonicalElement[]): CanonicalElement {
   let acc: AlmostReducedElement = Fr.from(0n).assertAlmostReduced();
   const r = getR(); // Get R once, not in every iteration
 
@@ -51,7 +51,7 @@ export function commit(table: AlmostReducedElement[]): AlmostReducedElement {
     const prod = acc.mul(r); // returns Unreduced
     acc = prod.add(table[i]).assertAlmostReduced(); // reduce for next iteration
   }
-  return acc;
+  return acc.assertCanonical();
 }
 
 // constant‑time single‑field update using struct digest recalculation (non-provable version)
@@ -78,11 +78,11 @@ export function commit(table: AlmostReducedElement[]): AlmostReducedElement {
 
 // constant‑time single‑field update using struct digest recalculation (provable version)
 export function update(
-  oldTableCommitment: AlmostReducedElement,
+  oldTableCommitment: CanonicalElement,
   oldStructDigest: AlmostReducedElement,
   newStructDigest: AlmostReducedElement,
   index: UInt32
-): AlmostReducedElement {
+): CanonicalElement {
   // The table commitment formula in commit() now produces:
   // table[0]*R^0 + table[1]*R^1 + table[2]*R^2 + ... + table[i]*R^i
   // So position i has coefficient R^i
@@ -95,23 +95,23 @@ export function update(
     .sub(oldStructDigest)
     .assertAlmostReduced();
   const tableDelta = structDelta.mul(rPowI).assertAlmostReduced();
-  return oldTableCommitment.add(tableDelta).assertAlmostReduced();
+  return oldTableCommitment.add(tableDelta).assertCanonical();
 }
 
 // Create ZkProgram for commitment update
 export const CommitmentProgram = ZkProgram({
   name: "CommitmentUpdate",
-  publicOutput: Fr.AlmostReduced.provable,
+  publicOutput: Fr.Canonical.provable,
   methods: {
     updateCommitment: {
       privateInputs: [
-        Fr.AlmostReduced.provable, // oldTableCommitment
+        Fr.Canonical.provable, // oldTableCommitment
         Fr.AlmostReduced.provable, // oldStructDigest
         Fr.AlmostReduced.provable, // newStructDigest
         UInt32, // index
       ],
       async method(
-        oldTableCommitment: AlmostReducedElement,
+        oldTableCommitment: CanonicalElement,
         oldStructDigest: AlmostReducedElement,
         newStructDigest: AlmostReducedElement,
         index: UInt32

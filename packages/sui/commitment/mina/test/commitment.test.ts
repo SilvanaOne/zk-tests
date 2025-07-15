@@ -11,7 +11,6 @@ import {
 
 describe("commitment equivalence with Move", () => {
   test("digest and update matches Move result", () => {
-    console.log("Random field:", Field.random().toBigInt());
     console.log("Testing commitment equivalence with Move...");
 
     // two structs, each 2 fields
@@ -153,12 +152,13 @@ describe("commitment equivalence with Move", () => {
 
     setNumberOfWorkers(8); // Mac M2 Max
 
-    const cache = Cache.FileSystem("../cache");
+    const cache = Cache.FileSystem("./cache");
 
     console.log("\ncompiling...");
     console.time("compile");
     const vk = (await CommitmentProgram.compile({ cache })).verificationKey;
     console.timeEnd("compile");
+    console.log("vk:", vk.hash.toJSON()); // 12468479725166761494505226643698891732004953180564018405267393178782471181991
 
     console.log("\n=== TESTING UPDATE METHOD ===");
     console.log("proving update...");

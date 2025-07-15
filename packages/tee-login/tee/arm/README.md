@@ -63,21 +63,11 @@ cargo vendor vendor/ --versioned-dirs
 
 ```
 Output file: /workspace/out/tee-arm.eif
-{
-  "HashAlgorithm": "Sha384 { ... }",
-  "PCR0": "78ae7cd712a8d5c861c066710b2454a740dc9d977f71531bf2d3dd9821f2d88510ae6205840a2b5b77f2ead24dca970a",
-  "PCR1": "78ae7cd712a8d5c861c066710b2454a740dc9d977f71531bf2d3dd9821f2d88510ae6205840a2b5b77f2ead24dca970a",
-  "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"
-}
-
-```
-
-```
-Output file: /workspace/out/tee-arm.eif
-{
-  "HashAlgorithm": "Sha384 { ... }",
-  "PCR0": "c89982b4508c5e686560bf624af9180102f2d87fe9ecd747b5582a9c6022f6fdd88ab50e3fd7b2ba8554b511983fecdb",
-  "PCR1": "c89982b4508c5e686560bf624af9180102f2d87fe9ecd747b5582a9c6022f6fdd88ab50e3fd7b2ba8554b511983fecdb",
-  "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"
-}
+#43 0.910 Output file: /workspace/tee-arm.eif
+#43 1.028 {
+#43 1.028   "HashAlgorithm": "Sha384 { ... }",
+#43 1.028   "PCR0": "7342cf561ca9f27b205a84eddab7fd0ba05ddaf5a7e6495561f2902483b710409f044190dd64ad5efe489a9b1eb21ec4",
+#43 1.028   "PCR1": "7342cf561ca9f27b205a84eddab7fd0ba05ddaf5a7e6495561f2902483b710409f044190dd64ad5efe489a9b1eb21ec4",
+#43 1.028   "PCR2": "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a"
+#43 1.028 }
 ```
