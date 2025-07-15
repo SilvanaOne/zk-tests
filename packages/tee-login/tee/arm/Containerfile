@@ -274,7 +274,7 @@ RUN eif_build \
     --kernel_config /Image.config \
     --ramdisk /rootfs.cpio \
     --output /workspace/tee-arm.eif \
-    --cmdline "reboot=k panic=1 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0"
+    --cmdline "reboot=k panic=30 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0"
 
 # Default command
 CMD ["/bin/bash"]
