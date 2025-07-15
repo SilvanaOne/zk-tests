@@ -46,7 +46,7 @@ WORKDIR /app
 FROM docker.io/library/alpine@sha256:008448246686fe28544e36ba89e7bc7fbe6dad8a2ccdef576875c74298c46348 AS runtime
 
 # Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing, GNU cpio for reproducible builds)
-RUN apk add --no-cache socat jq cpio
+RUN apk add --no-cache socat jq cpio openssl readline ncurses
 
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app
@@ -165,6 +165,18 @@ RUN <<-EOF
     cp /lib/libc.musl-aarch64.so.1 initramfs/lib/libc.musl-aarch64.so.1
     cp /lib/ld-musl-aarch64.so.1 initramfs/lib/ld-musl-aarch64.so.1
     
+    # Copy OpenSSL and other libraries (required by socat)
+    echo "Finding and copying socat dependencies..."
+    find /usr/lib /lib -name "libssl.so*" -o -name "libcrypto.so*" -o -name "libreadline.so*" -o -name "libncursesw.so*" | head -10
+    
+    cp /usr/lib/libssl.so.3 initramfs/lib/libssl.so.3
+    cp /usr/lib/libcrypto.so.3 initramfs/lib/libcrypto.so.3  
+    cp /usr/lib/libreadline.so.8 initramfs/lib/libreadline.so.8
+    cp /lib/libncursesw.so.6 initramfs/lib/libncursesw.so.6
+    
+    # Verify libraries were copied
+    ls -la initramfs/lib/lib{ssl,crypto,readline,ncursesw}*
+    
     # Create symlinks for compatibility
     ln -sf libc.musl-aarch64.so.1 initramfs/lib/libc.so.6
     ln -sf ld-musl-aarch64.so.1 initramfs/lib/ld-linux-aarch64.so.1
@@ -178,6 +190,8 @@ RUN <<-EOF
     ldd initramfs/init 2>/dev/null || echo "init: statically linked or musl (ldd not available)"
     ldd initramfs/server 2>/dev/null || echo "server: statically linked or musl"
     ldd initramfs/sh 2>/dev/null || echo "sh: statically linked or musl"
+    echo "Testing socat dependencies:"
+    ldd initramfs/socat 2>/dev/null || echo "socat: ldd failed - checking manually"
     
     # Verify binaries are executable
     test -x initramfs/init && echo "init: executable" || echo "init: NOT executable"
