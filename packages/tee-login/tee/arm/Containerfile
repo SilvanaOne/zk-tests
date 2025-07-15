@@ -257,7 +257,6 @@ RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/
     wget -O /cmdline https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/cmdline && \
     chmod +x /cmdline
 
-
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)
 COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
 
