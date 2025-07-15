@@ -46,7 +46,14 @@ WORKDIR /app
 FROM docker.io/library/alpine@sha256:008448246686fe28544e36ba89e7bc7fbe6dad8a2ccdef576875c74298c46348 AS runtime
 
 # Install runtime dependencies (socat for vsock forwarding, jq for JSON parsing, GNU cpio for reproducible builds)
-RUN apk add --no-cache socat jq cpio openssl readline ncurses oniguruma
+RUN apk add --no-cache \
+    socat=1.8.0.3-r1 \
+    jq=1.8.0-r0 \
+    cpio=2.15-r0 \
+    openssl=3.5.1-r0 \
+    readline=8.2.13-r1 \
+    ncurses=6.5_p20250503-r0 \
+    oniguruma=6.9.10-r0
 
 # Create a non-root user (optional but recommended)
 RUN addgroup -S app && adduser -S app -G app
