@@ -31,27 +31,15 @@ image:
 nitro-builder-image:
 	docker buildx build --progress=plain --platform linux/arm64 --output type=docker -t $(NITRO_BUILDER_IMAGE) --target nitro-builder -f Containerfile .
 
-# Create the Enclave Image File (EIF) using Docker -------------
+# Create the Enclave Image File (EIF) by extracting from nitro-builder -----
 $(EIF_NAME): image nitro-builder-image
 	mkdir -p $(OUT_DIR)
-	@echo "Building EIF with nitro-cli (using image present in host daemon)..."
+	@echo "Extracting EIF from nitro-builder image (built in Containerfile)..."
 	docker run --rm \
-		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(PWD)/$(OUT_DIR):/workspace/out \
 		--platform linux/arm64 \
 		$(NITRO_BUILDER_IMAGE) \
-		sh -c "mkdir -p /var/log/nitro_enclaves && \
-		echo \"CPIO size: \$$(stat -c%s /rootfs.cpio)\" && \
-		eif_build \
-			--arch aarch64 \
-			--kernel /Image \
-			--kernel_config /Image.config \
-			--ramdisk /rootfs.cpio \
-			--output /workspace/out/tee-arm.eif \
-			--cmdline \"reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0\""
-		      #  nitro-cli build-enclave \
-		      #      --docker-uri $(IMAGE_NAME) \
-		      #      --output-file /workspace/out/tee-arm.eif
+		cp /workspace/tee-arm.eif /workspace/out/
 
 .PHONY: eif
 eif: $(EIF_NAME)

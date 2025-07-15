@@ -262,8 +262,18 @@ COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
 
 RUN ls -lh /
 
+
+
 # Set working directory
 WORKDIR /workspace
+
+# Build the EIF file as final step
+RUN eif_build \
+    --kernel /Image \
+    --kernel_config /Image.config \
+    --ramdisk /rootfs.cpio \
+    --output /workspace/tee-arm.eif \
+    --cmdline "reboot=k panic=1 pci=off nomodules console=ttyS0 random.trust_cpu=on root=/dev/ram0"
 
 # Default command
 CMD ["/bin/bash"]
