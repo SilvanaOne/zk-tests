@@ -191,6 +191,7 @@ RUN <<-EOF
     # Set timestamps for reproducible builds
     cd initramfs
     find . -exec touch -hcd "@0" "{}" +
+    ls -lh
     
     # Create the cpio archive (gzipped like x86 version)
     find . -print0 \
@@ -230,10 +231,16 @@ RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/ni
 
 # Download ARM64 kernel files from AWS Nitro Enclaves CLI repository
 RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image && \
-    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image.config
+    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/Image.config && \
+    wget -O /linuxkit https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/linuxkit && \
+    wget -O /cmdline https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/main/blobs/aarch64/cmdline && \
+    chmod +x /cmdline
+
 
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)
 COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
+
+RUN ls -lh /
 
 # Set working directory
 WORKDIR /workspace
