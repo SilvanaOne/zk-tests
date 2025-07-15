@@ -175,7 +175,7 @@ RUN <<-EOF
     cp /usr/lib/libncursesw.so.6 initramfs/lib/libncursesw.so.6
     
     # Verify libraries were copied
-    ls -la initramfs/lib/lib{ssl,crypto,readline,ncursesw}*
+    ls -la initramfs/lib/libssl* initramfs/lib/libcrypto* initramfs/lib/libreadline* initramfs/lib/libncursesw*
     
     # Create symlinks for compatibility
     ln -sf libc.musl-aarch64.so.1 initramfs/lib/libc.so.6
