@@ -173,9 +173,14 @@ RUN <<-EOF
     
     # Test that our binaries can find libc
     echo "Testing binary dependencies:"
-    ldd initramfs/init 2>/dev/null || file initramfs/init
+    ldd initramfs/init 2>/dev/null || echo "init: statically linked or musl (ldd not available)"
     ldd initramfs/server 2>/dev/null || echo "server: statically linked or musl"
     ldd initramfs/sh 2>/dev/null || echo "sh: statically linked or musl"
+    
+    # Verify binaries are executable
+    test -x initramfs/init && echo "init: executable" || echo "init: NOT executable"
+    test -x initramfs/server && echo "server: executable" || echo "server: NOT executable"
+    test -x initramfs/sh && echo "sh: executable" || echo "sh: NOT executable"
     
     # Copy SSL certificates
     cp -r /etc/ssl/certs/* initramfs/etc/ssl/certs/ 2>/dev/null 
