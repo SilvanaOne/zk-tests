@@ -9,7 +9,9 @@ FROM docker.io/library/rust@sha256:fa3f412044d347294ad9c21eb3c9922a5e12e57b645ae
 
 # Install build dependencies
 ENV SOURCE_DATE_EPOCH=0  
-RUN apk add --no-cache build-base musl-dev
+RUN apk add --no-cache \
+    build-base=0.5-r3 \
+    musl-dev=1.2.5-r10
 
 # Workdir inside the container
 WORKDIR /app
@@ -38,7 +40,6 @@ WORKDIR /app/forwarder
 RUN cargo build --release --target aarch64-unknown-linux-musl
 
 WORKDIR /app
-
 
 ### Stage 2 – Runtime ######################################################
 # Use a minimal Alpine image for the final enclave rootfs.
@@ -269,7 +270,13 @@ ENV SOURCE_DATE_EPOCH=0 \
 
 # Minimal tool-chain for a static binary
 RUN yum install -y --setopt=install_weak_deps=False \
-    git clang rust cargo openssl-devel tar wget && \
+    git-2.47.1-1.amzn2023.0.3 \
+    clang-15.0.7-3.amzn2023.0.4 \
+    rust-1.85.0-1.amzn2023.0.1 \
+    cargo-1.85.0-1.amzn2023.0.1 \
+    openssl-devel-1:3.2.2-1.amzn2023.0.1 \
+    tar-2:1.34-1.amzn2023.0.4 \
+    wget-1.21.3-1.amzn2023.0.4 && \
     yum clean all
 
 # Clone + checkout exactly one commit, then build with --locked
@@ -282,17 +289,10 @@ RUN git clone https://github.com/aws/aws-nitro-enclaves-image-format.git /src/ni
 
 # Download ARM64 kernel files from AWS Nitro Enclaves CLI repository
 RUN wget -O /Image https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image && \
-    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image.config && \
-    wget -O /linuxkit https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/linuxkit && \
-    wget -O /cmdline https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/cmdline && \
-    chmod +x /cmdline
+    wget -O /Image.config https://raw.githubusercontent.com/aws/aws-nitro-enclaves-cli/v1.4.2/blobs/aarch64/Image.config
 
 # Copy the rootfs.cpio from the initramfs-builder stage (includes NSM driver)
 COPY --from=initramfs-builder /build_cpio/rootfs.cpio /rootfs.cpio
-
-RUN ls -lh /
-
-
 
 # Set working directory
 WORKDIR /workspace
