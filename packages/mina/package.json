@@ -33,7 +33,8 @@
     "if": "npm run test test/if.test.ts",
     "if2": "npm run test test/if2.test.ts",
     "eddsa": "npm run test test/eddsa.test.ts",
-    "payment": "npm run test test/payment.test.ts"
+    "payment": "npm run test test/payment.test.ts",
+    "two-programs": "npm run test test/two-programs.test.ts"
   },
   "node": {
     "version": ">=20.0.0"
