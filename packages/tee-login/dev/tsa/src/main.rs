@@ -2,7 +2,7 @@ mod sui;
 mod tsa;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use digicert_tsa::get_timestamp;
+use tsa::get_timestamp;
 use dotenvy::dotenv;
 use serde_json;
 use sha2::{Digest, Sha256};

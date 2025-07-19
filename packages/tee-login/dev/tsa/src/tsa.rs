@@ -22,6 +22,7 @@ use x509_parser::certificate::X509Certificate;
 use x509_parser::prelude::FromDer;
 use x509_parser::time::ASN1Time;
 use x509_tsp::{MessageImprint, TimeStampReq, TimeStampResp, TspVersion, TstInfo};
+use tracing::info;
 
 /// DigiCert Assured ID Root CA certificate for TSA verification
 static DIGICERT_ROOT_CA: Lazy<Vec<u8>> = Lazy::new(|| {
@@ -170,6 +171,8 @@ pub struct CertVerificationResult {
 
 #[allow(dead_code)]
 pub async fn get_timestamp(data: &[u8], endpoint: &str) -> anyhow::Result<TsaResponse> {
+    info!("🔍 Getting timestamp from TSA endpoint: {}", endpoint);
+
     // --- 1. hash the data ---------------------------------------------------
     let digest = Sha256::digest(data);
 
@@ -317,6 +320,8 @@ pub async fn get_timestamp(data: &[u8], endpoint: &str) -> anyhow::Result<TsaRes
         millis: accuracy.millis.map(|m| m.try_into().unwrap_or(0)),
         micros: accuracy.micros.map(|m| m.try_into().unwrap_or(0)),
     });
+
+    info!("🔍 TSA response: {:?}", tst_info);
 
     Ok(TsaResponse {
         gen_time: tst_info.gen_time,
