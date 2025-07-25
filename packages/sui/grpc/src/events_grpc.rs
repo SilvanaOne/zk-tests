@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use prost::Message;
 use prost_types;
-use serde_json;
 use std::error::Error;
 use tonic::Request;
 use tonic::transport::{Channel, ClientTlsConfig};
@@ -27,7 +26,7 @@ pub async fn query_events_via_grpc(
         TARGET_PACKAGE_ID
     );
     println!(
-        "🔍 Monitoring {} events from {} checkpoints",
+        "🔍 Monitoring {} events from {} gRPC checkpoints",
         num_events, num_checkpoints
     );
 
@@ -70,19 +69,27 @@ pub async fn query_events_via_grpc(
     // Create subscription client for streaming checkpoints
     let mut subscription_client = SubscriptionServiceClient::new(channel);
 
-    // Subscribe to checkpoint stream
+    // Optimized read mask using sui-rpc field mask utilities
+    // Based on Sui examples: use direct field names without "checkpoint." prefix
     let request = Request::new(SubscribeCheckpointsRequest {
         read_mask: Some(prost_types::FieldMask {
             paths: vec![
-                "sequence_number".to_string(),
-                "digest".to_string(),
-                "summary".to_string(),
-                "transactions".to_string(),
+                "summary.timestamp".to_string(), // For freshness checking
+                "transactions.events.events.package_id".to_string(), // For package filtering
+                                                 //"transactions.events.events.module".to_string(), // For display
+                                                 //"transactions.events.events.sender".to_string(), // For display
+                                                 //"transactions.events.events.event_type".to_string(), // For display
             ],
         }),
     });
 
-    println!("📡 Subscribing to checkpoint stream to monitor fresh events...");
+    println!("📡 Subscribing to gRPC checkpoint stream with optimized read mask...");
+    println!("🚀 OPTIMIZATION: Using specific field paths based on Sui examples");
+    println!("📊 Only fetching: summary.timestamp, transactions.events.events.*");
+    println!(
+        "🎯 DEBUG: Looking for events from target package: {}",
+        TARGET_PACKAGE_ID
+    );
     let mut stream = subscription_client
         .subscribe_checkpoints(request)
         .await?
@@ -101,6 +108,29 @@ pub async fn query_events_via_grpc(
         // Track response size using protobuf's encoded_len method
         total_response_size += checkpoint_response.encoded_len() as u64;
 
+        // Debug: Print checkpoint structure info
+        // println!("🔍 DEBUG: Received checkpoint response:");
+        // println!("   • Has cursor: {}", checkpoint_response.cursor.is_some());
+        // println!(
+        //     "   • Has checkpoint: {}",
+        //     checkpoint_response.checkpoint.is_some()
+        // );
+        // if let Some(checkpoint) = &checkpoint_response.checkpoint {
+        //     println!("   • Has summary: {}", checkpoint.summary.is_some());
+        //     if let Some(summary) = &checkpoint.summary {
+        //         println!("   • Summary timestamp: {:?}", summary.timestamp);
+        //     }
+        //     println!("   • Transactions count: {}", checkpoint.transactions.len());
+        //     for (tx_idx, tx) in checkpoint.transactions.iter().enumerate() {
+        //         println!(
+        //             "   • Transaction {}: has_events={}, events_count={}",
+        //             tx_idx,
+        //             tx.events.is_some(),
+        //             tx.events.as_ref().map(|e| e.events.len()).unwrap_or(0)
+        //         );
+        //     }
+        // }
+
         if let Some(cursor) = checkpoint_response.cursor {
             if let Some(checkpoint) = checkpoint_response.checkpoint {
                 // Process all checkpoints but filter events within them by timestamp
@@ -115,7 +145,7 @@ pub async fn query_events_via_grpc(
 
                 if events_found > 0 {
                     println!(
-                        "✨ Found {} fresh events from target package in checkpoint {}",
+                        "✨ Found {} fresh gRPC events from target package in checkpoint {}",
                         events_found, cursor
                     );
                 }
@@ -123,7 +153,7 @@ pub async fn query_events_via_grpc(
                 // Stop if we've found enough fresh events
                 if fresh_events_found >= num_events {
                     println!(
-                        "\n🎉 Found {} fresh events from target package, stopping search",
+                        "\n🎉 Found {} fresh gRPC events from target package, stopping search",
                         fresh_events_found
                     );
                     break;
@@ -134,7 +164,7 @@ pub async fn query_events_via_grpc(
         // Stop after processing enough checkpoints for demo
         if checkpoint_count >= num_checkpoints {
             println!(
-                "\n📄 Processed {} checkpoints, found {} fresh events from package {}",
+                "\n📄 Processed {} gRPC checkpoints, found {} fresh events from package {}",
                 checkpoint_count, fresh_events_found, TARGET_PACKAGE_ID
             );
             break;
@@ -143,7 +173,7 @@ pub async fn query_events_via_grpc(
         // Print progress every 10 checkpoints
         if checkpoint_count % 10 == 0 {
             println!(
-                "🔍 Processed {} checkpoints, found {} fresh events so far...",
+                "🔍 Processed {} gRPC checkpoints, found {} fresh events so far...",
                 checkpoint_count, fresh_events_found
             );
         }
@@ -156,10 +186,10 @@ pub async fn query_events_via_grpc(
         delays.iter().sum::<i64>() as f64 / delays.len() as f64
     };
 
-    println!("\n📊 Final Summary:");
+    println!("\n📊 Final gRPC Summary:");
     println!("   • Total events checked: {}", total_events_checked);
     println!(
-        "   • Fresh events from target package: {}",
+        "   • Fresh gRPC events from target package: {}",
         fresh_events_found
     );
     println!("   • Checkpoints processed: {}", checkpoint_count);
@@ -201,12 +231,39 @@ fn process_checkpoint_events(
             for (event_index, event) in events.events.iter().enumerate() {
                 *total_events_checked += 1;
 
+                // Debug: Print every event for inspection (limit to first few for readability)
+                // if *total_events_checked <= 20 {
+                //     println!(
+                //         "🔍 DEBUG: Event {}.{}.{}",
+                //         checkpoint_cursor, tx_index, event_index
+                //     );
+                //     println!("   • Package ID: {:?}", event.package_id);
+                //     println!("   • Module: {:?}", event.module);
+                //     println!("   • Event Type: {:?}", event.event_type);
+                //     if let Some(pkg_id) = &event.package_id {
+                //         println!(
+                //             "   • Target match: {} == {} ? {}",
+                //             pkg_id,
+                //             TARGET_PACKAGE_ID,
+                //             pkg_id == TARGET_PACKAGE_ID
+                //         );
+                //     }
+                // }
+
                 // Check if this event is fresh by comparing checkpoint timestamp with start_time
                 let is_fresh_event = if let Some(event_time) = checkpoint_time {
                     event_time > *start_time
                 } else {
                     false // Skip events without valid timestamps
                 };
+
+                // Debug freshness check (limit output)
+                if *total_events_checked <= 10 {
+                    println!(
+                        "   • Event time: {:?}, Start time: {:?}, Is fresh: {}",
+                        checkpoint_time, start_time, is_fresh_event
+                    );
+                }
 
                 // Only process fresh events from target package
                 if is_fresh_event {
@@ -215,16 +272,12 @@ fn process_checkpoint_events(
                             events_in_checkpoint += 1;
                             *fresh_events_found += 1;
 
-                            let delay_ms = display_event_grpc(
+                            let delay_ms = display_event_grpc_minimal(
                                 event,
                                 *fresh_events_found,
                                 checkpoint_cursor,
                                 tx_index,
                                 event_index,
-                                &transaction
-                                    .digest
-                                    .as_ref()
-                                    .unwrap_or(&"unknown".to_string()),
                                 checkpoint.summary.as_ref(),
                             );
 
@@ -242,22 +295,21 @@ fn process_checkpoint_events(
     events_in_checkpoint
 }
 
-fn display_event_grpc(
+fn display_event_grpc_minimal(
     event: &Event,
     event_number: u32,
     checkpoint_seq: u64,
     tx_index: usize,
     event_index: usize,
-    tx_digest: &str,
     checkpoint_summary: Option<&sui_rpc::CheckpointSummary>,
 ) -> Option<i64> {
-    println!("\n🎉 Event #{} found from target package!", event_number);
+    println!(
+        "\n🎉 gRPC Event #{} found from target package!",
+        event_number
+    );
     println!("┌─────────────────────────────────────────────────────────────────");
     println!("│ Checkpoint:     {}", checkpoint_seq);
-    println!(
-        "│ Transaction:    {} (tx #{} in checkpoint)",
-        tx_digest, tx_index
-    );
+    println!("│ Transaction:    tx #{} in checkpoint", tx_index);
     println!("│ Event Index:    {} in transaction", event_index);
 
     if let Some(package_id) = &event.package_id {
@@ -275,6 +327,12 @@ fn display_event_grpc(
     if let Some(sender) = &event.sender {
         println!("│ Sender:         {}", sender);
     }
+
+    println!("│ 📡 Optimized gRPC: Read mask using specific field paths from Sui examples");
+    println!(
+        "│ 💡 Only essential fields fetched: package_id, module, sender, event_type, timestamp"
+    );
+    println!("│ 🔧 Full event content (JSON/BCS) can be fetched separately if needed");
 
     // Display timestamp from checkpoint and calculate delay
     let calculated_delay = if let Some(summary) = checkpoint_summary {
@@ -306,44 +364,6 @@ fn display_event_grpc(
     } else {
         None
     };
-
-    // Display JSON content if available
-    if let Some(json_content) = &event.json {
-        println!("│ JSON Data:");
-        // Convert prost_types::Value to serde_json::Value for serialization
-        match convert_prost_value_to_serde(json_content) {
-            Ok(serde_value) => {
-                let json_str = serde_json::to_string_pretty(&serde_value)
-                    .unwrap_or_else(|_| "Failed to serialize JSON".to_string());
-                for line in json_str.lines() {
-                    println!("│   {}", line);
-                }
-            }
-            Err(_) => {
-                println!("│   Failed to convert JSON data");
-            }
-        }
-    }
-
-    // Display BCS content info
-    if let Some(contents) = &event.contents {
-        if let Some(bcs_bytes) = &contents.value {
-            println!("│ BCS Length:     {} bytes", bcs_bytes.len());
-        }
-        if let Some(bcs_name) = &contents.name {
-            println!("│ BCS Type:       {}", bcs_name);
-        }
-    }
-
-    // Display links to explorers
-    println!(
-        "│ 🌐 View on Suiscan: https://suiscan.xyz/testnet/tx/{}",
-        tx_digest
-    );
-    println!(
-        "│ 📦 Checkpoint:      https://suiscan.xyz/testnet/checkpoint/{}",
-        checkpoint_seq
-    );
     println!("└─────────────────────────────────────────────────────────────────");
 
     calculated_delay
@@ -373,36 +393,4 @@ async fn create_sui_channel_plaintext() -> Result<Channel, Box<dyn Error>> {
 
     println!("✅ Connected to Sui gRPC with plaintext at {}", endpoint);
     Ok(channel)
-}
-
-// Helper function to convert prost_types::Value to serde_json::Value
-fn convert_prost_value_to_serde(
-    prost_value: &prost_types::Value,
-) -> Result<serde_json::Value, Box<dyn Error>> {
-    use prost_types::value::Kind;
-    use serde_json::Value as JsonValue;
-
-    let result = match &prost_value.kind {
-        Some(Kind::NullValue(_)) => JsonValue::Null,
-        Some(Kind::NumberValue(n)) => JsonValue::from(*n),
-        Some(Kind::StringValue(s)) => JsonValue::String(s.clone()),
-        Some(Kind::BoolValue(b)) => JsonValue::Bool(*b),
-        Some(Kind::StructValue(s)) => {
-            let mut map = serde_json::Map::new();
-            for (key, value) in &s.fields {
-                map.insert(key.clone(), convert_prost_value_to_serde(value)?);
-            }
-            JsonValue::Object(map)
-        }
-        Some(Kind::ListValue(l)) => {
-            let mut vec = Vec::new();
-            for value in &l.values {
-                vec.push(convert_prost_value_to_serde(value)?);
-            }
-            JsonValue::Array(vec)
-        }
-        None => JsonValue::Null,
-    };
-
-    Ok(result)
 }

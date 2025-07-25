@@ -78,19 +78,22 @@ pub async fn query_events_via_rest(
     let max_polls = 100000; // Maximum number of polling cycles (10 minutes at 100ms intervals)
     let mut poll_count = 0;
 
-    println!("\n🔄 Starting continuous polling for fresh events...");
+    println!("\n🔄 Starting continuous polling for fresh REST events...");
 
     loop {
         if poll_count >= max_polls {
             println!(
-                "\n⏰ Reached maximum polling time ({}), stopping search",
+                "\n⏰ Reached maximum REST polling time ({}), stopping search",
                 max_polls
             );
             break;
         }
 
         poll_count += 1;
-        println!("\n🔍 Polling for fresh events (cycle {})...", poll_count);
+        println!(
+            "\n🔍 Polling for fresh REST events (cycle {})...",
+            poll_count
+        );
 
         let (response, response_size) =
             query_recent_events_with_size(&client, sui_rpc_url, cursor.as_ref()).await?;
@@ -136,7 +139,7 @@ pub async fn query_events_via_rest(
 
         if fresh_events_in_batch > 0 {
             println!(
-                "✨ Found {} fresh events from target package in this batch",
+                "✨ Found {} fresh REST events from target package in this batch",
                 fresh_events_in_batch
             );
         } else {
@@ -146,7 +149,7 @@ pub async fn query_events_via_rest(
         // Stop if we found the requested number of fresh events from our target package
         if target_events_processed >= num_events {
             println!(
-                "\n🎉 Found {} fresh events from target package, stopping search",
+                "\n🎉 Found {} fresh REST events from target package, stopping search",
                 target_events_processed
             );
             break;
@@ -172,7 +175,7 @@ pub async fn query_events_via_rest(
         delays.iter().sum::<i64>() as f64 / delays.len() as f64
     };
 
-    println!("\n📊 Final Summary:");
+    println!("\n📊 Final REST Summary:");
     println!("   • Total events checked: {}", total_events_checked);
     println!("   • Fresh events found: {}", fresh_events_found);
     println!(
@@ -235,9 +238,12 @@ async fn query_recent_events_with_size(
     let parsed_response: QueryEventsResponse = serde_json::from_value(result)?;
     Ok((parsed_response, response_size))
 }
-#[allow(dead_code)]
+
 fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
-    println!("\n🎉 Event #{} found from target package!", event_number);
+    println!(
+        "\n🎉 REST event #{} found from target package!",
+        event_number
+    );
     println!("┌─────────────────────────────────────────────────────────────────");
     println!("│ Transaction: {}", event.id.tx_digest);
     println!("│ Package ID:  {}", event.package_id);
