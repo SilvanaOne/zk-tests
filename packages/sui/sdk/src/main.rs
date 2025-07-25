@@ -7,7 +7,7 @@ use sui_rpc::Client;
 use sui_rpc::client::ResponseExt;
 use sui_rpc::proto::sui::rpc::v2beta2::GetServiceInfoRequest;
 
-const NUM_OF_EVENTS: usize = 10;
+const NUM_OF_EVENTS: usize = 10000000;
 
 #[tokio::main]
 async fn main() -> Result<()> {

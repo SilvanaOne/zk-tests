@@ -1,6 +1,7 @@
 use crate::constants::{TARGET_MODULE, TARGET_PACKAGE_ID};
 use anyhow::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     SubscribeCheckpointsRequest, SubscribeCheckpointsResponse,
@@ -49,6 +50,9 @@ pub async fn stream_until_target_events(
     let start_time = SystemTime::now();
     const MAX_RETRIES: usize = 5;
     const TIMEOUT_SECONDS: u64 = 30;
+    const LOG_INTERVAL_SECONDS: u64 = 600; // 10 minutes
+    
+    static LAST_LOG_TIME: AtomicU64 = AtomicU64::new(0);
 
     println!("Starting to stream checkpoints...");
     println!(
@@ -117,17 +121,39 @@ pub async fn stream_until_target_events(
                                         }
                                     }
 
-                                    // Only print info for checkpoints with target events
+                                    // Rate-limited logging for checkpoint info
+                                    let current_time_secs = SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs();
+                                    
+                                    let last_log_time = LAST_LOG_TIME.load(Ordering::Relaxed);
+                                    let should_log = last_log_time == 0 || 
+                                        current_time_secs.saturating_sub(last_log_time) >= LOG_INTERVAL_SECONDS;
+                                    
                                     if checkpoint_target_events > 0 {
                                         total_checkpoints_with_events += 1;
+                                        
+                                        if should_log {
+                                            LAST_LOG_TIME.store(current_time_secs, Ordering::Relaxed);
+                                            println!(
+                                                "Checkpoint #{}: Cursor={}, Events={}, Delay={:.1}ms, Size={}B, Total={}",
+                                                count,
+                                                cursor_value,
+                                                checkpoint_target_events,
+                                                delay_ms,
+                                                response_size,
+                                                total_target_events
+                                            );
+                                        }
+                                    } else if should_log {
+                                        LAST_LOG_TIME.store(current_time_secs, Ordering::Relaxed);
                                         println!(
-                                            "Checkpoint #{}: Cursor={}, Events={}, Delay={:.1}ms, Size={}B, Total={}",
+                                            "Checkpoint #{}: Cursor={}, Events=0, Delay={:.1}ms, Size={}B",
                                             count,
                                             cursor_value,
-                                            checkpoint_target_events,
                                             delay_ms,
-                                            response_size,
-                                            total_target_events
+                                            response_size
                                         );
                                     }
                                 }

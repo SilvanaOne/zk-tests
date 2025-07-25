@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use mina_hasher::{create_kimchi, Fp, Hashable, Hasher, ROInput};
 
-declare_id!("7nVSPmNDKKn8V1GZx9LyhTas7xZ5ZkFAMf37vjju9JrY");
+declare_id!("EdsRD7dwER75GnzH9gw6kJjwr1pxTGtQLeVBSxLLiNWY");
 
 #[derive(Debug, Clone)]
 struct PoseidonInput {
@@ -41,7 +41,8 @@ pub mod poseidon {
         //let hash = hasher.hash(&poseidon_input);
         let mut i = 0;
         while i < count {
-            hasher.hash(&poseidon_input);
+            let hash = hasher.hash(&poseidon_input);
+            msg!("Hash: {:?}", hash.to_string()); // Hash: "17017029585017630513954937283105772963331887127320430819007921583560430366787"
             i += 1;
         }
 
