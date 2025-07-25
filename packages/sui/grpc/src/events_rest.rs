@@ -144,7 +144,7 @@ pub async fn query_events_via_rest(
                     && event.transaction_module == TARGET_MODULE
                 {
                     target_events_processed += 1;
-                    let delay_ms = display_event(event, target_events_processed);
+                    let delay_ms = display_event(event, target_events_processed).await;
 
                     // Collect delay for average calculation
                     if let Some(delay) = delay_ms {
@@ -233,9 +233,9 @@ async fn query_recent_events_with_size(
     });
 
     let params = if cursor.is_some() {
-        json!([filter, cursor, 100, true]) // descending=true for most recent first
+        json!([filter, null, 10, true]) // descending=true for most recent first
     } else {
-        json!([filter, null, 100, true])
+        json!([filter, null, 10, true])
     };
 
     let request_body = json!({
@@ -265,12 +265,11 @@ async fn query_recent_events_with_size(
     Ok((parsed_response, response_size))
 }
 
-fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
+async fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
     println!(
         "\n🎉 REST event #{} found from target package!",
         event_number
     );
-    //println!("🔍 DEBUG: Event details: {:?}", event);
     println!("┌─────────────────────────────────────────────────────────────────");
     println!("│ Transaction: {}", event.id.tx_digest);
     println!("│ Package ID:  {}", event.package_id);
@@ -279,37 +278,8 @@ fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
     println!("│ Sender:      {}", event.sender);
     println!("│ Event Seq:   {}", event.id.event_seq);
 
-    // Calculate and display timestamp with delay
-    let calculated_delay = if let Some(timestamp_str) = &event.timestamp_ms {
-        if let Ok(timestamp_ms) = timestamp_str.parse::<i64>() {
-            // Convert milliseconds to seconds for DateTime::from_timestamp
-            let timestamp_secs = timestamp_ms / 1000;
-            let timestamp_nanos = ((timestamp_ms % 1000) * 1_000_000) as u32;
-
-            if let Some(datetime) = DateTime::from_timestamp(timestamp_secs, timestamp_nanos) {
-                // Calculate delay from event creation to now
-                let now = Utc::now();
-                let delay = now - datetime;
-                let delay_ms = delay.num_milliseconds();
-
-                println!("│ Now:  {}", now.timestamp_millis());
-                println!(
-                    "│ Timestamp:   {} (delay: {}ms)",
-                    datetime.format("%Y-%m-%d %H:%M:%S%.3f UTC"),
-                    delay_ms
-                );
-                Some(delay_ms)
-            } else {
-                println!("│ Timestamp:   {} ms (invalid)", timestamp_str);
-                None
-            }
-        } else {
-            println!("│ Timestamp:   {} ms (invalid format)", timestamp_str);
-            None
-        }
-    } else {
-        None
-    };
+    // Calculate and display timestamp with delay using checkpoint timestamp
+    let calculated_delay = get_checkpoint_timestamp_delay(&event.id.tx_digest, Utc::now()).await;
 
     // Display JSON content if available
     // if let Some(json_content) = &event.parsed_json {
@@ -329,4 +299,110 @@ fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
     println!("└─────────────────────────────────────────────────────────────────");
 
     calculated_delay
+}
+
+async fn get_checkpoint_timestamp_delay(tx_digest: &str, now: DateTime<Utc>) -> Option<i64> {
+    let client = reqwest::Client::new();
+    let sui_rpc_url = "http://148.251.75.59:9000";
+
+    // First, get the transaction details to find the checkpoint number
+    let tx_request_body = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "sui_getTransactionBlock",
+        "params": [tx_digest]
+    });
+
+    match client
+        .post(sui_rpc_url)
+        .header("Content-Type", "application/json")
+        .json(&tx_request_body)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let response_text = response.text().await.ok()?;
+            let response_json: Value = serde_json::from_str(&response_text).ok()?;
+
+            if let Some(error) = response_json.get("error") {
+                println!("│ ❌ Failed to get transaction: {}", error);
+                return None;
+            }
+
+            // Extract checkpoint number from transaction response
+            let checkpoint_number = response_json
+                .get("result")?
+                .get("checkpoint")?
+                .as_str()?
+                .parse::<u64>()
+                .ok()?;
+
+            // Now get the checkpoint details to get the timestamp
+            let checkpoint_request_body = json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sui_getCheckpoint",
+                "params": [checkpoint_number.to_string()]
+            });
+
+            match client
+                .post(sui_rpc_url)
+                .header("Content-Type", "application/json")
+                .json(&checkpoint_request_body)
+                .send()
+                .await
+            {
+                Ok(checkpoint_response) => {
+                    let checkpoint_text = checkpoint_response.text().await.ok()?;
+                    let checkpoint_json: Value = serde_json::from_str(&checkpoint_text).ok()?;
+
+                    if let Some(error) = checkpoint_json.get("error") {
+                        println!("│ ❌ Failed to get checkpoint: {}", error);
+                        return None;
+                    }
+
+                    // Extract timestamp from checkpoint response
+                    let timestamp_ms = checkpoint_json
+                        .get("result")?
+                        .get("timestampMs")?
+                        .as_str()?
+                        .parse::<i64>()
+                        .ok()?;
+
+                    // Convert milliseconds to seconds for DateTime::from_timestamp
+                    let timestamp_secs = timestamp_ms / 1000;
+                    let timestamp_nanos = ((timestamp_ms % 1000) * 1_000_000) as u32;
+
+                    if let Some(datetime) =
+                        DateTime::from_timestamp(timestamp_secs, timestamp_nanos)
+                    {
+                        // Calculate delay from checkpoint creation to now
+
+                        let delay = now - datetime;
+                        let delay_ms = delay.num_milliseconds();
+
+                        println!("│ Now:  {}", now.timestamp_millis());
+                        println!("│ Checkpoint: {}", checkpoint_number);
+                        println!(
+                            "│ Timestamp:   {} (delay: {}ms)",
+                            datetime.format("%Y-%m-%d %H:%M:%S%.3f UTC"),
+                            delay_ms
+                        );
+                        Some(delay_ms)
+                    } else {
+                        println!("│ Timestamp:   {} ms (invalid)", timestamp_ms);
+                        None
+                    }
+                }
+                Err(e) => {
+                    println!("│ ❌ Failed to get checkpoint: {}", e);
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            println!("│ ❌ Failed to get transaction: {}", e);
+            None
+        }
+    }
 }

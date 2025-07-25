@@ -4,8 +4,8 @@ mod events_grpc;
 mod events_rest;
 mod proto;
 
-const NUM_EVENTS: u32 = 3;
-const NUM_CHECKPOINTS: u32 = 5000;
+const NUM_EVENTS: u32 = 1000;
+const NUM_CHECKPOINTS: u32 = 50000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
