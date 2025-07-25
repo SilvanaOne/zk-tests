@@ -1,14 +1,13 @@
+use crate::constants::{TARGET_MODULE, TARGET_PACKAGE_ID};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 
 // Target package ID from the user's request
 #[allow(dead_code)]
-const TARGET_PACKAGE_ID: &str =
-    "0xa6477a6bf50e2389383b34a76d59ccfbec766ff2decefe38e1d8436ef8a9b245";
-
 #[derive(Debug, Serialize, Deserialize)]
 struct SuiEvent {
     pub id: EventId,
@@ -67,6 +66,9 @@ pub async fn query_events_via_rest(
     println!("🎯 Will only process events that occur after this timestamp");
     println!("🔍 Server-side filtering: only events from target package will be returned");
 
+    // HashMap to track processed events and avoid duplicates
+    let mut processed_events: HashMap<String, bool> = HashMap::new();
+
     // Query recent events and filter for fresh events only
     let mut cursor: Option<Value> = None;
     let mut total_events_checked = 0;
@@ -90,26 +92,37 @@ pub async fn query_events_via_rest(
         }
 
         poll_count += 1;
-        println!(
-            "\n🔍 Polling for fresh REST events (cycle {})...",
-            poll_count
-        );
+        // println!(
+        //     "\n🔍 Polling for fresh REST events (cycle {})...",
+        //     poll_count
+        // );
 
         let (response, response_size) =
             query_recent_events_with_size(&client, sui_rpc_url, cursor.as_ref()).await?;
         total_response_size += response_size;
 
         if response.data.is_empty() {
-            println!("📭 No events found in this cycle");
+            //println!("📭 No events found in this cycle");
             sleep(polling_interval).await;
             continue;
         }
 
-        let mut fresh_events_in_batch = 0;
+        let mut new_events_in_batch = 0;
 
         // Process events and filter for fresh ones
         for event in &response.data {
             total_events_checked += 1;
+
+            // Create unique identifier for this event
+            let event_id = format!("{}:{}", event.id.tx_digest, event.id.event_seq);
+
+            // Skip if we've already processed this event
+            if processed_events.contains_key(&event_id) {
+                continue;
+            }
+
+            // Mark this event as processed
+            processed_events.insert(event_id, true);
 
             // Check if event is fresh (occurred after start time)
             let is_fresh = if let Some(timestamp_str) = &event.timestamp_ms {
@@ -123,27 +136,39 @@ pub async fn query_events_via_rest(
             };
 
             if is_fresh {
-                fresh_events_in_batch += 1;
                 fresh_events_found += 1;
+                new_events_in_batch += 1;
 
-                // All events are now from our target package (server-side filtered)
-                target_events_processed += 1;
-                let delay_ms = display_event(event, target_events_processed);
+                // Verify this event is from our target package and module (client-side validation)
+                if event.package_id == TARGET_PACKAGE_ID
+                    && event.transaction_module == TARGET_MODULE
+                {
+                    target_events_processed += 1;
+                    let delay_ms = display_event(event, target_events_processed);
 
-                // Collect delay for average calculation
-                if let Some(delay) = delay_ms {
-                    delays.push(delay);
+                    // Collect delay for average calculation
+                    if let Some(delay) = delay_ms {
+                        delays.push(delay);
+                    }
+                } else {
+                    // This shouldn't happen with server-side filtering, but good to verify
+                    println!(
+                        "⚠️  Fresh event found but not from target package/module: package={}, module={}",
+                        event.package_id, event.transaction_module
+                    );
                 }
             }
         }
 
-        if fresh_events_in_batch > 0 {
+        if new_events_in_batch > 0 {
             println!(
-                "✨ Found {} fresh REST events from target package in this batch",
-                fresh_events_in_batch
+                "✨ Found {} new fresh REST events from target package in this batch",
+                new_events_in_batch
             );
         } else {
-            println!("⏳ No fresh events in this batch (all events are historical)");
+            // println!(
+            //     "⏳ No new fresh events in this batch (all events are historical or duplicates)"
+            // );
         }
 
         // Stop if we found the requested number of fresh events from our target package
@@ -159,7 +184,7 @@ pub async fn query_events_via_rest(
         cursor = response.next_cursor;
 
         // If no fresh events found, reset cursor and wait before next poll
-        if fresh_events_in_batch == 0 {
+        if new_events_in_batch == 0 {
             cursor = None; // Reset to get most recent events
             sleep(polling_interval).await;
         } else {
@@ -182,6 +207,7 @@ pub async fn query_events_via_rest(
         "   • Fresh events from target package: {}",
         target_events_processed
     );
+    println!("   • Unique events processed: {}", processed_events.len());
     println!("   • Average delay: {:.2}ms", average_delay);
     println!(
         "   • Start time: {} ({}ms)",
@@ -198,11 +224,11 @@ async fn query_recent_events_with_size(
     rpc_url: &str,
     cursor: Option<&Value>,
 ) -> Result<(QueryEventsResponse, u64), Box<dyn std::error::Error>> {
-    // Re-enabled: Use server-side module filtering for dubhe_dex_system module
+    // Re-enabled: Use server-side module filtering for targetmodule
     let filter = json!({
         "MoveModule": {
             "package": TARGET_PACKAGE_ID,
-            "module": "dubhe_dex_system"
+            "module": TARGET_MODULE
         }
     });
 
@@ -244,6 +270,7 @@ fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
         "\n🎉 REST event #{} found from target package!",
         event_number
     );
+    //println!("🔍 DEBUG: Event details: {:?}", event);
     println!("┌─────────────────────────────────────────────────────────────────");
     println!("│ Transaction: {}", event.id.tx_digest);
     println!("│ Package ID:  {}", event.package_id);
@@ -265,6 +292,7 @@ fn display_event(event: &SuiEvent, event_number: u32) -> Option<i64> {
                 let delay = now - datetime;
                 let delay_ms = delay.num_milliseconds();
 
+                println!("│ Now:  {}", now.timestamp_millis());
                 println!(
                     "│ Timestamp:   {} (delay: {}ms)",
                     datetime.format("%Y-%m-%d %H:%M:%S%.3f UTC"),

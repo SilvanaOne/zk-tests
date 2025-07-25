@@ -1,3 +1,4 @@
+use crate::constants::{TARGET_MODULE, TARGET_PACKAGE_ID};
 use chrono::{DateTime, Utc};
 use prost::Message;
 use prost_types;
@@ -12,10 +13,6 @@ pub mod sui_rpc {
 use sui_rpc::{
     Event, SubscribeCheckpointsRequest, subscription_service_client::SubscriptionServiceClient,
 };
-
-// Target package ID from the user's request
-const TARGET_PACKAGE_ID: &str =
-    "0xa6477a6bf50e2389383b34a76d59ccfbec766ff2decefe38e1d8436ef8a9b245";
 
 pub async fn query_events_via_grpc(
     num_events: u32,
@@ -76,7 +73,7 @@ pub async fn query_events_via_grpc(
             paths: vec![
                 "summary.timestamp".to_string(), // For freshness checking
                 "transactions.events.events.package_id".to_string(), // For package filtering
-                                                 //"transactions.events.events.module".to_string(), // For display
+                "transactions.events.events.module".to_string(), // For display
                                                  //"transactions.events.events.sender".to_string(), // For display
                                                  //"transactions.events.events.event_type".to_string(), // For display
             ],
@@ -171,12 +168,12 @@ pub async fn query_events_via_grpc(
         }
 
         // Print progress every 10 checkpoints
-        if checkpoint_count % 10 == 0 {
-            println!(
-                "🔍 Processed {} gRPC checkpoints, found {} fresh events so far...",
-                checkpoint_count, fresh_events_found
-            );
-        }
+        // if checkpoint_count % 10 == 0 {
+        //     println!(
+        //         "🔍 Processed {} gRPC checkpoints, found {} fresh events so far...",
+        //         checkpoint_count, fresh_events_found
+        //     );
+        // }
     }
 
     // Calculate average delay
@@ -269,21 +266,38 @@ fn process_checkpoint_events(
                 if is_fresh_event {
                     if let Some(package_id) = &event.package_id {
                         if package_id == TARGET_PACKAGE_ID {
-                            events_in_checkpoint += 1;
-                            *fresh_events_found += 1;
+                            // Also check if the event is from our target module
+                            if let Some(module) = &event.module {
+                                if module == TARGET_MODULE {
+                                    events_in_checkpoint += 1;
+                                    *fresh_events_found += 1;
 
-                            let delay_ms = display_event_grpc_minimal(
-                                event,
-                                *fresh_events_found,
-                                checkpoint_cursor,
-                                tx_index,
-                                event_index,
-                                checkpoint.summary.as_ref(),
-                            );
+                                    let delay_ms = display_event_grpc_minimal(
+                                        event,
+                                        *fresh_events_found,
+                                        checkpoint_cursor,
+                                        tx_index,
+                                        event_index,
+                                        checkpoint.summary.as_ref(),
+                                    );
 
-                            // Collect delay for average calculation
-                            if let Some(delay) = delay_ms {
-                                delays.push(delay);
+                                    // Collect delay for average calculation
+                                    if let Some(delay) = delay_ms {
+                                        delays.push(delay);
+                                    }
+                                } else {
+                                    // Event from target package but different module
+                                    // println!(
+                                    //     "⚠️  Fresh event from target package but different module: package={}, module={}",
+                                    //     package_id, module
+                                    // );
+                                }
+                            } else {
+                                // Event from target package but no module info
+                                println!(
+                                    "⚠️  Fresh event from target package but no module info: package={}",
+                                    package_id
+                                );
                             }
                         }
                     }
@@ -328,12 +342,6 @@ fn display_event_grpc_minimal(
         println!("│ Sender:         {}", sender);
     }
 
-    println!("│ 📡 Optimized gRPC: Read mask using specific field paths from Sui examples");
-    println!(
-        "│ 💡 Only essential fields fetched: package_id, module, sender, event_type, timestamp"
-    );
-    println!("│ 🔧 Full event content (JSON/BCS) can be fetched separately if needed");
-
     // Display timestamp from checkpoint and calculate delay
     let calculated_delay = if let Some(summary) = checkpoint_summary {
         if let Some(timestamp) = &summary.timestamp {
@@ -345,6 +353,7 @@ fn display_event_grpc_minimal(
                 let delay = now - datetime;
                 let delay_ms = delay.num_milliseconds();
 
+                println!("│ Now:  {}", now.timestamp_millis());
                 println!(
                     "│ Timestamp:      {} (delay: {}ms)",
                     datetime.format("%Y-%m-%d %H:%M:%S%.3f UTC"),
