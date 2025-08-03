@@ -89,11 +89,12 @@ export = async () => {
   });
 
   //const amiId = "ami-085ad6ae776d8f09c"; // x86_64
-  const amiIdArm64 = (
-    await aws.ssm.getParameter({
-      name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
-    })
-  ).value;
+  const amiIdArm64 = "ami-0db36bcbb6bf68b98";
+  //(
+  //  await aws.ssm.getParameter({
+  //    name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
+  //  })
+  //).value;
   const keyPairName = "TEE"; // TODO: create key pair in AWS
   const kmsKeyName = "TEEKMS"; // TODO: create kms key in AWS
 
@@ -296,49 +297,49 @@ export = async () => {
   // Create EC2 Instance
   // c7g.4xlarge - Graviton 0.58 per hour, 16 cpu
   // c6a.xlarge - min Intel, 4 cpu, 16gb ram
-  const devInstance = new aws.ec2.Instance(
-    "silvana-tee-login-dev-instance",
-    {
-      ami: amiIdArm64,
-      instanceType: "c7g.4xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
-      keyName: keyPairName,
-      vpcSecurityGroupIds: [securityGroup.id],
-      iamInstanceProfile: instanceProfile.name,
+  // const devInstance = new aws.ec2.Instance(
+  //   "silvana-tee-login-dev-instance",
+  //   {
+  //     ami: amiIdArm64,
+  //     instanceType: "c7g.4xlarge", //"m5.xlarge",  minimum:  or t4g.nano ($0.0042 per hour), standard: m5.xlarge or m5.2xlarge, good: c7i.4xlarge "c7g.4xlarge"
+  //     keyName: keyPairName,
+  //     vpcSecurityGroupIds: [securityGroup.id],
+  //     iamInstanceProfile: instanceProfile.name,
 
-      // Enable Nitro Enclaves
-      enclaveOptions: {
-        enabled: true,
-      },
+  //     // Enable Nitro Enclaves
+  //     enclaveOptions: {
+  //       enabled: true,
+  //     },
 
-      rootBlockDevice: {
-        volumeSize: 100,
-        volumeType: "gp3",
-        deleteOnTermination: true,
-      },
+  //     rootBlockDevice: {
+  //       volumeSize: 100,
+  //       volumeType: "gp3",
+  //       deleteOnTermination: true,
+  //     },
 
-      // User data script loaded from user-data.sh file
-      userData: fs.readFileSync("./user-data.sh", "utf8"),
-      userDataReplaceOnChange: false,
+  //     // User data script loaded from user-data.sh file
+  //     userData: fs.readFileSync("./user-data.sh", "utf8"),
+  //     userDataReplaceOnChange: false,
 
-      tags: {
-        Name: "silvana-tee-login-dev-instance",
-        Project: "silvana-tee-login",
-        "instance-script": "true",
-      },
-    },
-    {
-      ignoreChanges: ["userData"],
-    }
-  );
+  //     tags: {
+  //       Name: "silvana-tee-login-dev-instance",
+  //       Project: "silvana-tee-login",
+  //       "instance-script": "true",
+  //     },
+  //   },
+  //   {
+  //     ignoreChanges: ["userData"],
+  //   }
+  // );
 
   // Associate Elastic IP with the instance
-  const eipAssociation = new aws.ec2.EipAssociation(
-    "silvana-tee-login-eip-association",
-    {
-      instanceId: devInstance.id,
-      allocationId: devElasticIp.allocationId,
-    }
-  );
+  // const eipAssociation = new aws.ec2.EipAssociation(
+  //   "silvana-tee-login-eip-association",
+  //   {
+  //     instanceId: devInstance.id,
+  //     allocationId: devElasticIp.allocationId,
+  //   }
+  // );
 
   // Create another Elastic IP for arm instance
   const armElasticIp = new aws.ec2.Eip("silvana-tee-login-arm-ip", {
@@ -381,7 +382,7 @@ export = async () => {
       },
     },
     {
-      //ignoreChanges: ["userData"],
+      ignoreChanges: ["userData"],
     }
   );
 
@@ -409,9 +410,9 @@ export = async () => {
     kmsPolicyArn: kmsPolicy.arn,
     //amiIdX86: amiId,
     amiIdArm64: amiIdArm64,
-    devInstanceId: devInstance.id,
-    devInstancePublicIp: devElasticIp.publicIp,
-    devInstancePrivateIp: devInstance.privateIp,
+    //devInstanceId: devInstance.id,
+    //devInstancePublicIp: devElasticIp.publicIp,
+    //devInstancePrivateIp: devInstance.privateIp,
     ec2RoleArn: ec2Role.arn,
     instanceProfileArn: instanceProfile.arn,
     s3imagesBucketName: s3imagesBucket.id,

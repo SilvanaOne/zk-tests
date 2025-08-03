@@ -1,0 +1,17 @@
+[package]
+name = "add_sui_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+sui_sdk = { git = "https://github.com/mystenlabs/sui", rev = "62b9f371e37e618b7048417e2d232d6cd678c967",  package = "sui-sdk", default-features = false}
+sui_keys = { git = "https://github.com/mystenlabs/sui", rev = "62b9f371e37e618b7048417e2d232d6cd678c967",  package = "sui-keys" }
+shared_crypto = { git = "https://github.com/mystenlabs/sui", rev = "62b9f371e37e618b7048417e2d232d6cd678c967",  package = "shared-crypto" }
+bcs = "0.1"
+hex = "0.4.3"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0"
+dotenv = "0.15"
+sp1-sdk = "5.1.0"
