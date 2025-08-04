@@ -5,5 +5,5 @@ description = "Created with Anchor"
 edition = "2021"
 
 [dependencies]
-anchor-client = "0.31.0"
+anchor-client = "0.31.1"
 add = { version = "0.1.0", path = "../programs/add" }
