@@ -1,0 +1,27 @@
+[package]
+name = "sp1-solana"
+version = "0.1.0"
+edition = "2021"
+authors = ["Bhargav Annem, Yuwen Zhang"]
+description = "Verifier for SP1 Groth16 proofs on Solana"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/succinctlabs/groth16-solana"
+readme = "README.md"
+keywords = ["cryptography", "zero-knowledge", "groth16", "verifier"]
+categories = ["cryptography"]
+
+[dependencies]
+num-bigint = "0.4.6"
+sha2 = "0.10.8"
+groth16-solana = { git = "https://github.com/sp1-patches/groth16-solana", branch = "patch-v0.0.3" }
+ark-bn254 = "0.4.0"
+ark-serialize = "0.4.2"
+ark-ff = "0.4.2"
+thiserror = "1.0.63"
+hex = "0.4.3"
+
+[dev-dependencies]
+num-traits = "0.2.19"
+sp1-sdk = "5.1.0"
+hex-literal = "0.3.1"
+

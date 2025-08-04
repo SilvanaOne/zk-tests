@@ -174,12 +174,6 @@ public fun verify_add_proof(
         EProofVerificationFailed,
     );
 
-    // Create the public values from the provided parameters
-    let public_values = PublicValues {
-        old_sum,
-        new_sum,
-    };
-
     // Check that old_sum matches current sum state
     //assert!(public_values.old_sum == contract.sum, EInvalidOldSum);
 
@@ -190,16 +184,15 @@ public fun verify_add_proof(
     // );
 
     // Update the sum state
-    let old_sum = contract.sum;
-    contract.sum = public_values.new_sum;
+    contract.sum = new_sum;
 
     // Emit event with debug information
     event::emit(SumUpdated {
         old_sum,
-        new_sum: contract.sum,
+        new_sum,
     });
 
-    (public_values.old_sum, public_values.new_sum)
+    (old_sum, new_sum)
 }
 
 /// Get the current sum

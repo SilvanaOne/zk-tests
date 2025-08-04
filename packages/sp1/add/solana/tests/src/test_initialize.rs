@@ -10,7 +10,11 @@ use anchor_client::{
 #[test]
 fn test_initialize() {
     let program_id = "BTbMTALLVaSor7BfPTgDoFJvqmMAePHgs6HdZRdv4B1x";
-    let anchor_wallet = std::env::var("ANCHOR_WALLET").unwrap();
+    let anchor_wallet = std::env::var("ANCHOR_WALLET")
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").expect("HOME not set");
+            format!("{}/.config/solana/id.json", home)
+        });
     let payer = read_keypair_file(&anchor_wallet).unwrap();
 
     let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());

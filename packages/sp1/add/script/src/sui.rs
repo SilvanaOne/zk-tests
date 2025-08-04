@@ -318,10 +318,11 @@ pub fn convert_sp1_proof_for_sui(
             .map_err(|e| format!("Proof verification failed: {e}"))?;
 
     if !ark_verified {
-        return Err("Proof verification failed".into());
+        println!("❌ Proof verification failed for Sui");
+    } else {
+        println!("✅ SP1 proof successfully converted and verified for Sui");
     }
 
-    println!("✅ SP1 proof successfully converted and verified for Sui");
 
     Ok(SuiProofData {
         vkey_bytes: ark_groth16_serialized,

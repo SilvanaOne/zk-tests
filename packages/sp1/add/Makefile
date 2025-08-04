@@ -1,7 +1,7 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute prove-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules
+.PHONY: help build execute prove-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules
 
 # Load environment variables from .env file
 include .env
@@ -47,6 +47,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  test           - Run Foundry tests"
+	@echo "  solana         - Run Solana SP1 proof verification test"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  fetch-submodules - Fetch and initialize all Git submodules"
@@ -276,6 +277,16 @@ get-sum-plonk:
 test:
 	@echo "Running Foundry tests..."
 	cd ethereum && forge test -v
+
+solana:
+	@echo "Running Solana SP1 proof verification test..."
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd solana && cargo test -p tests test_verify_sp1_proof -- --nocapture; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
 
 # Utilities
 fetch-submodules:

@@ -12,7 +12,8 @@
 
 use add_lib::PublicValuesStruct;
 use add_script::proof::{self, FinalProofType};
-use add_script::sui_converter::convert_sp1_proof_for_sui;
+use add_script::sui::convert_sp1_proof_for_sui;
+use add_script::solana::{create_solana_fixture};
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -45,7 +46,7 @@ enum ProofSystem {
     Groth16,
 }
 
-/// A fixture that can be used to test the verification of SP1 zkVM proofs inside Solidity and Sui.
+/// A fixture that can be used to test the verification of SP1 zkVM proofs inside Solidity, Sui, and Solana.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SP1AddProofFixture {
@@ -62,6 +63,11 @@ struct SP1AddProofFixture {
     sui_vkey: String,
     sui_public_values: String,
     sui_proof: String,
+
+    // Solana-specific fields
+    solana_vkey_hash: String,
+    solana_proof: String,
+    solana_public_inputs: String,
 }
 
 fn main() {
@@ -183,6 +189,24 @@ fn create_proof_fixture(
         ("".to_string(), "".to_string(), "".to_string())
     };
 
+    // Generate Solana-compatible proof data (only for Groth16)
+    let (solana_vkey_hash, solana_proof, solana_public_inputs) = if system == ProofSystem::Groth16 {
+        let vkey_hash = vk.bytes32();
+        match create_solana_fixture(proof, &vkey_hash) {
+            Ok(solana_fixture) => (
+                solana_fixture.vkey_hash,
+                format!("0x{}", hex::encode(solana_fixture.proof_bytes)),
+                format!("0x{}", hex::encode(solana_fixture.public_inputs_bytes)),
+            ),
+            Err(e) => {
+                eprintln!("Warning: Failed to convert proof for Solana: {e}");
+                ("".to_string(), "".to_string(), "".to_string())
+            }
+        }
+    } else {
+        ("".to_string(), "".to_string(), "".to_string())
+    };
+
     // Create the testing fixture so we can test things end-to-end.
     let fixture = SP1AddProofFixture {
         // Common fields
@@ -198,6 +222,11 @@ fn create_proof_fixture(
         sui_vkey,
         sui_public_values,
         sui_proof,
+
+        // Solana-specific fields
+        solana_vkey_hash,
+        solana_proof,
+        solana_public_inputs,
     };
 
     // The verification key is used to verify that the proof corresponds to the execution of the
@@ -222,6 +251,14 @@ fn create_proof_fixture(
         println!("Sui Verification Key: {}", fixture.sui_vkey);
         println!("Sui Public Values: {}", fixture.sui_public_values);
         println!("Sui Proof Bytes: {}", fixture.sui_proof);
+    }
+
+    // Print Solana-specific data if available
+    if !fixture.solana_vkey_hash.is_empty() {
+        println!("\n--- Solana-specific data ---");
+        println!("Solana Verification Key Hash: {}", fixture.solana_vkey_hash);
+        println!("Solana Public Inputs: {}", fixture.solana_public_inputs);
+        println!("Solana Proof Bytes: {}", fixture.solana_proof);
     }
 
     // Save the fixture to a file.

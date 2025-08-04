@@ -7,3 +7,6 @@ edition = "2021"
 [dependencies]
 anchor-client = "0.31.1"
 add = { version = "0.1.0", path = "../programs/add" }
+serde_json = "1.0"
+hex = "0.4.3"
+solana-transaction-status = "2.1.6"
