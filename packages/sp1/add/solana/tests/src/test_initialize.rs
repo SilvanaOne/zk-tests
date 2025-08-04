@@ -9,7 +9,7 @@ use anchor_client::{
 
 #[test]
 fn test_initialize() {
-    let program_id = "BTbMTALLVaSor7BfPTgDoFJvqmMAePHgs6HdZRdv4B1x";
+    let program_id = "DrENg7J4SEZbTi419ZA1AnXFzh8wehfwisapdCeTEpqt";
     let anchor_wallet = std::env::var("ANCHOR_WALLET")
         .unwrap_or_else(|_| {
             let home = std::env::var("HOME").expect("HOME not set");

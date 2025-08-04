@@ -36,7 +36,7 @@ fn test_verify_sp1_proof() {
     };
 
     // Setup Anchor client
-    let program_id = "BTbMTALLVaSor7BfPTgDoFJvqmMAePHgs6HdZRdv4B1x";
+    let program_id = "DrENg7J4SEZbTi419ZA1AnXFzh8wehfwisapdCeTEpqt";
     let anchor_wallet = std::env::var("ANCHOR_WALLET")
         .unwrap_or_else(|_| {
             let home = std::env::var("HOME").expect("HOME not set");
@@ -44,7 +44,7 @@ fn test_verify_sp1_proof() {
         });
     let payer = read_keypair_file(&anchor_wallet).unwrap();
 
-    let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
+    let client = Client::new_with_options(Cluster::Devnet, &payer, CommitmentConfig::confirmed());
     let program_id = Pubkey::from_str(program_id).unwrap();
     let program = client.program(program_id).unwrap();
 

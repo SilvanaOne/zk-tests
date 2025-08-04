@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use sp1_solana::verify_proof;
 
-declare_id!("BTbMTALLVaSor7BfPTgDoFJvqmMAePHgs6HdZRdv4B1x");
+declare_id!("DrENg7J4SEZbTi419ZA1AnXFzh8wehfwisapdCeTEpqt");
 
 /// The instruction data for the program.
 #[derive(AnchorSerialize, AnchorDeserialize)]

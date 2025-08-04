@@ -29,6 +29,7 @@ help:
 	@echo "  deploy-groth16 - Deploy Add contract with Groth16 verifier"
 	@echo "  deploy-plonk   - Deploy Add contract with PLONK verifier"
 	@echo "  deploy-sui     - Build and deploy Sui Move contract"
+	@echo "  deploy-solana  - Build and deploy Solana Anchor program"
 	@echo ""
 	@echo "Sui Client:"
 	@echo "  sui            - Run Sui client application"
@@ -52,6 +53,7 @@ help:
 	@echo "Utilities:"
 	@echo "  fetch-submodules - Fetch and initialize all Git submodules"
 	@echo "  clean          - Clean build artifacts"
+	@echo "  solana-keys    - List Solana Anchor program keys"
 
 # Building and execution
 build:
@@ -287,6 +289,24 @@ solana:
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	echo "⏱️  Duration: $${duration} seconds"
+
+deploy-solana:
+	@echo "Building and deploying Solana Anchor program..."
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd solana && \
+	echo "Building Anchor program..." && \
+	anchor build && \
+	echo "Testing and deploying Anchor program..." && \
+	anchor deploy; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+solana-keys:
+	@echo "Listing Solana Anchor program keys..."
+	@cd solana && anchor keys list
 
 # Utilities
 fetch-submodules:
