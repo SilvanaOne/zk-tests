@@ -11,6 +11,7 @@
 //! ```
 
 use add_lib::PublicValuesStruct;
+use add_script::proof::{self, FinalProofType};
 use add_script::sui_converter::convert_sp1_proof_for_sui;
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
@@ -19,9 +20,11 @@ use sp1_sdk::{
     HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey, include_elf,
 };
 use std::path::PathBuf;
+use std::time::Instant;
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const ADD_ELF: &[u8] = include_elf!("add-program");
+pub const AGGREGATE_ELF: &[u8] = include_elf!("aggregate-program");
 
 /// The arguments for the EVM command.
 #[derive(Parser, Debug)]
@@ -31,6 +34,8 @@ struct EVMArgs {
     length: u32,
     #[arg(long, value_enum, default_value = "groth16")]
     system: ProofSystem,
+    #[arg(long, default_value = "2")]
+    proofs: u32,
 }
 
 /// Enum representing the available proof systems
@@ -67,10 +72,24 @@ fn main() {
     let args = EVMArgs::parse();
 
     // Setup the prover client.
-    let client = ProverClient::from_env();
+    //let client = ProverClient::from_env();
 
-    // Setup the program.
+    if args.proofs == 1 {
+        // Single proof mode
+        generate_single_evm_proof(&args);
+    } else {
+        // Multiple proofs with aggregation
+        generate_aggregated_evm_proofs(&args);
+    }
+}
+
+fn generate_single_evm_proof(args: &EVMArgs) {
+    let client = ProverClient::from_env();
+    println!("Setting up proving keys...");
+    let setup_start = Instant::now();
     let (pk, vk) = client.setup(ADD_ELF);
+    let setup_duration = setup_start.elapsed();
+    println!("Setup completed in {:.2}s", setup_duration.as_secs_f64());
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
@@ -83,19 +102,58 @@ fn main() {
         stdin.write(&value);
     }
 
-    println!("old_sum: {old_sum}");
-    println!("length: {}", args.length);
-    println!("values: {values:?}");
-    println!("Proof System: {:?}", args.system);
+    println!("\nInput values:");
+    println!("  old_sum: {old_sum}");
+    println!("  length: {}", args.length);
+    println!("  values: {values:?}");
+    println!("  Proof System: {:?}", args.system);
 
     // Generate the proof based on the selected proof system.
-    let proof = match args.system {
-        ProofSystem::Plonk => client.prove(&pk, &stdin).plonk().run(),
-        ProofSystem::Groth16 => client.prove(&pk, &stdin).groth16().run(),
-    }
-    .expect("failed to generate proof");
+    let final_proof_type = match args.system {
+        ProofSystem::Plonk => FinalProofType::Plonk,
+        ProofSystem::Groth16 => FinalProofType::Groth16,
+    };
+
+    let proof = proof::generate_single_proof(&client, &pk, &stdin, final_proof_type)
+        .expect("failed to generate proof");
+
+    proof::print_proof_statistics(&proof);
+
+    let verify_duration =
+        proof::verify_proof(&client, &proof, &vk).expect("failed to verify proof");
+
+    // Print performance summary
+    println!("\n=== Performance Summary ===");
+    println!("Setup time:      {:.2}s", setup_duration.as_secs_f64());
+    println!("Verification:    {:.2}s", verify_duration.as_secs_f64());
 
     create_proof_fixture(&proof, &vk, args.system);
+}
+
+fn generate_aggregated_evm_proofs(args: &EVMArgs) {
+    let final_proof_type = match args.system {
+        ProofSystem::Plonk => FinalProofType::Plonk,
+        ProofSystem::Groth16 => FinalProofType::Groth16,
+    };
+
+    let setup_start = Instant::now();
+    let result = proof::generate_and_aggregate_proofs(
+        ADD_ELF,
+        AGGREGATE_ELF,
+        args.proofs,
+        args.length,
+        final_proof_type,
+    )
+    .expect("failed to generate and aggregate proofs");
+    let setup_duration = setup_start.elapsed();
+
+    println!("Successfully generated aggregated {:?} proof!", args.system);
+
+    proof::print_proof_statistics(&result.proof);
+    proof::print_aggregated_results(&result.aggregated_values);
+    proof::print_aggregation_performance_summary(setup_duration, &result);
+
+    create_proof_fixture(&result.proof, &result.aggregate_vk, args.system);
 }
 
 /// Create a fixture for the given proof.

@@ -3,6 +3,7 @@ members = [
     "lib",
     "sui/client",
     "programs/add",
+    "programs/aggregate",
     "script",
 ]
 resolver = "2"

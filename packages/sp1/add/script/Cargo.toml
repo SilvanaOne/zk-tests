@@ -25,7 +25,7 @@ name = "extract_sui_vkey"
 path = "src/bin/extract_sui_vkey.rs"
 
 [dependencies]
-sp1-sdk = "5.1.0"
+sp1-sdk = { version = "5.1.0", default-features = false, features = ["network", "reserved-capacity"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 clap = { version = "4.0", features = ["derive", "env"] }
