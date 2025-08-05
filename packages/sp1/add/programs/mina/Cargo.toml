@@ -13,6 +13,5 @@ path = "src/main.rs"
 
 [dependencies]
 sp1-zkvm = { version = "5.1.0" }
-num-bigint = { version = "0.4", default-features = false }
-once_cell = "1.19"
-crypto-bigint = { git = "https://github.com/sp1-patches/RustCrypto-bigint", tag = "patch-0.5.5-sp1-4.0.0" }
+crypto-bigint = "=0.5.5"
+

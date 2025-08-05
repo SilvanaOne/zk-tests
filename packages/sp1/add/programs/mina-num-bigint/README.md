@@ -1,4 +1,99 @@
 ```
+ make hash MODE=execute ITERATIONS=10 TYPE=mina
+Running hash operation...
+Mode: execute
+Type: mina
+Iterations: 10
+⏱️  Start time: 2025-08-05 10:20:33
+Executing mina hash program...
+   Compiling add-script v0.1.0 (/Users/mike/Documents/Silvana/zk-tests/packages/sp1/add/script)
+warning: add-script@0.1.0: rustc +succinct --version: "rustc 1.88.0-dev\n"
+warning: add-script@0.1.0: add-program built at 2025-08-05 10:20:36
+warning: add-script@0.1.0: rustc +succinct --version: "rustc 1.88.0-dev\n"
+warning: add-script@0.1.0: aggregate-program built at 2025-08-05 10:20:37
+warning: add-script@0.1.0: rustc +succinct --version: "rustc 1.88.0-dev\n"
+warning: add-script@0.1.0: sha256-program built at 2025-08-05 10:20:39
+warning: add-script@0.1.0: rustc +succinct --version: "rustc 1.88.0-dev\n"
+warning: add-script@0.1.0: p3-program built at 2025-08-05 10:20:40
+warning: add-script@0.1.0: rustc +succinct --version: "rustc 1.88.0-dev\n"
+warning: add-script@0.1.0: mina-program built at 2025-08-05 10:20:43
+    Finished `release` profile [optimized] target(s) in 14.03s
+     Running `/Users/mike/Documents/Silvana/zk-tests/packages/sp1/add/target/release/hash --execute --type mina --iterations 10`
+Hash type: Mina
+Iterations: 10
+Input data: [1, 2, 3]
+2025-08-05T07:20:50.467573Z  INFO execute: clk = 0 pc = 0x2110c8
+2025-08-05T07:20:50.683624Z  INFO execute: clk = 10000000 pc = 0x226ca0
+2025-08-05T07:20:50.897283Z  INFO execute: clk = 20000000 pc = 0x21d1a8
+2025-08-05T07:20:51.108518Z  INFO execute: clk = 30000000 pc = 0x226ca0
+2025-08-05T07:20:51.322848Z  INFO execute: clk = 40000000 pc = 0x21d1d0
+2025-08-05T07:20:51.533989Z  INFO execute: clk = 50000000 pc = 0x211600
+2025-08-05T07:20:51.749256Z  INFO execute: clk = 60000000 pc = 0x210c50
+2025-08-05T07:20:51.960613Z  INFO execute: clk = 70000000 pc = 0x226c94
+2025-08-05T07:20:52.174131Z  INFO execute: clk = 80000000 pc = 0x2186c4
+2025-08-05T07:20:52.387079Z  INFO execute: clk = 90000000 pc = 0x21cfc4
+2025-08-05T07:20:52.616452Z  INFO execute: clk = 100000000 pc = 0x226cb8
+2025-08-05T07:20:52.829601Z  INFO execute: clk = 110000000 pc = 0x226990
+2025-08-05T07:20:53.042709Z  INFO execute: clk = 120000000 pc = 0x226c94
+2025-08-05T07:20:53.257966Z  INFO execute: clk = 130000000 pc = 0x2184ac
+2025-08-05T07:20:53.471816Z  INFO execute: clk = 140000000 pc = 0x211588
+2025-08-05T07:20:53.688756Z  INFO execute: clk = 150000000 pc = 0x21dff4
+2025-08-05T07:20:53.902776Z  INFO execute: clk = 160000000 pc = 0x226c90
+2025-08-05T07:20:54.117696Z  INFO execute: clk = 170000000 pc = 0x21d1b4
+2025-08-05T07:20:54.333363Z  INFO execute: clk = 180000000 pc = 0x21d430
+2025-08-05T07:20:54.428301Z  INFO execute: gas: 180592451
+2025-08-05T07:20:54.429565Z  INFO execute: close time.busy=3.97s time.idle=2.08µs
+Program executed successfully.
+Hash digest: 0x366e46102b0976735ed1cc8820c7305822a448893fee8ceeb42a3012a4663fd0
+Number of cycles: 184025615
+Number of syscalls: 22
+Total instructions: 184025637
+
+=== Detailed Execution Report ===
+gas: 180592451
+opcode counts (184025615 total instructions):
+    47685699 add
+    17560604 sub
+    17312551 lw
+    15575968 srl
+    14308101 sltu
+    13255179 sw
+     8903475 or
+     8332026 sll
+     6991460 bne
+     6222959 beq
+     4709594 blt
+     3917776 mul
+     3531551 mulhu
+     3408777 jal
+     2341591 bgeu
+     2232535 jalr
+     1908252 and
+     1583083 bltu
+     1382872 xor
+     1116281 auipc
+      722793 lbu
+      606034 sb
+      178142 divu
+      157020 sra
+       69340 bge
+       10040 lb
+        1770 remu
+          60 slt
+          60 sh
+          22 ecall
+syscall counts (22 total syscall instructions):
+    8 commit
+    8 commit_deferred_proofs
+    2 hint_len
+    2 hint_read
+    1 halt
+    1 write
+
+⏱️  End time: 2025-08-05 10:20:54
+⏱️  Duration: 21 seconds
+
+
 add % make hash MODE=prove ITERATIONS=1 TYPE=mina
 Running hash operation...
 Mode: prove
