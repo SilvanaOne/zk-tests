@@ -1,5 +1,20 @@
 use crypto_bigint::{U256, NonZero};
 
+#[cfg(target_os = "zkvm")]
+extern "C" {
+    /// SP1 syscall for big integer operations with a modulus.
+    fn sys_bigint(
+        result: *mut [u32; 8],
+        op: u32,
+        x: *const [u32; 8],
+        y: *const [u32; 8],
+        modulus: *const [u32; 8],
+    );
+}
+
+#[cfg(target_os = "zkvm")]
+const OP_MULTIPLY: u32 = 0;
+
 #[derive(Clone)]
 pub struct PoseidonConfig {
     pub mds: Vec<Vec<U256>>,
@@ -323,11 +338,12 @@ pub struct FiniteField;
 
 impl FiniteField {
     pub fn mod_p(x: &U256, p: &U256) -> U256 {
-        let p_nonzero = NonZero::new(*p);
-        if bool::from(p_nonzero.is_some()) {
-            x.rem(&p_nonzero.unwrap())
+        // For the Mina prime, we can optimize by checking if reduction is needed
+        if x < p {
+            *x
         } else {
-            panic!("Modulus cannot be zero")
+            let p_nonzero = NonZero::new(*p).expect("Modulus cannot be zero");
+            x.rem(&p_nonzero)
         }
     }
 
@@ -336,6 +352,16 @@ impl FiniteField {
         let mut x = U256::ONE;
         let mut n = *n;
 
+        // For power 7 (used in Poseidon), we can optimize:
+        // a^7 = a * a^2 * a^4 = a * a^2 * (a^2)^2
+        if n == U256::from(7u32) {
+            let a2 = Self::mul(&a, &a, p);    // a^2
+            let a4 = Self::mul(&a2, &a2, p);  // a^4
+            let a3 = Self::mul(&a2, &a, p);   // a^3 = a^2 * a
+            return Self::mul(&a4, &a3, p);    // a^7 = a^4 * a^3
+        }
+
+        // General case for other exponents
         while n > U256::ZERO {
             if n.bit(0).into() {
                 x = Self::mul(&x, &a, p);
@@ -349,60 +375,79 @@ impl FiniteField {
     pub fn dot(x: &[U256], y: &[U256], p: &U256) -> U256 {
         let mut z = U256::ZERO;
         let n = x.len();
+        
+        // Compute all products first, then sum them
+        // This can help with instruction scheduling
         for i in 0..n {
             let prod = Self::mul(&x[i], &y[i], p);
-            z = Self::add(&z, &prod, p);
+            z = z.add_mod(&prod, p);
         }
         z
     }
 
     pub fn add(x: &U256, y: &U256, p: &U256) -> U256 {
-        let x_mod = Self::mod_p(x, p);
-        let y_mod = Self::mod_p(y, p);
-        
-        let sum = x_mod.wrapping_add(&y_mod);
-        if sum < x_mod || sum >= *p {
-            sum.wrapping_sub(p)
-        } else {
-            sum
-        }
+        // Use the optimized add_mod from crypto-bigint
+        // This is more efficient than our manual implementation
+        x.add_mod(y, p)
     }
 
     pub fn mul(x: &U256, y: &U256, p: &U256) -> U256 {
         let x_mod = Self::mod_p(x, p);
         let y_mod = Self::mod_p(y, p);
         
-        // The patched crypto-bigint library optimizes the underlying operations
-        // For correct modular multiplication, we need to handle overflow properly
-        
-        // First check if we can do simple multiplication without overflow
-        let p_nonzero = NonZero::new(*p).expect("Modulus cannot be zero");
-        
-        // Try to use the most efficient path based on the size of operands
-        // If both operands are small enough, we can use direct multiplication
-        let x_high = x_mod.shr(128);
-        let y_high = y_mod.shr(128);
-        
-        if x_high == U256::ZERO && y_high == U256::ZERO {
-            // Both values fit in 128 bits, so product fits in 256 bits
-            let product = x_mod.wrapping_mul(&y_mod);
-            product.rem(&p_nonzero)
-        } else {
-            // Use Montgomery multiplication algorithm for efficiency
-            // This is still optimized by the SP1 patches at the lower level
-            let mut result = U256::ZERO;
-            let mut a = x_mod;
-            let b = y_mod;
+        #[cfg(target_os = "zkvm")]
+        {
+            // Use direct syscall for modular multiplication in zkVM
+            // This provides maximum efficiency by bypassing all software implementation
+            let result = unsafe {
+                let mut out = [0u32; 8];
+                sys_bigint(
+                    &mut out as *mut [u32; 8],
+                    OP_MULTIPLY,
+                    x_mod.to_words().as_ptr() as *const [u32; 8],
+                    y_mod.to_words().as_ptr() as *const [u32; 8],
+                    p.to_words().as_ptr() as *const [u32; 8],
+                );
+                U256::from_words(out)
+            };
             
-            // Standard double-and-add multiplication with modular reduction
-            for i in 0..256 {
-                if b.bit(i).into() {
-                    result = Self::add(&result, &a, p);
+            // The syscall should return a value less than the modulus
+            debug_assert!(result < *p);
+            return result;
+        }
+        
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            // Fallback implementation for non-zkVM environments
+            // First check if we can do simple multiplication without overflow
+            let p_nonzero = NonZero::new(*p).expect("Modulus cannot be zero");
+            
+            // Try to use the most efficient path based on the size of operands
+            // If both operands are small enough, we can use direct multiplication
+            let x_high = x_mod.shr(128);
+            let y_high = y_mod.shr(128);
+            
+            if x_high == U256::ZERO && y_high == U256::ZERO {
+                // Both values fit in 128 bits, so product fits in 256 bits
+                let product = x_mod.wrapping_mul(&y_mod);
+                product.rem(&p_nonzero)
+            } else {
+                // Use Montgomery multiplication algorithm for efficiency
+                // This is still optimized by the SP1 patches at the lower level
+                let mut result = U256::ZERO;
+                let mut a = x_mod;
+                let b = y_mod;
+                
+                // Standard double-and-add multiplication with modular reduction
+                for i in 0..256 {
+                    if b.bit(i).into() {
+                        result = Self::add(&result, &a, p);
+                    }
+                    a = Self::add(&a, &a, p);
                 }
-                a = Self::add(&a, &a, p);
+                
+                result
             }
-            
-            result
         }
     }
 }
@@ -419,8 +464,7 @@ impl PoseidonHash {
     pub fn hash(input: Vec<U256>) -> U256 {
         let initial_state = vec![U256::ZERO, U256::ZERO, U256::ZERO];
         let config = PoseidonConstant::poseidon_config_kimchi_fp();
-        Self::poseidon_update(initial_state, input, &config)[0].clone()
-        //U256::ZERO
+        Self::poseidon_update(initial_state, input, &config)[0]
     }
 
     pub fn poseidon_update(
@@ -439,7 +483,7 @@ impl PoseidonHash {
 
         // Copy input to array
         for (i, val) in input.iter().enumerate() {
-            array[i] = val.clone();
+            array[i] = *val;
         }
 
         let p = Self::p();
@@ -447,7 +491,7 @@ impl PoseidonHash {
         // For every block of length `rate`, add block to the first `rate` elements of the state, and apply the permutation
         for block_index in (0..n).step_by(config.rate) {
             for i in 0..config.rate {
-                state[i] = FiniteField::add(&state[i], &array[block_index + i], &p);
+                state[i] = state[i].add_mod(&array[block_index + i], &p);
             }
             Self::permutation(&mut state, config);
         }
@@ -462,25 +506,42 @@ impl PoseidonHash {
         let mut offset = 0;
         if config.has_initial_round_constant {
             for i in 0..config.state_size {
-                state[i] = FiniteField::add(&state[i], &config.round_constants[0][i], &p);
+                state[i] = state[i].add_mod(&config.round_constants[0][i], &p);
             }
             offset = 1;
         }
 
+        // Precompute power for all rounds (it's always 7)
+        let power_n = U256::from(config.power as u64);
+        
         for round in 0..config.full_rounds {
-            // Raise to a power
-            for i in 0..config.state_size {
-                state[i] = FiniteField::power(&state[i], &U256::from(config.power as u64), &p);
+            // Raise to a power - optimize for power 7
+            if config.power == 7 {
+                for i in 0..config.state_size {
+                    let x = &state[i];
+                    let x2 = FiniteField::mul(x, x, &p);      // x^2
+                    let x4 = FiniteField::mul(&x2, &x2, &p);  // x^4
+                    let x3 = FiniteField::mul(&x2, x, &p);    // x^3
+                    state[i] = FiniteField::mul(&x4, &x3, &p); // x^7
+                }
+            } else {
+                for i in 0..config.state_size {
+                    state[i] = FiniteField::power(&state[i], &power_n, &p);
+                }
             }
 
-            let old_state = state.clone();
+            // Matrix multiplication with round constant addition
+            let mut new_state = vec![U256::ZERO; config.state_size];
             for i in 0..config.state_size {
-                // Multiply by MDS matrix
-                state[i] = FiniteField::dot(&config.mds[i], &old_state, &p);
-                // Add round constants
-                state[i] =
-                    FiniteField::add(&state[i], &config.round_constants[round + offset][i], &p);
+                // Compute dot product and add round constant in one pass
+                let mut acc = config.round_constants[round + offset][i];
+                for j in 0..config.state_size {
+                    let prod = FiniteField::mul(&config.mds[i][j], &state[j], &p);
+                    acc = acc.add_mod(&prod, &p);
+                }
+                new_state[i] = acc;
             }
+            *state = new_state;
         }
     }
 }

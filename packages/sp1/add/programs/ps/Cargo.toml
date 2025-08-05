@@ -1,0 +1,10 @@
+[package]
+version = "0.1.0"
+name = "ps-program"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = { version = "5.1.0" }
+mina-hasher = { git = "https://github.com/SilvanaOne/proof-systems", branch = "poseidon", package = "mina-hasher" }
+
+

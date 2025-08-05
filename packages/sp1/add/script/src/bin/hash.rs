@@ -10,7 +10,7 @@
 //! ```
 
 use clap::Parser;
-use sp1_sdk::{Prover, ProverClient, SP1Stdin, include_elf};
+use sp1_sdk::{Prover, ProverClient, SP1Stdin, include_elf, network::FulfillmentStrategy};
 
 /// The ELF files for different hash programs
 pub const SHA256_ELF: &[u8] = include_elf!("sha256-program");
@@ -18,6 +18,7 @@ pub const SHA256_ELF: &[u8] = include_elf!("sha256-program");
 // pub const BN254_ELF: &[u8] = include_elf!("bn254-program");
 pub const MINA_ELF: &[u8] = include_elf!("mina-program");
 pub const P3_ELF: &[u8] = include_elf!("p3-program");
+pub const PS_ELF: &[u8] = include_elf!("ps-program");
 
 /// Supported hash types
 #[derive(Parser, Debug, Clone)]
@@ -26,6 +27,7 @@ enum HashType {
     Bn254,
     Mina,
     P3,
+    PS,
 }
 
 impl std::str::FromStr for HashType {
@@ -37,6 +39,7 @@ impl std::str::FromStr for HashType {
             "bn254" => Ok(HashType::Bn254),
             "mina" => Ok(HashType::Mina),
             "p3" => Ok(HashType::P3),
+            "ps" => Ok(HashType::PS),
             _ => Err(format!("Unknown hash type: {}", s)),
         }
     }
@@ -80,6 +83,7 @@ fn main() {
         }
         HashType::Mina => MINA_ELF,
         HashType::P3 => P3_ELF,
+        HashType::PS => PS_ELF,
     };
 
     // Setup the prover client.
@@ -126,6 +130,8 @@ fn main() {
         let prove_start = std::time::Instant::now();
         let proof = client
             .prove(&pk, &stdin)
+            //.groth16()
+            //.strategy(FulfillmentStrategy::Hosted)
             .run()
             .expect("failed to generate proof");
         let prove_duration = prove_start.elapsed();

@@ -6,6 +6,7 @@ members = [
     "programs/aggregate",
     "programs/sha256",
     "programs/p3",
+    "programs/ps",
     "programs/mina",
     "script",
 ]
