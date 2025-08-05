@@ -17,6 +17,8 @@ import { sleep } from "../src/sleep.js";
 import { formatTime } from "../src/time.js";
 import { fetchZekoFee } from "../src/zeko-fee.js";
 
+const url = "http://m1.zeko.io/graphql";
+//const url = "https://devnet.zeko.io/graphql";
 const MAX_FEE = 10n;
 const COUNT = 100;
 
@@ -56,9 +58,6 @@ const balanceContract = new BalanceContract(zkKey);
 
 describe("balance instability check", () => {
   it(`should compile`, async () => {
-    //const url = "http://m1.zeko.io/graphql";
-    const url = "https://devnet.zeko.io/graphql";
-
     const networkInstance = Mina.Network({
       mina: url,
       archive: url,
@@ -92,7 +91,7 @@ describe("balance instability check", () => {
         await balanceContract.deploy({});
       }
     );
-    const fee = await fetchZekoFee({ txn: tx });
+    const fee = await fetchZekoFee({ tx, url });
     if (!fee) {
       throw new Error("fee is undefined");
     }
@@ -113,7 +112,7 @@ describe("balance instability check", () => {
     while (txSent.status !== "pending") {
       console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
       await sleep(10000);
-      const fee = await fetchZekoFee({ txn: tx });
+      const fee = await fetchZekoFee({ tx, url });
       if (fee) {
         console.log(
           "fee:",
@@ -171,7 +170,7 @@ describe("balance instability check", () => {
         }
       );
       await tx.prove();
-      const fee = await fetchZekoFee({ txn: tx });
+      const fee = await fetchZekoFee({ tx, url });
 
       if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
         console.log(
@@ -193,7 +192,7 @@ describe("balance instability check", () => {
           txSent.errors
         );
         await sleep(5000);
-        const fee = await fetchZekoFee({ txn: tx });
+        const fee = await fetchZekoFee({ tx, url });
         if (fee) {
           console.log(
             "fee:",

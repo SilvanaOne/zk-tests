@@ -40,6 +40,8 @@ let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
+//const url = "https://devnet.zeko.io/graphql";
+const url = "http://m1.zeko.io/graphql";
 
 let retries = 0;
 
@@ -107,9 +109,6 @@ describe("Based rollup", async () => {
     if (!PRIVATE_KEY) {
       throw new Error("PRIVATE_KEY is not set");
     }
-
-    //const url = "https://devnet.zeko.io/graphql";
-    const url = "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
       mina: url,
@@ -180,7 +179,7 @@ describe("Based rollup", async () => {
         }
       );
       console.timeEnd("prepared");
-      const fee = await fetchZekoFee({ txn: tx });
+      const fee = await fetchZekoFee({ tx, url });
 
       if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
         console.log(
@@ -199,7 +198,7 @@ describe("Based rollup", async () => {
       while (txSent.status !== "pending") {
         console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
         await sleep(5000);
-        const fee = await fetchZekoFee({ txn: tx });
+        const fee = await fetchZekoFee({ tx, url });
         if (fee) {
           console.log(
             "fee:",

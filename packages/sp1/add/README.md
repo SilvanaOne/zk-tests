@@ -111,6 +111,42 @@ make solana             # Run Solana verification test
 4. Convert aggregated proof to Groth16
 5. Submit Groth16 proof to blockchain for verification
 
+## SP1 Recursive Proofs - Silvana Integration
+
+### Ready Code for SP1 Integration in Silvana
+
+- Recursive aggregated proofs - Groth16, PLONK
+- Settlement on Ethereum, Sui, Solana
+- Integration with SP1 proving service
+
+Based on SP1-solana and soundness sp1-sui implementations (their code is practically identical).
+
+### SP1 Features
+
+SP1 has unique characteristics: recursive proofs can be computed directly inside the core proof using loops with variable iteration counts (impossible in Mina, where loops must have a fixed iteration count). The core proof performs folding automatically when operation limits are exceeded, but the limit is quite high, so folding wasn't reached in our tests. Computation time is 5-6 seconds, with minimal dependency on the number of user actions inside.
+
+### Performance Stages
+
+1. **Core Proof Generation**: 5-6 seconds
+2. **Compression**: ~5 seconds (required as only compressed proofs can be aggregated)
+3. **Aggregation**: 30-200 seconds depending on the number of proofs
+4. **STARK to Groth16 Conversion**: 3-4 minutes (only needed for settlement on Sui/Solana/Ethereum)
+
+When using SP1 Prover Service with GPU, Groth16 conversion takes only 20-30 seconds and costs $0.05-$0.20, depending on the number of aggregated proofs.
+
+### Hardware Requirements
+
+- Core proofs: ~10 GB RAM
+- Groth16 proofs: ~32 GB RAM
+
+### Optimal Recursion Strategy
+
+The optimal recursion strategy differs from Mina and consists of:
+
+1. Maximizing user actions within core proof recursion (fast and cheap)
+2. Using direct proof aggregation only when necessary
+3. Adding Groth16 conversion only for settlement (expensive and slow)
+
 ## Requirements
 
 - Rust with SP1 toolchain

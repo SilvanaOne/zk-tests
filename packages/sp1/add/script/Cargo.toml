@@ -24,6 +24,10 @@ path = "src/bin/verify.rs"
 name = "extract_sui_vkey"
 path = "src/bin/extract_sui_vkey.rs"
 
+[[bin]]
+name = "hash"
+path = "src/bin/hash.rs"
+
 [dependencies]
 sp1-sdk = { version = "5.1.0", default-features = false, features = ["network", "reserved-capacity"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

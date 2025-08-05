@@ -7,6 +7,9 @@ fn main() {
     // Build the SP1 programs
     build_program_with_args("../programs/add", Default::default());
     build_program_with_args("../programs/aggregate", Default::default());
+    build_program_with_args("../programs/sha256", Default::default());
+    build_program_with_args("../programs/p3", Default::default());
+    build_program_with_args("../programs/mina", Default::default());
 
     // Generate ABI from Add.sol
     generate_abi();

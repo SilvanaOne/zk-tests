@@ -2612,6 +2612,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-bigint"
+version = "0.5.5"
+source = "git+https://github.com/sp1-patches/RustCrypto-bigint?tag=patch-0.5.5-sp1-4.0.0#d421029772fb604022defd4cae5fffb269ad5155"
+dependencies = [
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3286,7 +3295,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
 dependencies = [
  "base16ct 0.2.0",
- "crypto-bigint 0.5.5",
+ "crypto-bigint 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "digest 0.10.7",
  "ff 0.13.1",
  "generic-array 0.14.7",
@@ -5222,6 +5231,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mina-program"
+version = "0.1.0"
+dependencies = [
+ "crypto-bigint 0.5.5 (git+https://github.com/sp1-patches/RustCrypto-bigint?tag=patch-0.5.5-sp1-4.0.0)",
+ "num-bigint 0.4.6",
+ "once_cell",
+ "sp1-zkvm",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6424,6 +6443,18 @@ dependencies = [
  "p3-symmetric",
  "rand 0.8.5",
  "serde",
+]
+
+[[package]]
+name = "p3-program"
+version = "0.1.0"
+dependencies = [
+ "p3-baby-bear",
+ "p3-field",
+ "p3-poseidon2",
+ "p3-symmetric",
+ "sp1-primitives",
+ "sp1-zkvm",
 ]
 
 [[package]]
@@ -8456,6 +8487,14 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "sha256-program"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.8",
+ "sp1-zkvm",
 ]
 
 [[package]]

@@ -4,6 +4,9 @@ members = [
     "sui/client",
     "programs/add",
     "programs/aggregate",
+    "programs/sha256",
+    "programs/p3",
+    "programs/mina",
     "script",
 ]
 resolver = "2"

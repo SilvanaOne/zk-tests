@@ -3,13 +3,13 @@ import { Transaction, UInt64 } from "o1js";
 /// txn.setFee(await fetchZekoFee(txn));
 
 export async function fetchZekoFee(params: {
-  txn: Transaction<false, false> | number;
+  tx: Transaction<false, false> | number;
   buffer?: number;
   url?: string;
 }): Promise<UInt64 | undefined> {
-  const { txn, buffer = 0.1, url = "https://devnet.zeko.io/graphql" } = params;
+  const { tx, buffer = 0.1, url = "https://devnet.zeko.io/graphql" } = params;
   const weight =
-    typeof txn === "number" ? txn : txn.transaction.accountUpdates.length + 1;
+    typeof tx === "number" ? tx : tx.transaction.accountUpdates.length + 1;
   console.log("fetchZekoFee weight", weight);
   try {
     const response = await fetch(url, {

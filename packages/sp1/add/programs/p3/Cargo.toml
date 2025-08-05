@@ -1,0 +1,12 @@
+[package]
+version = "0.1.0"
+name = "p3-program"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = { version = "5.1.0" }
+p3-baby-bear = { version = "=0.2.3-succinct" }
+p3-poseidon2 = { version = "=0.2.3-succinct" }
+p3-symmetric = { version = "=0.2.3-succinct" }
+p3-field = { version = "=0.2.3-succinct" }
+sp1-primitives = { version = "5.1.0" }

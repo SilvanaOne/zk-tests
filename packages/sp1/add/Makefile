@@ -1,7 +1,7 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute prove-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules
+.PHONY: help build execute prove-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
 
 # Load environment variables from .env file
 include .env
@@ -50,7 +50,15 @@ help:
 	@echo "  test           - Run Foundry tests"
 	@echo "  solana         - Run Solana SP1 proof verification test"
 	@echo ""
+	@echo "Hash Operations:"
+	@echo "  hash           - Execute or prove hash computations"
+	@echo "                   Usage: make hash MODE=prove TYPE=sha256 ITERATIONS=10"
+	@echo "                   MODE: execute or prove (default: prove)"
+	@echo "                   TYPE: sha256, bn254, mina, p3 (default: sha256, only sha256 implemented)"
+	@echo "                   ITERATIONS: number of hash iterations (default: 10)"
+	@echo ""
 	@echo "Utilities:"
+	@echo "  locks          - Check for running Rust-related processes (cargo, rustup, rust-analyzer)"
 	@echo "  fetch-submodules - Fetch and initialize all Git submodules"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  solana-keys    - List Solana Anchor program keys"
@@ -309,6 +317,10 @@ solana-keys:
 	@cd solana && anchor keys list
 
 # Utilities
+locks:
+	@echo "Checking for running Rust-related processes..."
+	@pgrep -fl 'cargo|rustup|rust-analyzer'
+
 fetch-submodules:
 	@echo "Fetching and initializing Git submodules..."
 	@echo "Registering submodules from ethereum/.gitmodules..."
@@ -324,6 +336,32 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cd script && cargo clean
 	cd ethereum && forge clean
+
+# Hash operations
+hash:
+	@echo "Running hash operation..."
+	@MODE=$(or $(MODE),prove); \
+	TYPE=$(or $(TYPE),sha256); \
+	ITERATIONS=$(or $(ITERATIONS),10); \
+	echo "Mode: $$MODE"; \
+	echo "Type: $$TYPE"; \
+	echo "Iterations: $$ITERATIONS"; \
+	echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	start_time=$$(date +%s); \
+	if [ "$$MODE" = "execute" ]; then \
+		echo "Executing $$TYPE hash program..."; \
+		cd script && cargo run --release --bin hash -- --execute --type $$TYPE --iterations $$ITERATIONS; \
+	elif [ "$$MODE" = "prove" ]; then \
+		echo "Generating proof for $$TYPE hash program..."; \
+		cd script && cargo run --release --bin hash -- --prove --type $$TYPE --iterations $$ITERATIONS; \
+	else \
+		echo "❌ Error: MODE must be either 'execute' or 'prove'"; \
+		exit 1; \
+	fi; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
 
 # Full workflow targets
 full-groth16: prove-groth16 deploy-groth16 verify-groth16
