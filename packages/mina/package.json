@@ -10,6 +10,7 @@
     "signature": "npm run test test/signature.test.ts",
     "signature-rust": "npm run test test/signature-rust.test.ts",
     "keys": "npm run test test/keys.test.ts",
+    "hash": "npm run test test/hash.test.ts",
     "faucet:zeko": "CHAIN=zeko npm run test test/faucet.test.ts",
     "faucet:devnet": "CHAIN=devnet npm run test test/faucet.test.ts",
     "nft-faucet:zeko": "CHAIN=zeko npm run test test/nft-faucet.test.ts",

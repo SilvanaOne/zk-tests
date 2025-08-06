@@ -1,0 +1,17 @@
+[package]
+name = "proof"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+mina-poseidon = {git = "https://github.com/o1-labs/proof-systems", package = "mina-poseidon" }
+mina-hasher = {git = "https://github.com/o1-labs/proof-systems", package = "mina-hasher" }
+kimchi = {git = "https://github.com/o1-labs/proof-systems", package = "kimchi" }
+poly-commitment = {git = "https://github.com/o1-labs/proof-systems", package = "poly-commitment" }
+mina-curves = {git = "https://github.com/o1-labs/proof-systems", package = "mina-curves" }
+ark-ff = "0.5.0"
+ark-poly = "0.5.0"
+groupmap = {git = "https://github.com/o1-labs/proof-systems", package = "groupmap" }
+o1-utils = {git = "https://github.com/o1-labs/proof-systems", package = "o1-utils" }
+rand = "0.8"
