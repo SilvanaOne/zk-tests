@@ -40,15 +40,13 @@ fn main() {
 
             // Step 4: Verify the proof
             println!("\nStep 4: Verifying the proof...");
-            println!("  Expected hash: {}", hash);
             let verify_start = Instant::now();
-            match verify_poseidon_proof(&proof_data, hash) {
-                Ok((is_valid, returned_hash)) => {
+            match verify_poseidon_proof(&proof_data) {
+                Ok(is_valid) => {
                     let verify_duration = verify_start.elapsed();
                     if is_valid {
                         println!("  ✓ Proof verified successfully!");
                         println!("  Time: {:.3} ms", verify_duration.as_secs_f64() * 1000.0);
-                        println!("  Hash value from circuit: {}", returned_hash);
                     } else {
                         println!("  ✗ Proof verification failed!");
                     }

@@ -145,8 +145,7 @@ pub fn create_poseidon_proof() -> Result<PoseidonProof, Box<dyn std::error::Erro
 /// This would cryptographically bind the proof to the specific hash value.
 pub fn verify_poseidon_proof(
     proof_data: &PoseidonProof,
-    expected_hash: Fp,
-) -> Result<(bool, Fp), Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error>> {
     let group_map = <Vesta as CommitmentCurve>::Map::setup();
 
     // Verify the proof (no public inputs in this simplified version)
@@ -158,7 +157,7 @@ pub fn verify_poseidon_proof(
     );
 
     // Return verification result and the expected hash
-    Ok((result.is_ok(), expected_hash))
+    Ok(result.is_ok())
 }
 
 /// Get circuit information (number of gates and constraints)
@@ -230,10 +229,8 @@ mod tests {
 
         // Create and verify proof
         let proof = create_poseidon_proof().expect("Failed to create proof");
-        let (is_valid, returned_hash) =
-            verify_poseidon_proof(&proof, expected).expect("Failed to verify proof");
+        let is_valid = verify_poseidon_proof(&proof).expect("Failed to verify proof");
 
         assert!(is_valid, "Proof should be valid");
-        assert_eq!(returned_hash, expected, "Hash should match expected value");
     }
 }

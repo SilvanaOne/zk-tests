@@ -28,8 +28,8 @@ import { pushEvent, emptyEvents } from "../src/events/events.js";
 import { fetchZekoFee } from "../src/zeko-fee.js";
 import { formatTime } from "../src/time.js";
 
-const MAX_FEE = 10n;
-const NUMBER_OF_ITERATIONS = 100;
+const MAX_FEE = 1n;
+const NUMBER_OF_ITERATIONS = 1000;
 
 const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;
