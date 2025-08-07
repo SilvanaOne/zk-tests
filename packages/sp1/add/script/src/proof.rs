@@ -121,6 +121,7 @@ pub fn generate_and_aggregate_proofs(
         FinalProofType::Core => aggregate_client
             .prove(&aggregate_pk, &aggregate_stdin)
             .compressed()
+            .strategy(FulfillmentStrategy::Hosted)
             .run()?,
         FinalProofType::Groth16 => aggregate_client
             .prove(&aggregate_pk, &aggregate_stdin)
