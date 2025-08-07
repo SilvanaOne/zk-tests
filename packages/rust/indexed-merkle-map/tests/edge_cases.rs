@@ -1,5 +1,5 @@
 use crypto_bigint::U256;
-use indexed_merkle_map::{Field, IndexedMerkleMap};
+use indexed_merkle_map::{Field, IndexedMerkleMap, IndexedMerkleMapError};
 
 #[test]
 fn test_zero_key_value() {
@@ -109,9 +109,9 @@ fn test_fill_tree_to_capacity() {
     // Use a small tree to test capacity
     let mut map = IndexedMerkleMap::new(3);
     
-    // Tree of height 3 can hold 2^3 = 8 leaves
-    // First leaf is always (0,0,0), so we can insert 7 more
-    for i in 1..8 {
+    // Tree of height 3 can hold 2^(3-1) = 4 leaves at the leaf level
+    // First leaf is always (0,0,0), so we can insert 3 more
+    for i in 1..4 {
         let key = Field::from_u32(i * 10);
         let value = Field::from_u32(i * 100);
         let result = map.insert(key, value);
@@ -119,13 +119,14 @@ fn test_fill_tree_to_capacity() {
     }
     
     // Tree should be at capacity
-    assert_eq!(map.next_index(), 8);
+    assert_eq!(map.next_index(), 4);
     
-    // Next insert should still work (tree will resize internally)
+    // Next insert should fail (tree is at capacity)
     let key = Field::from_u32(100);
     let value = Field::from_u32(1000);
     let result = map.insert(key, value);
-    assert!(result.is_ok());
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), IndexedMerkleMapError::TreeFull);
 }
 
 #[test]
@@ -195,7 +196,8 @@ fn test_non_membership_between_keys() {
     
     // Verify the proof
     let root = map.root();
-    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent));
+    let tree_length = map.length();
+    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent, tree_length));
 }
 
 #[test]

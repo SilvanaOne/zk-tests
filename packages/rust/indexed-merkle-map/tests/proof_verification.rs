@@ -1,4 +1,4 @@
-use indexed_merkle_map::{Field, Hash, IndexedMerkleMap, MembershipProof};
+use indexed_merkle_map::{Field, Hash, IndexedMerkleMap, MembershipProof, MerkleProof, Leaf, NonMembershipProof};
 
 #[test]
 fn test_valid_membership_proof() {
@@ -13,7 +13,7 @@ fn test_valid_membership_proof() {
     let proof = map.get_membership_proof(&key).unwrap();
     
     // Verify with correct parameters
-    assert!(IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn test_invalid_membership_proof_wrong_key() {
     
     // Verify with wrong key
     let wrong_key = Field::from_u32(101);
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &wrong_key, &value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &wrong_key, &value, map.length()));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_invalid_membership_proof_wrong_value() {
     
     // Verify with wrong value
     let wrong_value = Field::from_u32(201);
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &wrong_value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &wrong_value, map.length()));
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn test_invalid_membership_proof_wrong_root() {
     
     // Use wrong root
     let wrong_root = Hash::zero();
-    assert!(!IndexedMerkleMap::verify_membership_proof(&wrong_root, &proof, &key, &value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&wrong_root, &proof, &key, &value, map.length()));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn test_valid_non_membership_proof() {
     let proof = map.get_non_membership_proof(&non_existent).unwrap();
     
     // Verify proof
-    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent));
+    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent, map.length()));
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn test_invalid_non_membership_proof_existing_key() {
     let proof = map.get_non_membership_proof(&non_existent).unwrap();
     
     // This should fail because key 20 exists
-    assert!(!IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &key));
+    assert!(!IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &key, map.length()));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn test_non_membership_proof_boundary_check() {
     for (non_existent, expected_low_key) in test_cases {
         let proof = map.get_non_membership_proof(&non_existent).unwrap();
         assert_eq!(proof.low_leaf.key, expected_low_key);
-        assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent));
+        assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &non_existent, map.length()));
     }
 }
 
@@ -148,13 +148,13 @@ fn test_proof_after_update() {
     let root_after = map.root();
     
     // Old proof should be invalid with new root
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root_after, &proof_before, &key, &value1));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root_after, &proof_before, &key, &value1, map.length()));
     
     // New proof should be valid with new root
-    assert!(IndexedMerkleMap::verify_membership_proof(&root_after, &proof_after, &key, &value2));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root_after, &proof_after, &key, &value2, map.length()));
     
     // Old proof should still be valid with old root
-    assert!(IndexedMerkleMap::verify_membership_proof(&root_before, &proof_before, &key, &value1));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root_before, &proof_before, &key, &value1, map.length()));
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn test_tampered_merkle_proof() {
     }
     
     // Verification should fail
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn test_tampered_leaf_data() {
     proof.leaf.next_key = Field::from_u32(999);
     
     // Verification should fail because leaf hash will be different
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
 }
 
 #[test]
@@ -240,7 +240,7 @@ fn test_cross_tree_proof_invalid() {
     let proof1 = map1.get_membership_proof(&key).unwrap();
     
     // Proof from map1 should not verify against map2's root
-    assert!(!IndexedMerkleMap::verify_membership_proof(&root2, &proof1, &key, &value));
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root2, &proof1, &key, &value, map1.length()));
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn test_multiple_proofs_same_root() {
     
     // All proofs should verify against the same root
     for ((key, value), proof) in keys.iter().zip(&proofs) {
-        assert!(IndexedMerkleMap::verify_membership_proof(&root, proof, key, value));
+        assert!(IndexedMerkleMap::verify_membership_proof(&root, proof, key, value, map.length()));
     }
 }
 
@@ -288,5 +288,113 @@ fn test_proof_serialization_round_trip() {
     let deserialized: MembershipProof = borsh::from_slice(&serialized).unwrap();
     
     // Deserialized proof should still verify
-    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value, map.length()));
+}
+
+#[test]
+fn test_invalid_proof_size_too_small() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert some data
+    let key = Field::from_u32(100);
+    let value = Field::from_u32(200);
+    map.insert(key, value).unwrap();
+    
+    let root = map.root();
+    let mut proof = map.get_membership_proof(&key).unwrap();
+    
+    // Truncate the proof to make it too small
+    // A valid proof should have siblings matching the tree height
+    if proof.merkle_proof.siblings.len() > 1 {
+        proof.merkle_proof.siblings.truncate(1);
+        proof.merkle_proof.path_indices.truncate(1);
+    }
+    
+    // This proof with insufficient siblings should fail verification
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
+}
+
+#[test]
+fn test_invalid_proof_size_too_large() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert some data
+    let key = Field::from_u32(100);
+    let value = Field::from_u32(200);
+    map.insert(key, value).unwrap();
+    
+    let root = map.root();
+    let mut proof = map.get_membership_proof(&key).unwrap();
+    
+    // Add too many siblings to exceed the maximum tree height of 32
+    while proof.merkle_proof.siblings.len() <= 33 {
+        proof.merkle_proof.siblings.push(Hash::zero());
+        proof.merkle_proof.path_indices.push(false);
+    }
+    
+    // This proof with too many siblings should fail verification
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
+}
+
+#[test]
+fn test_invalid_proof_size_mismatched_arrays() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert some data
+    let key = Field::from_u32(100);
+    let value = Field::from_u32(200);
+    map.insert(key, value).unwrap();
+    
+    let root = map.root();
+    let mut proof = map.get_membership_proof(&key).unwrap();
+    
+    // Create mismatch between siblings and path_indices arrays
+    proof.merkle_proof.siblings.push(Hash::zero());
+    // Don't add corresponding path_index
+    
+    // This proof with mismatched array sizes should fail verification
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &proof, &key, &value, map.length()));
+}
+
+#[test]
+fn test_invalid_non_membership_proof_size() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert some data to create a non-trivial tree
+    map.insert(Field::from_u32(10), Field::from_u32(100)).unwrap();
+    map.insert(Field::from_u32(30), Field::from_u32(300)).unwrap();
+    
+    let root = map.root();
+    let key = Field::from_u32(20); // Non-existent key between 10 and 30
+    let mut proof = map.get_non_membership_proof(&key).unwrap();
+    
+    // Truncate the proof to make it invalid
+    if proof.merkle_proof.siblings.len() > 1 {
+        proof.merkle_proof.siblings.truncate(1);
+        proof.merkle_proof.path_indices.truncate(1);
+    }
+    
+    // This proof with insufficient siblings should fail verification
+    assert!(!IndexedMerkleMap::verify_non_membership_proof(&root, &proof, &key, map.length()));
+}
+
+#[test]
+fn test_empty_proof_rejected() {
+    let map = IndexedMerkleMap::new(10);
+    let root = map.root();
+    
+    // Create an empty proof
+    let empty_proof = MembershipProof {
+        leaf: Leaf::empty(),
+        merkle_proof: MerkleProof {
+            siblings: vec![],
+            path_indices: vec![],
+        },
+    };
+    
+    let key = Field::from_u32(100);
+    let value = Field::from_u32(200);
+    
+    // Empty proof should fail verification
+    assert!(!IndexedMerkleMap::verify_membership_proof(&root, &empty_proof, &key, &value, map.length()));
 }

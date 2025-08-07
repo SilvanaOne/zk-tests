@@ -116,7 +116,7 @@ fn test_proof_verification_performance() {
     let iterations = 10000;
     
     for _ in 0..iterations {
-        let _ = IndexedMerkleMap::verify_membership_proof(&root, &membership_proof, &key, &value);
+        let _ = IndexedMerkleMap::verify_membership_proof(&root, &membership_proof, &key, &value, map.length());
     }
     
     let duration = start.elapsed();
@@ -130,7 +130,7 @@ fn test_proof_verification_performance() {
     let start = Instant::now();
     
     for _ in 0..iterations {
-        let _ = IndexedMerkleMap::verify_non_membership_proof(&root, &non_proof, &non_key);
+        let _ = IndexedMerkleMap::verify_non_membership_proof(&root, &non_proof, &non_key, map.length());
     }
     
     let duration = start.elapsed();

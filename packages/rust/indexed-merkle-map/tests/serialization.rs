@@ -1,4 +1,7 @@
-use indexed_merkle_map::{Field, Hash, IndexedMerkleMap, Leaf, MembershipProof, NonMembershipProof};
+use indexed_merkle_map::{
+    Field, Hash, IndexedMerkleMap, Leaf, MembershipProof, NonMembershipProof,
+    MerkleProof, InsertWitness, UpdateWitness
+};
 
 #[test]
 fn test_field_serialization() {
@@ -72,7 +75,7 @@ fn test_membership_proof_serialization() {
     
     // Verify deserialized proof still works
     let root = map.root();
-    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value, map.length()));
 }
 
 #[test]
@@ -99,7 +102,7 @@ fn test_non_membership_proof_serialization() {
     
     // Verify deserialized proof still works
     let root = map.root();
-    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &deserialized, &non_existent));
+    assert!(IndexedMerkleMap::verify_non_membership_proof(&root, &deserialized, &non_existent, map.length()));
 }
 
 #[test]
@@ -127,7 +130,7 @@ fn test_large_proof_serialization() {
     // Deserialize and verify
     let deserialized: MembershipProof = borsh::from_slice(&serialized).unwrap();
     let root = map.root();
-    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value));
+    assert!(IndexedMerkleMap::verify_membership_proof(&root, &deserialized, &key, &value, map.length()));
 }
 
 #[test]
@@ -260,6 +263,254 @@ fn test_batch_serialization() {
     for (k, proof) in keys.iter().zip(&deserialized) {
         let key = Field::from_u32(*k);
         let value = Field::from_u32(*k * 10);
-        assert!(IndexedMerkleMap::verify_membership_proof(&root, proof, &key, &value));
+        assert!(IndexedMerkleMap::verify_membership_proof(&root, proof, &key, &value, map.length()));
     }
+}
+
+// ============ Tests for Missing Structs ============
+
+#[test]
+fn test_merkle_proof_serialization() {
+    // Create a MerkleProof directly
+    let merkle_proof = MerkleProof {
+        siblings: vec![
+            Hash::new([1u8; 32]),
+            Hash::new([2u8; 32]),
+            Hash::new([3u8; 32]),
+        ],
+        path_indices: vec![true, false, true],
+    };
+    
+    // Serialize
+    let serialized = borsh::to_vec(&merkle_proof).unwrap();
+    
+    // Deserialize
+    let deserialized: MerkleProof = borsh::from_slice(&serialized).unwrap();
+    
+    // Verify all fields match
+    assert_eq!(merkle_proof.siblings.len(), deserialized.siblings.len());
+    for (orig, deser) in merkle_proof.siblings.iter().zip(&deserialized.siblings) {
+        assert_eq!(orig, deser);
+    }
+    assert_eq!(merkle_proof.path_indices, deserialized.path_indices);
+}
+
+#[test]
+fn test_insert_witness_serialization() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert some initial data
+    map.insert(Field::from_u32(10), Field::from_u32(100)).unwrap();
+    map.insert(Field::from_u32(30), Field::from_u32(300)).unwrap();
+    
+    // Generate witness for new insertion
+    let new_key = Field::from_u32(20);
+    let new_value = Field::from_u32(200);
+    let witness = map.insert_and_generate_witness(new_key, new_value, true)
+        .unwrap()
+        .expect("Witness generation should succeed");
+    
+    // Serialize
+    let serialized = borsh::to_vec(&witness).unwrap();
+    
+    // Deserialize
+    let deserialized: InsertWitness = borsh::from_slice(&serialized).unwrap();
+    
+    // Verify all fields match
+    assert_eq!(witness.old_root, deserialized.old_root);
+    assert_eq!(witness.new_root, deserialized.new_root);
+    assert_eq!(witness.key, deserialized.key);
+    assert_eq!(witness.value, deserialized.value);
+    assert_eq!(witness.new_leaf_index, deserialized.new_leaf_index);
+    assert_eq!(witness.tree_length, deserialized.tree_length);
+    assert_eq!(witness.non_membership_proof.low_leaf, deserialized.non_membership_proof.low_leaf);
+    assert_eq!(witness.low_leaf_proof_before.siblings.len(), deserialized.low_leaf_proof_before.siblings.len());
+    assert_eq!(witness.updated_low_leaf, deserialized.updated_low_leaf);
+    assert_eq!(witness.new_leaf, deserialized.new_leaf);
+    assert_eq!(witness.new_leaf_proof_after.siblings.len(), deserialized.new_leaf_proof_after.siblings.len());
+    
+    // Verify deserialized witness still works for verification
+    assert!(IndexedMerkleMap::verify_insert(&deserialized).is_ok());
+}
+
+#[test]
+fn test_update_witness_serialization() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Insert data to update
+    let key = Field::from_u32(100);
+    let old_value = Field::from_u32(200);
+    let new_value = Field::from_u32(300);
+    
+    map.insert(key, old_value).unwrap();
+    
+    // Generate update witness
+    let witness = map.update_and_generate_witness(key, new_value, true)
+        .unwrap()
+        .expect("Update witness generation should succeed");
+    
+    // Serialize
+    let serialized = borsh::to_vec(&witness).unwrap();
+    
+    // Deserialize
+    let deserialized: UpdateWitness = borsh::from_slice(&serialized).unwrap();
+    
+    // Verify all fields match
+    assert_eq!(witness.old_root, deserialized.old_root);
+    assert_eq!(witness.new_root, deserialized.new_root);
+    assert_eq!(witness.key, deserialized.key);
+    assert_eq!(witness.old_value, deserialized.old_value);
+    assert_eq!(witness.new_value, deserialized.new_value);
+    assert_eq!(witness.updated_leaf, deserialized.updated_leaf);
+    assert_eq!(witness.membership_proof.leaf, deserialized.membership_proof.leaf);
+    
+    // Verify deserialized witness still works for verification
+    assert!(IndexedMerkleMap::verify_update(&deserialized).is_ok());
+}
+
+#[test]
+fn test_large_insert_witness_serialization() {
+    let mut map = IndexedMerkleMap::new(15); // Larger tree
+    
+    // Insert many keys to create a complex tree
+    for i in 1..=50 {
+        map.insert(Field::from_u32(i * 10), Field::from_u32(i * 100)).unwrap();
+    }
+    
+    // Generate witness for insertion
+    let new_key = Field::from_u32(255);
+    let new_value = Field::from_u32(2550);
+    let witness = map.insert_and_generate_witness(new_key, new_value, true)
+        .unwrap()
+        .expect("Witness generation should succeed");
+    
+    // Serialize
+    let serialized = borsh::to_vec(&witness).unwrap();
+    
+    // Check size is reasonable (should be much less than the full tree)
+    assert!(serialized.len() < 5000, "Witness size too large: {} bytes", serialized.len());
+    
+    // Deserialize and verify
+    let deserialized: InsertWitness = borsh::from_slice(&serialized).unwrap();
+    assert!(IndexedMerkleMap::verify_insert(&deserialized).is_ok());
+}
+
+#[test]
+fn test_witness_batch_serialization() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Create multiple witnesses
+    let mut witnesses = Vec::new();
+    
+    // Insert initial keys
+    for i in 1..=3 {
+        map.insert(Field::from_u32(i * 20), Field::from_u32(i * 200)).unwrap();
+    }
+    
+    // Generate update witnesses
+    for i in 1..=3 {
+        let key = Field::from_u32(i * 20);
+        let new_value = Field::from_u32(i * 200 + 1000);
+        let witness = map.update_and_generate_witness(key, new_value, true)
+            .unwrap()
+            .expect("Update witness generation should succeed");
+        witnesses.push(witness);
+    }
+    
+    // Serialize the batch
+    let serialized = borsh::to_vec(&witnesses).unwrap();
+    
+    // Deserialize the batch
+    let deserialized: Vec<UpdateWitness> = borsh::from_slice(&serialized).unwrap();
+    
+    assert_eq!(witnesses.len(), deserialized.len());
+    
+    // Verify all deserialized witnesses
+    for witness in &deserialized {
+        assert!(IndexedMerkleMap::verify_update(witness).is_ok());
+    }
+}
+
+#[test]
+fn test_witness_serialization_consistency() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Setup
+    let key = Field::from_u32(42);
+    let value = Field::from_u32(420);
+    map.insert(key, value).unwrap();
+    
+    // Generate witness
+    let new_value = Field::from_u32(840);
+    let witness = map.update_and_generate_witness(key, new_value, true)
+        .unwrap()
+        .expect("Witness generation should succeed");
+    
+    // Serialize and deserialize multiple times
+    let serialized1 = borsh::to_vec(&witness).unwrap();
+    let deserialized1: UpdateWitness = borsh::from_slice(&serialized1).unwrap();
+    let serialized2 = borsh::to_vec(&deserialized1).unwrap();
+    let deserialized2: UpdateWitness = borsh::from_slice(&serialized2).unwrap();
+    
+    // All serializations should be identical
+    assert_eq!(serialized1, serialized2);
+    
+    // Both deserializations should work
+    assert!(IndexedMerkleMap::verify_update(&deserialized1).is_ok());
+    assert!(IndexedMerkleMap::verify_update(&deserialized2).is_ok());
+}
+
+#[test]
+fn test_empty_tree_witness_serialization() {
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Generate witness for first insertion (into empty tree except zero leaf)
+    let key = Field::from_u32(100);
+    let value = Field::from_u32(1000);
+    let witness = map.insert_and_generate_witness(key, value, true)
+        .unwrap()
+        .expect("Witness generation should succeed");
+    
+    // Serialize
+    let serialized = borsh::to_vec(&witness).unwrap();
+    
+    // Deserialize
+    let deserialized: InsertWitness = borsh::from_slice(&serialized).unwrap();
+    
+    // Verify witness for insertion into nearly empty tree
+    assert!(IndexedMerkleMap::verify_insert(&deserialized).is_ok());
+    assert_eq!(deserialized.tree_length, 1); // Only zero leaf before insertion
+}
+
+#[test]
+fn test_max_values_witness_serialization() {
+    use crypto_bigint::U256;
+    
+    let mut map = IndexedMerkleMap::new(10);
+    
+    // Use maximum field values
+    let max_key = Field::from_u256(U256::MAX);
+    let max_value = Field::from_u256(U256::from_u128(u128::MAX));
+    
+    map.insert(max_key, max_value).unwrap();
+    
+    // Generate update witness with max values
+    let new_max_value = Field::from_u256(U256::from_u64(u64::MAX));
+    let witness = map.update_and_generate_witness(max_key, new_max_value, true)
+        .unwrap()
+        .expect("Witness generation should succeed");
+    
+    // Serialize
+    let serialized = borsh::to_vec(&witness).unwrap();
+    
+    // Deserialize
+    let deserialized: UpdateWitness = borsh::from_slice(&serialized).unwrap();
+    
+    // Verify max values are preserved
+    assert_eq!(deserialized.key, max_key);
+    assert_eq!(deserialized.old_value, max_value);
+    assert_eq!(deserialized.new_value, new_max_value);
+    
+    // Verify witness still works
+    assert!(IndexedMerkleMap::verify_update(&deserialized).is_ok());
 }
