@@ -813,6 +813,8 @@ dependencies = [
  "o1-utils",
  "poly-commitment",
  "rand",
+ "rmp-serde",
+ "serde",
 ]
 
 [[package]]

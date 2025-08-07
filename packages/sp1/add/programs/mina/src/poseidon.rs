@@ -372,6 +372,7 @@ impl FiniteField {
         x
     }
 
+    #[allow(dead_code)]
     pub fn dot(x: &[U256], y: &[U256], p: &U256) -> U256 {
         let mut z = U256::ZERO;
         let n = x.len();

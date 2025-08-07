@@ -1,0 +1,10 @@
+[package]
+version = "0.1.0"
+name = "proof-program"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = { version = "5.1.0" }
+proof-lib = { path = "../../lib/proof" }
+
+

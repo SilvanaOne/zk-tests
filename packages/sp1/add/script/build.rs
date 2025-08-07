@@ -10,6 +10,7 @@ fn main() {
     build_program_with_args("../programs/sha256", Default::default());
     build_program_with_args("../programs/p3", Default::default());
     build_program_with_args("../programs/ps", Default::default());
+    build_program_with_args("../programs/proof", Default::default());
     build_program_with_args("../programs/mina", Default::default());
 
     // Generate ABI from Add.sol

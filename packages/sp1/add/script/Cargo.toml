@@ -36,7 +36,8 @@ clap = { version = "4.0", features = ["derive", "env"] }
 tracing = "0.1.40"
 hex = "0.4.3"
 alloy-sol-types = { workspace = true }
-add-lib = { path = "../lib" }
+add-lib = { path = "../lib/add" }
+proof-lib = { path = "../lib/proof" }
 dotenv = "0.15.0"
 alloy = { version = "0.6", features = ["full"] }
 eyre = "0.6"

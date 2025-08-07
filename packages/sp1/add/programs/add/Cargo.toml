@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 alloy-sol-types = { workspace = true }
 sp1-zkvm = "5.1.0"
-add-lib = { path = "../../lib" }
+add-lib = { path = "../../lib/add" }

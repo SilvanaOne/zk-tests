@@ -11,6 +11,7 @@ import {
   Mina,
   fetchAccount,
   fetchLastBlock,
+  UInt32,
 } from "o1js";
 import { fetchMinaAccount, accountBalanceMina } from "@silvana-one/mina-utils";
 import { sleep } from "../src/sleep.js";
@@ -20,7 +21,7 @@ import { fetchZekoFee } from "../src/zeko-fee.js";
 const url = "http://m1.zeko.io/graphql";
 //const url = "https://devnet.zeko.io/graphql";
 const MAX_FEE = 10n;
-const COUNT = 100;
+const COUNT = 1;
 
 const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;
@@ -36,7 +37,8 @@ class BalanceContract extends SmartContract {
   @state(UInt64) record = State<UInt64>(UInt64.zero);
 
   @method
-  public async topup() {
+  public async topup(expiry: UInt32) {
+    this.network.globalSlotSinceGenesis.requireBetween(UInt32.zero, expiry);
     const balance = this.account.balance.getAndRequireEquals();
     const record = this.record.getAndRequireEquals();
     balance.assertEquals(record.mul(4));
@@ -75,6 +77,7 @@ describe("balance instability check", () => {
 
     const vk = (await BalanceContract.compile()).verificationKey;
     console.log("vk", vk.hash.toJSON());
+    console.log("max slot", UInt32.MAXINT().toBigint());
   });
   it(`should deploy`, async () => {
     await fetchMinaAccount({ publicKey: sender, force: true });
@@ -166,7 +169,7 @@ describe("balance instability check", () => {
       const tx = await Mina.transaction(
         { sender, fee: 100_000_000, memo: `step ${i + 1}` },
         async () => {
-          await balanceContract.topup();
+          await balanceContract.topup(UInt32.from(1_000_000n));
         }
       );
       await tx.prove();

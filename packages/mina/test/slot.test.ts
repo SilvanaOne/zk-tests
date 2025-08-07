@@ -4,7 +4,7 @@ import { fetchLastBlock } from "o1js";
 import { initBlockchain } from "@silvana-one/mina-utils";
 
 type Chain = "zeko" | "devnet" | "mainnet";
-const chain: Chain = "mainnet" as Chain;
+const chain: Chain = "devnet" as Chain;
 
 describe("Slot", () => {
   it(`should get slot`, async () => {

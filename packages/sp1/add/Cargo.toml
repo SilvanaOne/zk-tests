@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "lib",
+    "lib/add",
+    "lib/proof",
     "sui/client",
     "programs/add",
     "programs/aggregate",
@@ -8,6 +9,7 @@ members = [
     "programs/p3",
     "programs/ps",
     "programs/mina",
+    "programs/proof",
     "script",
 ]
 resolver = "2"
