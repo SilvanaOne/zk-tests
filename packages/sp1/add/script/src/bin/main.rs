@@ -12,10 +12,12 @@
 
 use add_lib::PublicValuesStruct;
 use add_script::proof::{self, FinalProofType};
-use alloy_sol_types::SolType;
+use add_script::map::{AccountManager, AccountOperation};
+use alloy_sol_types::{SolType, private::U256};
 use clap::Parser;
 use sp1_sdk::{ProverClient, SP1Stdin, include_elf};
 use std::time::Instant;
+use rand::{thread_rng, Rng};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const ADD_ELF: &[u8] = include_elf!("add-program");
@@ -33,8 +35,8 @@ struct Args {
     #[arg(long)]
     prove: bool,
 
-    #[arg(long, default_value = "10")]
-    length: u32,
+    #[arg(long, alias = "length", default_value = "10")]
+    operations: u32,
 
     #[arg(long, default_value = "2")]
     proofs: u32,
@@ -53,40 +55,71 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Setup the inputs.
+    // Generate random account operations
+    let mut rng = thread_rng();
+    let operations: Vec<AccountOperation> = (0..args.operations)
+        .map(|_| {
+            let account_num = rng.gen_range(1..=100);
+            let add_value = rng.gen_range(1..=1000);
+            AccountOperation::new(account_num, add_value)
+        })
+        .collect();
+
+    println!("Generated {} account operations", operations.len());
+
+    // Create account manager and process operations
+    let mut manager = AccountManager::new(16); 
+    let initial_root = manager.get_root();
+    
+    // Setup the inputs for zkVM
     let mut stdin = SP1Stdin::new();
-    let old_sum = 0u32;
-    let values: Vec<u32> = (10..10 + args.length).collect();
-
-    stdin.write(&old_sum);
-    stdin.write(&args.length);
-    for &value in &values {
-        stdin.write(&value);
+    
+    // Write initial root as [u8; 32]
+    let root_bytes: [u8; 32] = initial_root.as_bytes().try_into().unwrap();
+    stdin.write(&root_bytes);
+    
+    // Write number of operations
+    stdin.write(&args.operations);
+    
+    // Process operations and collect actions
+    let mut actions = Vec::new();
+    for op in &operations {
+        let action = manager.process_action(op.account_num, op.add_value)
+            .expect("Failed to process action");
+        
+        // Serialize the action for zkVM
+        let action_bytes = borsh::to_vec(&action).expect("Failed to serialize action");
+        stdin.write(&action_bytes);
+        
+        actions.push(action);
     }
-
-    println!("old_sum: {old_sum}",);
-    println!("length: {}", args.length);
-    println!("values: {values:?}");
+    
+    let final_root = manager.get_root();
+    println!("\nInitial root: 0x{}", hex::encode(initial_root.as_bytes()));
+    println!("Final root: 0x{}", hex::encode(final_root.as_bytes()));
 
     if args.execute {
         // Execute the program
-        // Setup the prover client.
         let client = ProverClient::from_env();
         let (output, report) = client.execute(ADD_ELF, &stdin).run().unwrap();
         println!("Program executed successfully.");
 
-        // Read the output.
-        let decoded = PublicValuesStruct::abi_decode(output.as_slice()).unwrap();
-        let PublicValuesStruct { old_sum, new_sum } = decoded;
-        println!("old_sum: {old_sum}");
-        println!("new_sum: {new_sum}");
+        // Read the output
+        let output_bytes = output.as_slice();
+        let decoded = PublicValuesStruct::abi_decode(output_bytes).unwrap();
+        let PublicValuesStruct { old_root, new_root } = decoded;
+        
+        // Convert roots to U256 for comparison
+        let old_root_bytes: [u8; 32] = initial_root.as_bytes().try_into().unwrap();
+        let expected_old_root = U256::from_be_bytes(old_root_bytes);
+        let new_root_bytes: [u8; 32] = final_root.as_bytes().try_into().unwrap();
+        let expected_new_root = U256::from_be_bytes(new_root_bytes);
+        
+        println!("Old root matches: {}", old_root == expected_old_root);
+        println!("New root matches: {}", new_root == expected_new_root);
 
-        let expected_new_sum = add_lib::add_many(&values, old_sum);
-        assert_eq!(new_sum, expected_new_sum);
-        println!("Values are correct!");
-
-        // Record the number of cycles executed.
-        println!("Number of cycles: {}", report.total_instruction_count());
+        // Record the number of cycles executed
+        println!("\nNumber of cycles: {}", report.total_instruction_count());
         println!("Number of syscalls: {}", report.total_syscall_count());
         println!(
             "Total instructions: {}",
@@ -102,39 +135,38 @@ fn main() {
         println!("{report}");
     } else if args.proofs == 1 {
         // Single proof mode
-        // Setup the prover client.
-        let client = ProverClient::from_env();
         let setup_start = Instant::now();
-        let (pk, vk) = client.setup(ADD_ELF);
-        let setup_duration = setup_start.elapsed();
-        println!("Setup completed in {:.2}s", setup_duration.as_secs_f64());
-
-        let proof = proof::generate_single_proof(&client, &pk, &stdin, FinalProofType::Core)
+        
+        let proof = proof::generate_single_proof(ADD_ELF, &stdin, FinalProofType::Core)
             .expect("failed to generate proof");
         proof::print_proof_statistics(&proof);
 
+        // Get verification key for verification
+        let client = ProverClient::from_env();
+        let (_pk, vk) = client.setup(ADD_ELF);
+        
         let verify_duration =
-            proof::verify_proof(&client, &proof, &vk).expect("failed to verify proof");
+            proof::verify_proof(&proof, &vk).expect("failed to verify proof");
+        
+        let setup_duration = setup_start.elapsed();
 
         // Print performance summary
         println!("\n=== Performance Summary ===");
-        println!("Setup time:      {:.2}s", setup_duration.as_secs_f64());
+        println!("Total time:      {:.2}s", setup_duration.as_secs_f64());
         println!("Verification:    {:.2}s", verify_duration.as_secs_f64());
     } else {
         // Multiple proofs with aggregation
-        let setup_start = Instant::now();
         let result = proof::generate_and_aggregate_proofs(
             ADD_ELF,
             AGGREGATE_ELF,
             args.proofs,
-            args.length,
+            args.operations,
             FinalProofType::Core,
         )
         .expect("failed to generate and aggregate proofs");
-        let setup_duration = setup_start.elapsed();
 
         proof::print_proof_statistics(&result.proof);
         proof::print_aggregated_results(&result.aggregated_values);
-        proof::print_aggregation_performance_summary(setup_duration, &result);
+        proof::print_aggregation_performance_summary(&result);
     }
 }

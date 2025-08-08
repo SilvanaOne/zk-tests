@@ -1,6 +1,6 @@
 //! A program that aggregates multiple SP1 add proofs.
 //! This program verifies multiple add program proofs and ensures they form a valid chain
-//! where each proof's old_sum matches the previous proof's new_sum.
+//! where each proof's new_root matches the next proof's old_root.
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
@@ -42,26 +42,24 @@ pub fn main() {
         decoded_values.push(decoded);
     }
 
-    // Verify that proofs form a valid chain: old_sum[i+1] == new_sum[i]
+    // Verify that proofs form a valid chain: new_root[i] == old_root[i+1]
     for i in 0..decoded_values.len() - 1 {
         assert_eq!(
-            decoded_values[i + 1].old_sum,
-            decoded_values[i].new_sum,
-            "Proof chain broken: proof {} new_sum ({}) != proof {} old_sum ({})",
+            decoded_values[i].new_root,
+            decoded_values[i + 1].old_root,
+            "Proof chain broken: proof {} new_root != proof {} old_root",
             i,
-            decoded_values[i].new_sum,
-            i + 1,
-            decoded_values[i + 1].old_sum
+            i + 1
         );
     }
 
-    // Create aggregated result: first old_sum and last new_sum
-    let first_old_sum = decoded_values[0].old_sum;
-    let last_new_sum = decoded_values[decoded_values.len() - 1].new_sum;
+    // Create aggregated result: first old_root and last new_root
+    let first_old_root = decoded_values[0].old_root;
+    let last_new_root = decoded_values[decoded_values.len() - 1].new_root;
 
     let aggregated_values = PublicValuesStruct {
-        old_sum: first_old_sum,
-        new_sum: last_new_sum,
+        old_root: first_old_root,
+        new_root: last_new_root,
     };
 
     // Commit the aggregated public values

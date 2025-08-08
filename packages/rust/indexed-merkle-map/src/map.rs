@@ -4,6 +4,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use alloc::vec;
 use alloc::collections::BTreeMap;
 use crate::types::{
     Field, Hash, Leaf, MembershipProof, NonMembershipProof, 

@@ -7,3 +7,5 @@ edition = "2021"
 alloy-sol-types = { workspace = true }
 sp1-zkvm = "5.1.0"
 add-lib = { path = "../../lib/add" }
+indexed-merkle-map = { path = "../../../../rust/indexed-merkle-map", default-features = false }
+borsh = { version = "1.5", default-features = false, features = ["derive"] }

@@ -14,15 +14,15 @@ help:
 	@echo "Building and Execution:"
 	@echo "  build          - Build the SP1 program"
 	@echo "  execute        - Execute the program without generating proof"
-	@echo "                   Usage: make execute LENGTH=10"
+	@echo "                   Usage: make execute OPERATIONS=10"
 	@echo ""
 	@echo "Proof Generation:"
 	@echo "  prove-core     - Generate SP1 core proof"
-	@echo "                   Usage: make prove-core LENGTH=10 PROOFS=2"
+	@echo "                   Usage: make prove-core OPERATIONS=10 PROOFS=2"
 	@echo "  prove-groth16  - Generate Groth16 EVM proof and fixture"
-	@echo "                   Usage: make prove-groth16 LENGTH=10 PROOFS=2"
+	@echo "                   Usage: make prove-groth16 OPERATIONS=10 PROOFS=2"
 	@echo "  prove-plonk    - Generate PLONK EVM proof and fixture"
-	@echo "                   Usage: make prove-plonk LENGTH=10 PROOFS=2"
+	@echo "                   Usage: make prove-plonk OPERATIONS=10 PROOFS=2"
 	@echo "  vkey          - Get verification keys for both add and aggregate programs"
 	@echo ""
 	@echo "Contract Deployment:"
@@ -70,10 +70,10 @@ build:
 
 execute:
 	@echo "Executing program without proof..."
-	@echo "Usage: make execute LENGTH=10"
+	@echo "Usage: make execute OPERATIONS=10"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release -- --execute --length $(or $(LENGTH),10); \
+	cd script && cargo run --release -- --execute --operations $(or $(OPERATIONS),10); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -82,10 +82,10 @@ execute:
 # Proof generation
 prove-core:
 	@echo "Generating SP1 core proof..."
-	@echo "Usage: make prove-core LENGTH=10 PROOFS=2"
+	@echo "Usage: make prove-core OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release -- --prove --length $(or $(LENGTH),10) --proofs $(or $(PROOFS),2); \
+	cd script && cargo run --release -- --prove --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -93,10 +93,10 @@ prove-core:
 
 prove-groth16:
 	@echo "Generating Groth16 EVM proof..."
-	@echo "Usage: make prove-groth16 LENGTH=10 PROOFS=2"
+	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system groth16 --length $(or $(LENGTH),10) --proofs $(or $(PROOFS),2); \
+	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -104,10 +104,10 @@ prove-groth16:
 
 prove-plonk:
 	@echo "Generating PLONK EVM proof..."
-	@echo "Usage: make prove-plonk LENGTH=10 PROOFS=2"
+	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system plonk --length $(or $(LENGTH),10) --proofs $(or $(PROOFS),2); \
+	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \

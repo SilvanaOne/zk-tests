@@ -3,8 +3,8 @@ use alloy_sol_types::sol;
 sol! {
     /// The public values encoded as a struct that can be easily deserialized inside Solidity.
     struct PublicValuesStruct {
-        uint32 old_sum;
-        uint32 new_sum;
+        uint256 old_root;
+        uint256 new_root;
     }
 }
 
