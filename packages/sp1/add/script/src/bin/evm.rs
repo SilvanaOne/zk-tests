@@ -11,11 +11,13 @@
 //! ```
 
 use add_lib::PublicValuesStruct;
+use add_script::map::{AccountManager, AccountOperation};
 use add_script::proof::{self, FinalProofType};
+use add_script::solana::create_solana_fixture;
 use add_script::sui::convert_sp1_proof_for_sui;
-use add_script::solana::{create_solana_fixture};
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
+use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{
     HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey, include_elf,
@@ -31,8 +33,8 @@ pub const AGGREGATE_ELF: &[u8] = include_elf!("aggregate-program");
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct EVMArgs {
-    #[arg(long, default_value = "10")]
-    length: u32,
+    #[arg(long, alias = "length", default_value = "10")]
+    operations: u32,
     #[arg(long, value_enum, default_value = "groth16")]
     system: ProofSystem,
     #[arg(long, default_value = "2")]
@@ -51,8 +53,8 @@ enum ProofSystem {
 #[serde(rename_all = "camelCase")]
 struct SP1AddProofFixture {
     // Common fields
-    old_sum: u32,
-    new_sum: u32,
+    old_root: String,
+    new_root: String,
 
     // Ethereum fields (keep existing for backward compatibility)
     vkey: String,
@@ -93,25 +95,53 @@ fn generate_single_evm_proof(args: &EVMArgs) {
     let client = ProverClient::from_env();
     println!("Setting up proving keys...");
     let setup_start = Instant::now();
-    let (pk, vk) = client.setup(ADD_ELF);
+    let (_pk, vk) = client.setup(ADD_ELF);
     let setup_duration = setup_start.elapsed();
     println!("Setup completed in {:.2}s", setup_duration.as_secs_f64());
 
-    // Setup the inputs.
-    let mut stdin = SP1Stdin::new();
-    let old_sum = 0u32;
-    let values: Vec<u32> = (10..10 + args.length).collect();
+    // Generate random account operations
+    let mut rng = thread_rng();
+    let operations: Vec<AccountOperation> = (0..args.operations)
+        .map(|_| {
+            let account_num = rng.gen_range(1..=100);
+            let add_value = rng.gen_range(1..=1000);
+            AccountOperation::new(account_num, add_value)
+        })
+        .collect();
 
-    stdin.write(&old_sum);
-    stdin.write(&args.length);
-    for &value in &values {
-        stdin.write(&value);
+    println!("Generated {} account operations", operations.len());
+
+    // Create account manager and process operations
+    let mut manager = AccountManager::new(16);
+    let initial_root = manager.get_root();
+
+    // Setup the inputs for zkVM
+    let mut stdin = SP1Stdin::new();
+
+    // Write initial root as [u8; 32]
+    let root_bytes: [u8; 32] = initial_root.as_bytes().try_into().unwrap();
+    stdin.write(&root_bytes);
+
+    // Write number of operations
+    stdin.write(&args.operations);
+
+    // Process operations and collect actions
+    let mut actions = Vec::new();
+    for op in &operations {
+        let action = manager
+            .process_action(op.account_num, op.add_value)
+            .expect("Failed to process action");
+
+        // Serialize the action for zkVM
+        let action_bytes = borsh::to_vec(&action).expect("Failed to serialize action");
+        stdin.write(&action_bytes);
+
+        actions.push(action);
     }
 
-    println!("\nInput values:");
-    println!("  old_sum: {old_sum}");
-    println!("  length: {}", args.length);
-    println!("  values: {values:?}");
+    let final_root = manager.get_root();
+    println!("\nInitial root: 0x{}", hex::encode(initial_root.as_bytes()));
+    println!("Final root: 0x{}", hex::encode(final_root.as_bytes()));
     println!("  Proof System: {:?}", args.system);
 
     // Generate the proof based on the selected proof system.
@@ -120,13 +150,12 @@ fn generate_single_evm_proof(args: &EVMArgs) {
         ProofSystem::Groth16 => FinalProofType::Groth16,
     };
 
-    let proof = proof::generate_single_proof(&client, &pk, &stdin, final_proof_type)
+    let proof = proof::generate_single_proof(ADD_ELF, &stdin, final_proof_type)
         .expect("failed to generate proof");
 
     proof::print_proof_statistics(&proof);
 
-    let verify_duration =
-        proof::verify_proof(&client, &proof, &vk).expect("failed to verify proof");
+    let verify_duration = proof::verify_proof(&proof, &vk).expect("failed to verify proof");
 
     // Print performance summary
     println!("\n=== Performance Summary ===");
@@ -142,22 +171,20 @@ fn generate_aggregated_evm_proofs(args: &EVMArgs) {
         ProofSystem::Groth16 => FinalProofType::Groth16,
     };
 
-    let setup_start = Instant::now();
     let result = proof::generate_and_aggregate_proofs(
         ADD_ELF,
         AGGREGATE_ELF,
         args.proofs,
-        args.length,
+        args.operations,
         final_proof_type,
     )
     .expect("failed to generate and aggregate proofs");
-    let setup_duration = setup_start.elapsed();
 
     println!("Successfully generated aggregated {:?} proof!", args.system);
 
     proof::print_proof_statistics(&result.proof);
     proof::print_aggregated_results(&result.aggregated_values);
-    proof::print_aggregation_performance_summary(setup_duration, &result);
+    proof::print_aggregation_performance_summary(&result);
 
     create_proof_fixture(&result.proof, &result.aggregate_vk, args.system);
 }
@@ -170,7 +197,15 @@ fn create_proof_fixture(
 ) {
     // Deserialize the public values.
     let bytes = proof.public_values.as_slice();
-    let PublicValuesStruct { old_sum, new_sum } = PublicValuesStruct::abi_decode(bytes).unwrap();
+    let public_values = PublicValuesStruct::abi_decode(bytes).unwrap();
+    let old_root_hex = format!(
+        "0x{}",
+        hex::encode(public_values.old_root.to_be_bytes::<32>())
+    );
+    let new_root_hex = format!(
+        "0x{}",
+        hex::encode(public_values.new_root.to_be_bytes::<32>())
+    );
 
     // Generate Sui-compatible proof data (only for Groth16)
     let (sui_vkey, sui_public_values, sui_proof) = if system == ProofSystem::Groth16 {
@@ -210,8 +245,8 @@ fn create_proof_fixture(
     // Create the testing fixture so we can test things end-to-end.
     let fixture = SP1AddProofFixture {
         // Common fields
-        old_sum,
-        new_sum,
+        old_root: old_root_hex,
+        new_root: new_root_hex,
 
         // Ethereum fields (keep existing for backward compatibility)
         vkey: vk.bytes32().to_string(),

@@ -32,16 +32,16 @@ pub struct AddContractConfig {
 /// Public values structure matching the Move contract
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PublicValues {
-    pub old_sum: u32,
-    pub new_sum: u32,
+    pub old_root: String,  // u256 as hex string
+    pub new_root: String,  // u256 as hex string
 }
 
 /// Groth16 fixture data structure
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Groth16Fixture {
-    pub old_sum: u32,
-    pub new_sum: u32,
+    pub old_root: String,  // u256 as hex string
+    pub new_root: String,  // u256 as hex string
     pub vkey: String,
     pub public_values: String,
     pub proof: String,
@@ -223,9 +223,9 @@ impl AddSuiClient {
         sp1_system_vkey: Vec<u8>,
         public_inputs: Vec<u8>,
         proof_points: Vec<u8>,
-        old_sum: u32,
-        new_sum: u32,
-    ) -> Result<(u32, u32)> {
+        old_root: &str,  // u256 as hex string
+        new_root: &str,  // u256 as hex string
+    ) -> Result<(String, String)> {
         let package_id = self.config.package_id.ok_or_else(|| {
             anyhow::anyhow!("Package ID not configured. Set SUI_PACKAGE_ID environment variable.")
         })?;
@@ -240,8 +240,39 @@ impl AddSuiClient {
         let sp1_system_vkey_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&sp1_system_vkey)?))?;
         let public_inputs_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&public_inputs)?))?;
         let proof_points_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&proof_points)?))?;
-        let old_sum_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&old_sum)?))?;
-        let new_sum_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&new_sum)?))?;
+        // Convert hex strings to u256 (32 bytes)
+        let old_root_bytes = hex::decode(old_root.trim_start_matches("0x"))
+            .map_err(|e| anyhow::anyhow!("Failed to decode old_root: {}", e))?;
+        let new_root_bytes = hex::decode(new_root.trim_start_matches("0x"))
+            .map_err(|e| anyhow::anyhow!("Failed to decode new_root: {}", e))?;
+        
+        // Ensure they are 32 bytes
+        if old_root_bytes.len() != 32 {
+            return Err(anyhow::anyhow!("old_root must be 32 bytes, got {}", old_root_bytes.len()));
+        }
+        if new_root_bytes.len() != 32 {
+            return Err(anyhow::anyhow!("new_root must be 32 bytes, got {}", new_root_bytes.len()));
+        }
+        
+        // For Sui, u256 is stored as 4 u64s in little-endian order
+        // Convert 32-byte big-endian to 4 u64s in little-endian
+        let mut old_root_u64s = [0u64; 4];
+        let mut new_root_u64s = [0u64; 4];
+        
+        for i in 0..4 {
+            // Read 8 bytes from the big-endian array (reversed)
+            let start = 24 - (i * 8);
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&old_root_bytes[start..start + 8]);
+            old_root_u64s[i] = u64::from_be_bytes(bytes);
+            
+            bytes.copy_from_slice(&new_root_bytes[start..start + 8]);
+            new_root_u64s[i] = u64::from_be_bytes(bytes);
+        }
+        
+        // BCS encode as array of 4 u64s (this is how Move u256 is represented)
+        let old_root_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&old_root_u64s)?))?;
+        let new_root_arg = ptb.input(CallArg::Pure(bcs::to_bytes(&new_root_u64s)?))?;
 
         // Call verify_add_proof function
         let module = Identifier::new("main")?;
@@ -257,8 +288,8 @@ impl AddSuiClient {
                 sp1_system_vkey_arg,
                 public_inputs_arg,
                 proof_points_arg,
-                old_sum_arg,
-                new_sum_arg,
+                old_root_arg,
+                new_root_arg,
             ],
         ));
 
@@ -325,14 +356,14 @@ impl AddSuiClient {
         }
 
         // Return the values since they were validated by the contract
-        Ok((old_sum, new_sum))
+        Ok((old_root.to_string(), new_root.to_string()))
     }
 
-    /// Get the current sum from the contract
-    pub async fn get_current_sum(&self) -> Result<u32> {
+    /// Get the current root from the contract
+    pub async fn get_current_root(&self) -> Result<String> {
         // This would require reading the contract state
-        // For now, return a placeholder
-        Ok(0)
+        // For now, return a placeholder (32 zero bytes as hex)
+        Ok("0x0000000000000000000000000000000000000000000000000000000000000000".to_string())
     }
 
     /// Helper function to get contract object reference
@@ -418,9 +449,9 @@ async fn main() -> Result<()> {
         println!("Contract ID: {contract_id}");
 
         // If contract is configured, try to read current state
-        match client.get_current_sum().await {
-            Ok(sum) => println!("Current sum: {sum}"),
-            Err(e) => println!("Could not read current sum: {e}"),
+        match client.get_current_root().await {
+            Ok(root) => println!("Current root: {root}"),
+            Err(e) => println!("Could not read current root: {e}"),
         }
     } else {
         println!(
@@ -478,8 +509,8 @@ async fn main() -> Result<()> {
                     })?;
 
                 println!(
-                    "📊 Using Sui fixture data: old_sum={}, new_sum={}",
-                    fixture.old_sum, fixture.new_sum
+                    "📊 Using Sui fixture data: old_root={}, new_root={}",
+                    fixture.old_root, fixture.new_root
                 );
                 println!("🔑 SP1 system vkey: {} bytes", sp1_system_vkey.len());
                 println!("📊 Public inputs: {} bytes", public_inputs.len());
@@ -503,15 +534,15 @@ async fn main() -> Result<()> {
                 sp1_system_vkey,
                 public_inputs,
                 proof_points,
-                fixture.old_sum,
-                fixture.new_sum,
+                &fixture.old_root,
+                &fixture.new_root,
             )
             .await
         {
-            Ok((old_sum, new_sum)) => {
+            Ok((old_root, new_root)) => {
                 println!("✅ Proof verified successfully!");
-                println!("   Old sum: {old_sum}");
-                println!("   New sum: {new_sum}");
+                println!("   Old root: {old_root}");
+                println!("   New root: {new_root}");
             }
             Err(e) => {
                 println!("❌ Proof verification failed: {e}");

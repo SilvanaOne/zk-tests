@@ -4,8 +4,8 @@ pragma solidity ^0.8.20;
 import {ISP1Verifier} from "@sp1-contracts/ISP1Verifier.sol";
 
 struct PublicValuesStruct {
-    uint32 old_sum;
-    uint32 new_sum;
+    uint256 old_root;
+    uint256 new_root;
 }
 
 /// @title Add.
@@ -23,25 +23,25 @@ contract Add {
     /// @notice The verification key for the add program.
     bytes32 public addProgramVKey;
 
-    /// @notice The current sum state.
-    uint32 public sum;
+    /// @notice The current root state.
+    uint256 public root;
 
-    /// @notice Event emitted when sum is updated.
-    event SumUpdated(uint32 oldSum, uint32 newSum);
+    /// @notice Event emitted when root is updated.
+    event RootUpdated(uint256 oldRoot, uint256 newRoot);
 
     constructor(address _verifier, bytes32 _addProgramVKey) {
         verifier = _verifier;
         addProgramVKey = _addProgramVKey;
-        sum = 0; // Initialize sum to 0
+        root = 0; // Initialize root to 0
     }
 
-    /// @notice The entrypoint for verifying the proof of an addition and updating the sum.
+    /// @notice The entrypoint for verifying the proof and updating the root.
     /// @param _proofBytes The encoded proof.
     /// @param _publicValues The encoded public values.
     function verifyAddProof(
         bytes calldata _publicValues,
         bytes calldata _proofBytes
-    ) public returns (uint32, uint32) {
+    ) public returns (uint256, uint256) {
         // Verify the proof first
         ISP1Verifier(verifier).verifyProof(
             addProgramVKey,
@@ -55,23 +55,23 @@ contract Add {
             (PublicValuesStruct)
         );
 
-        // Check that old_sum matches current sum state - disabled for now
-        // if (publicValues.old_sum != sum) {
-        //    revert InvalidOldSum(sum, publicValues.old_sum);
+        // Check that old_root matches current state - disabled for now
+        // if (publicValues.old_root != root) {
+        //    revert InvalidOldRoot(root, publicValues.old_root);
         //}
 
-        // Update the sum state
-        uint32 oldSum = sum;
-        sum = publicValues.new_sum;
+        // Update the root state
+        uint256 oldRoot = root;
+        root = publicValues.new_root;
 
         // Emit event
-        emit SumUpdated(oldSum, sum);
+        emit RootUpdated(oldRoot, root);
 
-        return (publicValues.old_sum, publicValues.new_sum);
+        return (publicValues.old_root, publicValues.new_root);
     }
 
-    /// @notice Get the current sum.
-    function getCurrentSum() public view returns (uint32) {
-        return sum;
+    /// @notice Get the current root.
+    function getCurrentRoot() public view returns (uint256) {
+        return root;
     }
 }

@@ -31,7 +31,7 @@ let old_value = map.update(key, new_value).unwrap();
 // Or use set() for insert-or-update (o1js compatible)
 let key2 = Field::from_u32(50);
 let value2 = Field::from_u32(400);
-let previous = map.set(key2, value2); // Returns None if key didn't exist
+let previous = map.set(key2, value2)?; // Returns Ok(None) if key didn't exist, Err(TreeFull) if at capacity
 
 // Get value with get_option() (returns Option<Field>)
 let value = map.get_option(&key).unwrap_or(Field::zero());

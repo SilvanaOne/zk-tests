@@ -14,6 +14,18 @@ use crate::types::{
 pub struct ProvableIndexedMerkleMap;
 
 impl ProvableIndexedMerkleMap {
+    /// Convert path indices (bits) to leaf index
+    /// Uses little-endian representation matching the map.rs implementation
+    fn path_indices_to_index(bits: &[bool]) -> usize {
+        let mut idx = 0usize;
+        for (level, &is_right) in bits.iter().enumerate() {
+            if is_right { 
+                idx |= 1usize << level; 
+            }
+        }
+        idx
+    }
+
     /// Combine internal root with length to create the final root
     /// This provides protection against collision attacks
     pub fn combine_root_with_length(internal_root: &Hash, length: usize) -> Hash {
@@ -208,7 +220,19 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::InvalidLeafIndex);
         }
         
-        // === CONSTRAINT 2: Verify non-membership ===
+        // === CONSTRAINT 2: Verify path-index consistency ===
+        // Ensure the Merkle proof paths correspond to the claimed indices
+        let low_idx = Self::path_indices_to_index(&witness.low_leaf_proof_before.path_indices);
+        if low_idx != witness.non_membership_proof.low_leaf.index {
+            return Err(IndexedMerkleMapError::InvalidLeafIndex);
+        }
+        
+        let new_idx = Self::path_indices_to_index(&witness.new_leaf_proof_after.path_indices);
+        if new_idx != witness.new_leaf_index {
+            return Err(IndexedMerkleMapError::InvalidLeafIndex);
+        }
+        
+        // === CONSTRAINT 3: Verify non-membership ===
         if !Self::verify_non_membership_proof(
             &witness.old_root,
             &witness.non_membership_proof,
@@ -218,7 +242,7 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::InvalidProof);
         }
         
-        // === CONSTRAINT 3: Verify key ordering ===
+        // === CONSTRAINT 4: Verify key ordering ===
         // The new key must be between low_leaf.key and low_leaf.next_key
         if witness.key <= witness.non_membership_proof.low_leaf.key {
             return Err(IndexedMerkleMapError::InvalidWitness);
@@ -228,7 +252,7 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::InvalidWitness);
         }
         
-        // === CONSTRAINT 4: Verify low leaf matches proof ===
+        // === CONSTRAINT 5: Verify low leaf matches proof ===
         // The low_leaf_proof_before should match the low leaf in non_membership_proof
         let low_leaf_computed = Self::compute_root(
             witness.non_membership_proof.low_leaf.hash(),
@@ -239,7 +263,7 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::ProofVerificationFailed);
         }
         
-        // === CONSTRAINT 5: Verify updated low leaf ===
+        // === CONSTRAINT 6: Verify updated low leaf ===
         // The updated low leaf should have the same key, value, index but next_key = new key
         if witness.updated_low_leaf.key != witness.non_membership_proof.low_leaf.key ||
            witness.updated_low_leaf.value != witness.non_membership_proof.low_leaf.value ||
@@ -248,7 +272,7 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::InvalidWitness);
         }
         
-        // === CONSTRAINT 6: Verify new leaf structure ===
+        // === CONSTRAINT 7: Verify new leaf structure ===
         // The new leaf should have correct key, value, next_key (from old low leaf), and index
         if witness.new_leaf.key != witness.key ||
            witness.new_leaf.value != witness.value ||
@@ -257,7 +281,7 @@ impl ProvableIndexedMerkleMap {
             return Err(IndexedMerkleMapError::InvalidWitness);
         }
         
-        // === CONSTRAINT 7: Verify final root computation ===
+        // === CONSTRAINT 8: Verify final root computation ===
         // Step 1: Apply low leaf update
         let _low_leaf_updated_root = Self::compute_root(
             witness.updated_low_leaf.hash(),

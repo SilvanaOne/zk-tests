@@ -337,16 +337,18 @@ impl IndexedMerkleMap {
     }
     
     /// Set a key-value pair (insert or update).
-    /// Returns the previous value as an Option (None if the key didn't exist before).
-    /// This matches the o1js implementation's set() method.
-    pub fn set(&mut self, key: Field, value: Field) -> Option<Field> {
+    /// Returns Ok(Some(previous_value)) if the key existed and was updated.
+    /// Returns Ok(None) if the key didn't exist and was successfully inserted.
+    /// Returns Err(TreeFull) if the tree is at capacity and the key doesn't exist.
+    pub fn set(&mut self, key: Field, value: Field) -> Result<Option<Field>, IndexedMerkleMapError> {
         // Check if key already exists
         if let Some(&leaf_index) = self.leaf_indices.get(&key) {
             // Key exists - update it
             // Find the leaf in sorted_leaves and update it
             let old_value = {
                 let leaf = self.sorted_leaves.iter_mut()
-                    .find(|l| l.key == key)?;
+                    .find(|l| l.key == key)
+                    .ok_or(IndexedMerkleMapError::KeyDoesNotExist)?;
                 
                 let old_value = leaf.value;
                 leaf.value = value;
@@ -358,20 +360,20 @@ impl IndexedMerkleMap {
                 old_value
             };
             
-            Some(old_value)
+            Ok(Some(old_value))
         } else {
             // Key doesn't exist - insert it
             // Check if tree is at capacity
             let max_leaves = 1usize << (self.height - 1);
             if self.next_index >= max_leaves {
                 // Tree is full, cannot insert
-                return None;
+                return Err(IndexedMerkleMapError::TreeFull);
             }
             
             // Perform insertion
             match self.insert(key, value) {
-                Ok(_) => None, // No previous value
-                Err(_) => None, // Insertion failed
+                Ok(_) => Ok(None), // Successfully inserted new key
+                Err(e) => Err(e), // Propagate any insertion errors
             }
         }
     }

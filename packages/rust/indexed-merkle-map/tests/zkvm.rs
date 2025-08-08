@@ -1,6 +1,67 @@
 use indexed_merkle_map::{Field, Hash, IndexedMerkleMap, ProvableIndexedMerkleMap, UpdateWitness, InsertWitness};
 
 #[test]
+fn test_insert_witness_path_index_consistency() {
+    // This test verifies that the path-index consistency checks are enforced
+    // This addresses the HIGH severity issue from the audit
+    let mut map = IndexedMerkleMap::new(4); // Small tree for easier testing
+    
+    // Insert initial keys
+    map.insert(Field::from_u32(10), Field::from_u32(100)).unwrap();
+    map.insert(Field::from_u32(30), Field::from_u32(300)).unwrap();
+    
+    // Generate a valid witness for inserting key 20
+    let witness = map.insert_and_generate_witness(Field::from_u32(20), Field::from_u32(200), true)
+        .unwrap()
+        .expect("Witness should be generated");
+    
+    // First verify the witness is valid
+    assert!(ProvableIndexedMerkleMap::insert(&witness).is_ok());
+    
+    // Now tamper with the path indices to create inconsistency
+    // Create a witness where the new_leaf_proof_after path doesn't match new_leaf_index
+    let mut bad_witness = witness.clone();
+    
+    // Flip a bit in the path to make it point to a different index
+    if !bad_witness.new_leaf_proof_after.path_indices.is_empty() {
+        bad_witness.new_leaf_proof_after.path_indices[0] = !bad_witness.new_leaf_proof_after.path_indices[0];
+    }
+    
+    // This should now fail due to path-index inconsistency
+    let result = ProvableIndexedMerkleMap::insert(&bad_witness);
+    assert!(result.is_err(), "Should reject witness with inconsistent new leaf path indices");
+    
+    // Similarly test for low_leaf_proof_before path inconsistency
+    let mut bad_witness2 = witness.clone();
+    if !bad_witness2.low_leaf_proof_before.path_indices.is_empty() {
+        bad_witness2.low_leaf_proof_before.path_indices[0] = !bad_witness2.low_leaf_proof_before.path_indices[0];
+    }
+    
+    let result2 = ProvableIndexedMerkleMap::insert(&bad_witness2);
+    assert!(result2.is_err(), "Should reject witness with inconsistent low leaf path indices");
+}
+
+#[test]
+fn test_insert_witness_wrong_index_claim() {
+    // Test that claiming a wrong index (but with correct path) is also rejected
+    let mut map = IndexedMerkleMap::new(4);
+    
+    map.insert(Field::from_u32(10), Field::from_u32(100)).unwrap();
+    
+    let witness = map.insert_and_generate_witness(Field::from_u32(20), Field::from_u32(200), true)
+        .unwrap()
+        .expect("Witness should be generated");
+    
+    // Tamper with the claimed index (but keep path consistent with original)
+    let mut bad_witness = witness.clone();
+    bad_witness.new_leaf_index = witness.new_leaf_index + 1; // Wrong index claim
+    
+    // This should fail because new_leaf_index != tree_length
+    let result = ProvableIndexedMerkleMap::insert(&bad_witness);
+    assert!(result.is_err(), "Should reject witness with wrong new_leaf_index");
+}
+
+#[test]
 fn test_update_with_witness() {
     let mut map = IndexedMerkleMap::new(10);
     

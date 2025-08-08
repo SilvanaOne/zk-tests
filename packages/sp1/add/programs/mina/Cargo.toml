@@ -1,7 +1,7 @@
 [package]
 version = "0.1.0"
 name = "mina-program"
-edition = "2021"
+edition = "2024"
 
 [lib]
 name = "mina_lib"

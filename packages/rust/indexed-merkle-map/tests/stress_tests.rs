@@ -85,19 +85,20 @@ fn test_set_at_maximum_capacity() {
     // Fill to capacity
     let key1 = Field::from_u32(10);
     let value1 = Field::from_u32(100);
-    map.set(key1, value1);
+    map.set(key1, value1).unwrap();
     
     // Try to set a new key when at capacity
     let key2 = Field::from_u32(20);
     let value2 = Field::from_u32(200);
     let result = map.set(key2, value2);
     
-    // set() should return None when it can't insert
-    assert_eq!(result, None);
+    // set() should return Err(TreeFull) when it can't insert
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), IndexedMerkleMapError::TreeFull);
     
     // But updating existing key with set() should work
     let new_value = Field::from_u32(150);
-    let prev = map.set(key1, new_value);
+    let prev = map.set(key1, new_value).unwrap();
     assert_eq!(prev, Some(value1));
 }
 

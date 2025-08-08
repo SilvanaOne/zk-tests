@@ -33,7 +33,7 @@ fn main() {
     println!("\nUsing set() for insert-or-update:");
     let key2 = Field::from_u32(50);
     let value2 = Field::from_u32(400);
-    let previous = map.set(key2, value2); // Returns None if key didn't exist
+    let previous = map.set(key2, value2).expect("Set should succeed"); // Returns None if key didn't exist
     match previous {
         None => println!("  ✓ Set new key=50, value=400 (key didn't exist)"),
         Some(v) => println!("  ✓ Updated key=50 from value={} to value=400", v.to_u256()),

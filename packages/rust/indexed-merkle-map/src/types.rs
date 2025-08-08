@@ -66,14 +66,29 @@ impl Hash {
         Hash([0u8; 32])
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    /// Create a Hash from a byte array
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        Hash(bytes)
+    }
+
+    /// Try to create a Hash from a byte slice
+    /// Returns None if the slice is not exactly 32 bytes
+    pub fn try_from_slice(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != 32 {
+            return None;
+        }
         let mut hash = [0u8; 32];
-        hash.copy_from_slice(&bytes[..32]);
-        Hash(hash)
+        hash.copy_from_slice(bytes);
+        Some(Hash(hash))
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+
+    /// Get the inner byte array
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0
     }
 
     pub fn to_u256(&self) -> U256 {
@@ -86,7 +101,9 @@ pub fn sha256_hash(data: &[u8]) -> Hash {
     let mut hasher = Sha256::new();
     hasher.update(data);
     let result = hasher.finalize();
-    Hash::from_bytes(&result)
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&result);
+    Hash::from_bytes(bytes)
 }
 
 /// Hash two hashes together (for merkle tree nodes)
@@ -118,8 +135,29 @@ impl Field {
         Self::from_u256(U256::from_u32(val))
     }
 
+    /// Create a Field from a byte array
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        Field(bytes)
+    }
+
+    /// Try to create a Field from a byte slice
+    /// Returns None if the slice is not exactly 32 bytes
+    pub fn try_from_slice(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != 32 {
+            return None;
+        }
+        let mut field_bytes = [0u8; 32];
+        field_bytes.copy_from_slice(bytes);
+        Some(Field(field_bytes))
+    }
+
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
+    }
+
+    /// Get the inner byte array
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0
     }
 }
 

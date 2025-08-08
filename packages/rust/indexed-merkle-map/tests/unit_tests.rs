@@ -97,8 +97,8 @@ fn test_set_insert_new_key() {
     let key = Field::from_u32(100);
     let value = Field::from_u32(200);
     
-    // Set should return None for a new key
-    let previous = map.set(key, value);
+    // Set should return Ok(None) for a new key
+    let previous = map.set(key, value).unwrap();
     assert_eq!(previous, None);
     
     // Verify the key now exists with correct value
@@ -114,10 +114,10 @@ fn test_set_update_existing_key() {
     let value2 = Field::from_u32(300);
     
     // First set
-    map.set(key, value1);
+    map.set(key, value1).unwrap();
     
     // Second set should return the previous value
-    let previous = map.set(key, value2);
+    let previous = map.set(key, value2).unwrap();
     assert_eq!(previous, Some(value1));
     
     // Verify the new value
@@ -184,7 +184,7 @@ fn test_set_multiple_keys() {
     
     // First set should return None for all
     for (key, value) in &keys_values {
-        let previous = map.set(*key, *value);
+        let previous = map.set(*key, *value).unwrap();
         assert_eq!(previous, None);
     }
     
@@ -196,7 +196,7 @@ fn test_set_multiple_keys() {
     // Update all values
     for (i, (key, value)) in keys_values.iter().enumerate() {
         let new_value = Field::from_u32((i as u32 + 1) * 1000);
-        let previous = map.set(*key, new_value);
+        let previous = map.set(*key, new_value).unwrap();
         assert_eq!(previous, Some(*value));
     }
 }
@@ -212,7 +212,7 @@ fn test_set_zero_key() {
     
     // Update zero key
     let new_value = Field::from_u32(100);
-    let previous = map.set(zero_key, new_value);
+    let previous = map.set(zero_key, new_value).unwrap();
     assert_eq!(previous, Some(Field::zero()));
     
     // Verify update
@@ -228,20 +228,21 @@ fn test_set_at_capacity() {
     for i in 1..4 {
         let key = Field::from_u32(i * 10);
         let value = Field::from_u32(i * 100);
-        let previous = map.set(key, value);
+        let previous = map.set(key, value).unwrap();
         assert_eq!(previous, None);
     }
     
-    // Tree is at capacity, next set for a new key should return None
+    // Tree is at capacity, next set for a new key should return Err(TreeFull)
     let key = Field::from_u32(100);
     let value = Field::from_u32(1000);
     let result = map.set(key, value);
-    assert_eq!(result, None); // Cannot insert, tree is full
+    assert!(result.is_err()); // Should return Err(TreeFull)
+    assert_eq!(result.unwrap_err(), IndexedMerkleMapError::TreeFull);
     
     // But we can still update existing keys
     let existing_key = Field::from_u32(10);
     let new_value = Field::from_u32(999);
-    let previous = map.set(existing_key, new_value);
+    let previous = map.set(existing_key, new_value).unwrap();
     assert_eq!(previous, Some(Field::from_u32(100)));
 }
 
@@ -259,13 +260,13 @@ fn test_workflow_increment_counter() {
     let new_value = Field::from_u32(current_u32 + 1);
     
     // Set the new value
-    let previous = map.set(key, new_value);
+    let previous = map.set(key, new_value).unwrap();
     assert_eq!(previous, None); // First time setting this key
     
     // Increment again
     let _current_value = map.get_option(&key).unwrap();
     let new_value = Field::from_u32(2); // We know it's 1, so increment to 2
-    let previous = map.set(key, new_value);
+    let previous = map.set(key, new_value).unwrap();
     assert_eq!(previous, Some(Field::from_u32(1)));
     
     // Final value should be 2
@@ -282,7 +283,7 @@ fn test_set_preserves_tree_properties() {
     for k in keys {
         let key = Field::from_u32(k);
         let value = Field::from_u32(k * 10);
-        map.set(key, value);
+        map.set(key, value).unwrap();
     }
     
     // Verify sorted order is maintained
@@ -545,4 +546,100 @@ fn test_invalid_height_zero() {
 #[should_panic(expected = "Height must be between 1 and 32")]
 fn test_invalid_height_too_large() {
     IndexedMerkleMap::new(33);
+}
+
+#[test]
+fn test_hash_from_bytes() {
+    // Test creating Hash from [u8; 32]
+    let bytes: [u8; 32] = [1; 32];
+    let hash = Hash::from_bytes(bytes);
+    assert_eq!(hash.to_bytes(), bytes);
+    
+    // Test round-trip conversion
+    let original = Hash::from_bytes(bytes);
+    let converted = Hash::from_bytes(original.to_bytes());
+    assert_eq!(original, converted);
+}
+
+#[test]
+fn test_hash_try_from_slice() {
+    // Valid 32-byte slice
+    let bytes = vec![2u8; 32];
+    let hash = Hash::try_from_slice(&bytes);
+    assert!(hash.is_some());
+    assert_eq!(hash.unwrap().to_bytes(), [2u8; 32]);
+    
+    // Invalid size - too short
+    let short_bytes = vec![3u8; 16];
+    let hash = Hash::try_from_slice(&short_bytes);
+    assert!(hash.is_none());
+    
+    // Invalid size - too long
+    let long_bytes = vec![4u8; 64];
+    let hash = Hash::try_from_slice(&long_bytes);
+    assert!(hash.is_none());
+    
+    // Exact 32 bytes from array
+    let array: [u8; 32] = [5; 32];
+    let hash = Hash::try_from_slice(&array);
+    assert!(hash.is_some());
+    assert_eq!(hash.unwrap().to_bytes(), array);
+}
+
+#[test]
+fn test_field_from_bytes() {
+    // Test creating Field from [u8; 32]
+    let bytes: [u8; 32] = [7; 32];
+    let field = Field::from_bytes(bytes);
+    assert_eq!(field.to_bytes(), bytes);
+    
+    // Test round-trip conversion
+    let original = Field::from_bytes(bytes);
+    let converted = Field::from_bytes(original.to_bytes());
+    assert_eq!(original, converted);
+}
+
+#[test]
+fn test_field_try_from_slice() {
+    // Valid 32-byte slice
+    let bytes = vec![8u8; 32];
+    let field = Field::try_from_slice(&bytes);
+    assert!(field.is_some());
+    assert_eq!(field.unwrap().to_bytes(), [8u8; 32]);
+    
+    // Invalid size - too short
+    let short_bytes = vec![9u8; 16];
+    let field = Field::try_from_slice(&short_bytes);
+    assert!(field.is_none());
+    
+    // Invalid size - too long
+    let long_bytes = vec![10u8; 64];
+    let field = Field::try_from_slice(&long_bytes);
+    assert!(field.is_none());
+    
+    // Exact 32 bytes from array
+    let array: [u8; 32] = [11; 32];
+    let field = Field::try_from_slice(&array);
+    assert!(field.is_some());
+    assert_eq!(field.unwrap().to_bytes(), array);
+}
+
+#[test]
+fn test_hash_new_equals_from_bytes() {
+    let bytes: [u8; 32] = [42; 32];
+    let hash1 = Hash::new(bytes);
+    let hash2 = Hash::from_bytes(bytes);
+    assert_eq!(hash1, hash2);
+}
+
+#[test] 
+fn test_field_and_hash_byte_compatibility() {
+    // Test that Field and Hash can share byte representations
+    let bytes: [u8; 32] = [99; 32];
+    let field = Field::from_bytes(bytes);
+    let hash = Hash::from_bytes(bytes);
+    
+    assert_eq!(field.to_bytes(), hash.to_bytes());
+    assert_eq!(field.as_bytes(), &bytes);
+    assert_eq!(hash.as_bytes(), &bytes);
 }

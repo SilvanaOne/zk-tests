@@ -1,6 +1,6 @@
 /// Module: Add SP1 Verifier
-/// This contract implements a simple example of verifying the proof of computing an addition
-/// and maintaining a running sum state, similar to the Ethereum Add.sol contract but adapted for Sui.
+/// This contract implements a simple example of verifying the proof of computing a Merkle root update
+/// and maintaining a root state, similar to the Ethereum Add.sol contract but adapted for Sui.
 module add_sp1::main;
 
 use std::hash;
@@ -14,27 +14,28 @@ use sui::groth16::{
 };
 
 /// Struct representing the public values from the SP1 proof
+#[allow(unused_field)]
 public struct PublicValues has copy, drop {
-    old_sum: u32,
-    new_sum: u32,
+    old_root: u256,
+    new_root: u256,
 }
 
 /// The main Add contract object that maintains state
 public struct AddContract has key, store {
     id: object::UID,
-    /// The current sum state
-    sum: u32,
+    /// The current root state
+    root: u256,
     /// The hash of the add program (32 bytes)
     add_program_hash: vector<u8>,
 }
 
-/// Event emitted when sum is updated
-public struct SumUpdated has copy, drop {
-    old_sum: u32,
-    new_sum: u32,
+/// Event emitted when root is updated
+public struct RootUpdated has copy, drop {
+    old_root: u256,
+    new_root: u256,
 }
 
-//const EInvalidOldSum: u64 = 1;
+//const EInvalidOldRoot: u64 = 1;
 //const EInvalidComputation: u64 = 2;
 const EProofVerificationFailed: u64 = 3;
 
@@ -45,7 +46,7 @@ public fun create_contract(
 ): AddContract {
     AddContract {
         id: object::new(ctx),
-        sum: 0, // Initialize sum to 0
+        root: 0, // Initialize root to 0
         add_program_hash,
     }
 }
@@ -64,18 +65,18 @@ public fun create_and_share_contract(
 /// The function ABI-encodes the provided values and compares the hash with the digest
 public fun verify_committed_values(
     committed_values_digest: vector<u8>,
-    old_sum: u32,
-    new_sum: u32,
+    old_root: u256,
+    new_root: u256,
 ): bool {
     // ABI-encode the public values (same as in the SP1 program)
-    // Format: [32-byte old_sum][32-byte new_sum] (each u32 padded to 32 bytes)
+    // Format: [32-byte old_root][32-byte new_root] (each u256 as 32 bytes)
     let mut encoded_bytes = std::vector::empty<u8>();
 
-    // Encode old_sum (32 bytes, big-endian, right-padded)
-    encode_u32_to_abi_field(&mut encoded_bytes, old_sum);
+    // Encode old_root (32 bytes, big-endian)
+    encode_u256_to_abi_field(&mut encoded_bytes, old_root);
 
-    // Encode new_sum (32 bytes, big-endian, right-padded)
-    encode_u32_to_abi_field(&mut encoded_bytes, new_sum);
+    // Encode new_root (32 bytes, big-endian)
+    encode_u256_to_abi_field(&mut encoded_bytes, new_root);
 
     // Hash the encoded bytes using SHA2-256 with top 3 bits masked (same as SP1 uses)
     let mut computed_digest = hash::sha2_256(encoded_bytes);
@@ -89,33 +90,41 @@ public fun verify_committed_values(
     computed_digest == committed_values_digest
 }
 
-/// Encode a u32 value to ABI format (32 bytes, big-endian, right-padded)
-fun encode_u32_to_abi_field(bytes: &mut vector<u8>, value: u32) {
-    // ABI encoding pads u32 to 32 bytes, with the value in the last 4 bytes (big-endian)
-    let mut i = 0u64;
-    while (i < 28) {
-        std::vector::push_back(bytes, 0u8); // Padding bytes
+/// Encode a u256 value to ABI format (32 bytes, big-endian)
+fun encode_u256_to_abi_field(bytes: &mut vector<u8>, value: u256) {
+    // ABI encoding uses full 32 bytes for u256 (big-endian)
+    // Convert u256 to bytes in big-endian order
+    let mut remaining = value;
+    let mut result_bytes = std::vector::empty<u8>();
+
+    // Extract 32 bytes from u256
+    let mut i = 0u8;
+    while (i < 32) {
+        let byte_val = ((remaining & 0xFF) as u8);
+        std::vector::push_back(&mut result_bytes, byte_val);
+        remaining = remaining >> 8;
         i = i + 1;
     };
 
-    // Add the 4 bytes of the u32 value (big-endian)
-    std::vector::push_back(bytes, ((value >> 24) & 0xFF) as u8); // Most significant byte
-    std::vector::push_back(bytes, ((value >> 16) & 0xFF) as u8);
-    std::vector::push_back(bytes, ((value >> 8) & 0xFF) as u8);
-    std::vector::push_back(bytes, (value & 0xFF) as u8); // Least significant byte
+    // Reverse to get big-endian order (we extracted in little-endian)
+    let mut j = 32u64;
+    while (j > 0) {
+        j = j - 1;
+        std::vector::push_back(bytes, *std::vector::borrow(&result_bytes, j));
+    };
 }
 
-/// The entrypoint for verifying the proof of an addition and updating the sum
-/// Returns (old_sum, new_sum)
+/// The entrypoint for verifying the proof of a root update
+/// Returns (old_root, new_root)
 /// Follows SP1-Sui pattern: accepts system verification key and converted proof data
 public fun verify_add_proof(
     contract: &mut AddContract,
     sp1_system_vkey: vector<u8>, // SP1 system verification key
     public_inputs: vector<u8>, // Converted public inputs (includes program hash)
     proof_points: vector<u8>, // Converted proof points
-    old_sum: u32, // Old sum from the proof
-    new_sum: u32, // New sum from the proof
-): (u32, u32) {
+    old_root: u256, // Old root from the proof
+    new_root: u256, // New root from the proof
+): (u256, u256) {
     // Verify the Groth16 proof using Sui's native verification with SP1 system key
     let pvk = prepare_verifying_key(&bn254(), &sp1_system_vkey);
     let public_inputs_parsed = public_proof_inputs_from_bytes(public_inputs);
@@ -168,36 +177,30 @@ public fun verify_add_proof(
     assert!(
         verify_committed_values(
             committed_values_digest,
-            old_sum,
-            new_sum,
+            old_root,
+            new_root,
         ),
         EProofVerificationFailed,
     );
 
-    // Check that old_sum matches current sum state
-    //assert!(public_values.old_sum == contract.sum, EInvalidOldSum);
+    // Check that old_root matches current root state
+    //assert!(public_values.old_root == contract.root, EInvalidOldRoot);
 
-    // Verify that new_sum > old_sum (since we're adding positive values)
-    // assert!(
-    //     public_values.new_sum >= public_values.old_sum,
-    //     EInvalidComputation,
-    // );
-
-    // Update the sum state
-    contract.sum = new_sum;
+    // Update the root state
+    contract.root = new_root;
 
     // Emit event with debug information
-    event::emit(SumUpdated {
-        old_sum,
-        new_sum,
+    event::emit(RootUpdated {
+        old_root,
+        new_root,
     });
 
-    (old_sum, new_sum)
+    (old_root, new_root)
 }
 
-/// Get the current sum
-public fun get_current_sum(contract: &AddContract): u32 {
-    contract.sum
+/// Get the current root
+public fun get_current_root(contract: &AddContract): u256 {
+    contract.root
 }
 
 /// Get the program hash

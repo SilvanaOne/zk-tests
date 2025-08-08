@@ -85,7 +85,7 @@ prove-core:
 	@echo "Usage: make prove-core OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release -- --prove --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
+	cd script && cargo run --release -- --prove --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -96,7 +96,7 @@ prove-groth16:
 	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
+	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -107,7 +107,7 @@ prove-plonk:
 	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=1"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),1); \
+	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -245,8 +245,8 @@ check-contract-groth16:
 		echo "❌ CONTRACT_ADDRESS_GROTH16 not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Current Sum:"
-	cd ethereum && cast call $(CONTRACT_ADDRESS_GROTH16) "getCurrentSum()" --rpc-url $(RPC_URL)
+	@echo "Current Root:"
+	cd ethereum && cast call $(CONTRACT_ADDRESS_GROTH16) "getCurrentRoot()" --rpc-url $(RPC_URL)
 	@echo "Verifier Address:"
 	cd ethereum && cast call $(CONTRACT_ADDRESS_GROTH16) "verifier()" --rpc-url $(RPC_URL)
 	@echo "Program VKey:"
@@ -259,29 +259,29 @@ check-contract-plonk:
 		echo "❌ CONTRACT_ADDRESS_PLONK not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Current Sum:"
-	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "getCurrentSum()" --rpc-url $(RPC_URL)
+	@echo "Current Root:"
+	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "getCurrentRoot()" --rpc-url $(RPC_URL)
 	@echo "Verifier Address:"
 	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "verifier()" --rpc-url $(RPC_URL)
 	@echo "Program VKey:"
 	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "addProgramVKey()" --rpc-url $(RPC_URL)
 
 # Contract interaction
-get-sum-groth16:
-	@echo "Getting current sum from Groth16 contract..."
+get-root-groth16:
+	@echo "Getting current root from Groth16 contract..."
 	@if [ -z "$(CONTRACT_ADDRESS_GROTH16)" ]; then \
 		echo "❌ CONTRACT_ADDRESS_GROTH16 not set in .env"; \
 		exit 1; \
 	fi
-	cd ethereum && cast call $(CONTRACT_ADDRESS_GROTH16) "getCurrentSum()" --rpc-url $(RPC_URL) | cast --to-dec
+	cd ethereum && cast call $(CONTRACT_ADDRESS_GROTH16) "getCurrentRoot()" --rpc-url $(RPC_URL)
 
-get-sum-plonk:
-	@echo "Getting current sum from PLONK contract..."
+get-root-plonk:
+	@echo "Getting current root from PLONK contract..."
 	@if [ -z "$(CONTRACT_ADDRESS_PLONK)" ]; then \
 		echo "❌ CONTRACT_ADDRESS_PLONK not set in .env"; \
 		exit 1; \
 	fi
-	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "getCurrentSum()" --rpc-url $(RPC_URL) | cast --to-dec
+	cd ethereum && cast call $(CONTRACT_ADDRESS_PLONK) "getCurrentRoot()" --rpc-url $(RPC_URL)
 
 # Testing
 test:

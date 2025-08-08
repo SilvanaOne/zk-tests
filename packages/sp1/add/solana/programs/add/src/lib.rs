@@ -12,8 +12,7 @@ pub struct SP1Groth16Proof {
 
 /// Verification key hash for the add program
 /// This should be updated with the actual vkey hash from your SP1 program
-const ADD_VKEY_HASH: &str = "0x004bb10cab9d6cbd507923397b000ca182e137d088000b635c8e2cae2e80fbc4";
-
+const ADD_VKEY_HASH: &str = "0x00bee99e7cb561bd60cb0bb43002e9ae74ff8769c756fd82e6a4b18d990f7680";
 #[program]
 pub mod add {
     use super::*;
@@ -38,28 +37,16 @@ pub mod add {
 
         // Deserialize and log the public values
         let reader = proof_data.sp1_public_inputs.as_slice();
-        
-        // SP1 public values are serialized as 32-byte values
-        // Read old_sum (32 bytes, but we only need the last 4 bytes for u32)
-        let old_sum_bytes = &reader[0..32];
-        let old_sum = u32::from_be_bytes([
-            old_sum_bytes[28],
-            old_sum_bytes[29],
-            old_sum_bytes[30],
-            old_sum_bytes[31],
-        ]);
-        
-        // Read new_sum (32 bytes, but we only need the last 4 bytes for u32)
-        let new_sum_bytes = &reader[32..64];
-        let new_sum = u32::from_be_bytes([
-            new_sum_bytes[28],
-            new_sum_bytes[29],
-            new_sum_bytes[30],
-            new_sum_bytes[31],
-        ]);
-        
+
+        // SP1 public values are serialized as 32-byte values representing uint256
+        // Read old_root (first 32 bytes)
+        let old_root_bytes = &reader[0..32];
+        // Read new_root (second 32 bytes)
+        let new_root_bytes = &reader[32..64];
+
         msg!("SP1 proof verified successfully!");
-        msg!("Public values: old_sum: {}, new_sum: {}", old_sum, new_sum);
+        msg!("Public values: old_root: 0x{}", hex::encode(old_root_bytes));
+        msg!("Public values: new_root: 0x{}", hex::encode(new_root_bytes));
 
         Ok(())
     }
