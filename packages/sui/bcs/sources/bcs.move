@@ -1,7 +1,7 @@
 module bcs::main;
 
 use std::string::String;
-use sui::bcs;
+use sui::bcs::{Self, to_bytes};
 use sui::event;
 
 public struct UserRequest has copy, drop, store {
@@ -18,11 +18,19 @@ public struct UserState has key, store {
     sequence: u64,
 }
 
+public struct UserStateData has copy, drop {
+    name: String,
+    data: u256,
+    signature: vector<u8>,
+    sequence: u64,
+}
+
 public struct UserStateEvent has copy, drop {
     name: String,
     data: u256,
     signature: vector<u8>,
     sequence: u64,
+    serialized_state: vector<u8>,
 }
 
 // Debug event to track deserialization process
@@ -70,11 +78,20 @@ public fun user_request_1(
     state.data = data;
     state.signature = signature;
     state.name = name;
+    let serialized_state = to_bytes(
+        &UserStateData {
+            name: state.name,
+            data: state.data,
+            signature: state.signature,
+            sequence: state.sequence,
+        },
+    );
     let event = UserStateEvent {
         name,
         data,
         signature,
         sequence: state.sequence,
+        serialized_state: serialized_state,
     };
     event::emit(event);
 }
@@ -88,11 +105,20 @@ fun user_request_2_internal(
     state.data = user_request.data;
     state.signature = user_request.signature;
     state.name = user_request.name;
+    let serialized_state = to_bytes(
+        &UserStateData {
+            name: user_request.name,
+            data: user_request.data,
+            signature: user_request.signature,
+            sequence: state.sequence,
+        },
+    );
     let event = UserStateEvent {
         name: user_request.name,
         data: user_request.data,
         signature: user_request.signature,
         sequence: state.sequence,
+        serialized_state: serialized_state,
     };
     event::emit(event);
 }

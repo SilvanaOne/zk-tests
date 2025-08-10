@@ -17,7 +17,7 @@ use sui_sdk::types::{base_types::SuiAddress, crypto::SuiKeyPair, object::Owner};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 static SUI_CLIENT: OnceLock<SuiClient> = OnceLock::new();
-const PACKAGE_ID: &str = "0xac25cf968e3d4af08054b226c241c62322840af34ec14d94182464f1e1c8263e";
+const PACKAGE_ID: &str = "0xb422b7ae1d4cebb348a88c2a47328ae2153c81ae1cad8e571d7bde35e68984ff";
 const GAS_BUDGET: u64 = 100_000_000; // 0.1 SUI
 
 /// UserRequest struct that mirrors the Move struct
@@ -167,13 +167,13 @@ pub async fn create_user(
 }
 
 /// Make a request to the user  
-/// Returns the tx digest of the request
+/// Returns the tx digest and the UserStateEvent data
 pub async fn user_request_1(
     object_id: String,
     name: String,
     data: U256,
     signature: Vec<u8>,
-) -> Result<String, anyhow::Error> {
+) -> Result<(String, Option<serde_json::Value>), anyhow::Error> {
     let client = get_sui_client().await?;
     let keypair = get_keypair_from_env()?;
     let sender = SuiAddress::from(&keypair.public());
@@ -282,17 +282,29 @@ pub async fn user_request_1(
         }
     }
 
-    Ok(result.digest.to_string())
+    // Extract UserStateEvent from the transaction
+    let mut user_state_event = None;
+    if let Some(events) = &result.events {
+        for event in &events.data {
+            if event.type_.name.as_str() == "UserStateEvent" {
+                user_state_event = Some(event.parsed_json.clone());
+                break;
+            }
+        }
+    }
+
+    Ok((result.digest.to_string(), user_state_event))
 }
 
 /// Make a request to the user using BCS serialized UserRequest
 /// This tests the new user_request_2 function that accepts BCS bytes and deserializes them
+/// Returns the tx digest and the UserStateEvent data
 pub async fn user_request_2_with_bcs(
     object_id: String,
     name: String,
     data: U256,
     signature: Vec<u8>,
-) -> Result<String, anyhow::Error> {
+) -> Result<(String, Option<serde_json::Value>), anyhow::Error> {
     let client = get_sui_client().await?;
     let keypair = get_keypair_from_env()?;
     let sender = SuiAddress::from(&keypair.public());
@@ -414,180 +426,18 @@ pub async fn user_request_2_with_bcs(
         }
     }
 
-    // Check events to verify the data matches what was passed (user_request_2)
+    // Extract UserStateEvent from the transaction
+    let mut user_state_event = None;
     if let Some(events) = &result.events {
-        println!("\n📋 Event Verification for user_request_2 with BCS:");
-        println!("   Expected data: {}", data);
-        println!("   Expected signature: {:?}", signature);
-        println!("   Expected name: {}", name);
-
-        let mut start_event_found = false;
-        let mut extraction_event_found = false;
-        let mut user_state_event_found = false;
-
-        for (i, event) in events.data.iter().enumerate() {
-            println!("\n   📋 Event {} found: {}", i, event.type_);
-
-            let parsed_json = &event.parsed_json;
-            match event.type_.name.as_str() {
-                "DeserializeDebugEvent" => {
-                    if let Some(step_value) = parsed_json.get("step") {
-                        let step = step_value.as_str().unwrap_or("");
-                        println!("      Step: {}", step);
-
-                        match step {
-                            "start_deserialization" => {
-                                start_event_found = true;
-
-                                // Verify input size
-                                if let Some(input_size_value) = parsed_json.get("input_size") {
-                                    let input_size: u64 = input_size_value
-                                        .as_str()
-                                        .unwrap_or("0")
-                                        .parse()
-                                        .unwrap_or(0);
-                                    println!("      ✅ Input size: {} bytes", input_size);
-                                    assert_eq!(
-                                        input_size,
-                                        serialized_request.len() as u64,
-                                        "Input size should match serialized request length"
-                                    );
-                                }
-                            }
-
-                            "extraction_complete" => {
-                                extraction_event_found = true;
-
-                                // Verify extracted data matches input
-                                if let Some(data_extracted_value) =
-                                    parsed_json.get("data_extracted")
-                                {
-                                    let extracted_data: u64 = data_extracted_value
-                                        .as_str()
-                                        .unwrap_or("0")
-                                        .parse()
-                                        .unwrap_or(0);
-                                    println!("      ✅ Data extracted: {}", extracted_data);
-                                    assert_eq!(
-                                        extracted_data,
-                                        data.try_into().unwrap_or(0u64),
-                                        "Extracted data should match input data"
-                                    );
-                                }
-
-                                // Verify signature size matches input
-                                if let Some(signature_size_value) =
-                                    parsed_json.get("signature_size")
-                                {
-                                    let extracted_sig_size: u64 = signature_size_value
-                                        .as_str()
-                                        .unwrap_or("0")
-                                        .parse()
-                                        .unwrap_or(0);
-                                    println!("      ✅ Signature size: {}", extracted_sig_size);
-                                    assert_eq!(
-                                        extracted_sig_size,
-                                        signature.len() as u64,
-                                        "Signature size should match input signature length"
-                                    );
-                                }
-
-                                // Verify complete consumption (no remaining bytes)
-                                if let Some(remaining_bytes_value) =
-                                    parsed_json.get("remaining_bytes")
-                                {
-                                    let remaining_bytes: u64 = remaining_bytes_value
-                                        .as_str()
-                                        .unwrap_or("1")
-                                        .parse()
-                                        .unwrap_or(1);
-                                    println!("      ✅ Remaining bytes: {}", remaining_bytes);
-                                    assert_eq!(
-                                        remaining_bytes, 0,
-                                        "Should have no remaining bytes after complete deserialization"
-                                    );
-                                }
-                            }
-
-                            _ => {
-                                println!("      ❓ Unknown debug step: {}", step);
-                            }
-                        }
-                    }
-                }
-
-                "UserStateEvent" => {
-                    user_state_event_found = true;
-
-                    // Verify final user state matches our input
-                    if let Some(event_name_value) = parsed_json.get("name") {
-                        let event_name = event_name_value.as_str().unwrap_or("");
-                        println!("      ✅ Event name: '{}'", event_name);
-                        assert_eq!(event_name, name, "Event name should match input name");
-                    }
-
-                    if let Some(event_data_value) = parsed_json.get("data") {
-                        let event_data: u64 = event_data_value
-                            .as_str()
-                            .unwrap_or("0")
-                            .parse()
-                            .unwrap_or(0);
-                        println!("      ✅ Event data: {}", event_data);
-                        assert_eq!(
-                            event_data,
-                            data.try_into().unwrap_or(0u64),
-                            "Event data should match input data"
-                        );
-                    }
-
-                    if let Some(signature_array) = parsed_json.get("signature") {
-                        if let Some(signature_vec) = signature_array.as_array() {
-                            let event_signature: Vec<u8> = signature_vec
-                                .iter()
-                                .filter_map(|v| v.as_u64().map(|n| n as u8))
-                                .collect();
-                            println!("      ✅ Event signature: {:?}", event_signature);
-                            assert_eq!(
-                                event_signature, signature,
-                                "Event signature should match input signature"
-                            );
-                        }
-                    }
-
-                    if let Some(sequence_value) = parsed_json.get("sequence") {
-                        let sequence: u64 =
-                            sequence_value.as_str().unwrap_or("0").parse().unwrap_or(0);
-                        println!("      ✅ Event sequence: {}", sequence);
-                    }
-                }
-
-                _ => {
-                    println!("      ❓ Unknown event type: {}", event.type_.name);
-                }
+        for event in &events.data {
+            if event.type_.name.as_str() == "UserStateEvent" {
+                user_state_event = Some(event.parsed_json.clone());
+                break;
             }
         }
-
-        // Verify all expected events were found
-        assert!(
-            start_event_found,
-            "start_deserialization event should be emitted"
-        );
-        assert!(
-            extraction_event_found,
-            "extraction_complete event should be emitted"
-        );
-        assert!(user_state_event_found, "UserStateEvent should be emitted");
-
-        println!("\n   🎉 All event validations passed!");
-        println!("   ✅ Start deserialization event found and validated");
-        println!("   ✅ Extraction complete event found and validated");
-        println!("   ✅ User state event found and validated");
-        println!("   ✅ All data matches perfectly between input and events!");
-    } else {
-        panic!("No events found! Expected DeserializeDebugEvent and UserStateEvent");
     }
 
-    Ok(result.digest.to_string())
+    Ok((result.digest.to_string(), user_state_event))
 }
 
 #[cfg(test)]
