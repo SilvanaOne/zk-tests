@@ -1,7 +1,9 @@
 use crate::constants::{TARGET_MODULE, TARGET_PACKAGE_ID};
 use anyhow::Result;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use prost::Message;
+use prost_types;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     SubscribeCheckpointsRequest, SubscribeCheckpointsResponse,
@@ -9,8 +11,6 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
 use tokio::time::{sleep, timeout};
 use tokio_stream::StreamExt;
 use tonic::Request;
-use prost::Message;
-use prost_types;
 
 async fn create_checkpoint_stream(
     client: &mut Client,
@@ -50,8 +50,8 @@ pub async fn stream_until_target_events(
     let start_time = SystemTime::now();
     const MAX_RETRIES: usize = 5;
     const TIMEOUT_SECONDS: u64 = 30;
-    const LOG_INTERVAL_SECONDS: u64 = 600; // 10 minutes
-    
+    const LOG_INTERVAL_SECONDS: u64 = 10;
+
     static LAST_LOG_TIME: AtomicU64 = AtomicU64::new(0);
 
     println!("Starting to stream checkpoints...");
@@ -73,7 +73,7 @@ pub async fn stream_until_target_events(
                                 // Calculate response size
                                 let response_size = response.encoded_len() as u64;
                                 total_bytes_received += response_size;
-                                
+
                                 let SubscribeCheckpointsResponse { cursor, checkpoint } = response;
                                 count += 1;
                                 let mut checkpoint_target_events = 0;
@@ -126,16 +126,18 @@ pub async fn stream_until_target_events(
                                         .duration_since(UNIX_EPOCH)
                                         .unwrap_or_default()
                                         .as_secs();
-                                    
+
                                     let last_log_time = LAST_LOG_TIME.load(Ordering::Relaxed);
-                                    let should_log = last_log_time == 0 || 
-                                        current_time_secs.saturating_sub(last_log_time) >= LOG_INTERVAL_SECONDS;
-                                    
+                                    let should_log = last_log_time == 0
+                                        || current_time_secs.saturating_sub(last_log_time)
+                                            >= LOG_INTERVAL_SECONDS;
+
                                     if checkpoint_target_events > 0 {
                                         total_checkpoints_with_events += 1;
-                                        
+
                                         if should_log {
-                                            LAST_LOG_TIME.store(current_time_secs, Ordering::Relaxed);
+                                            LAST_LOG_TIME
+                                                .store(current_time_secs, Ordering::Relaxed);
                                             println!(
                                                 "Checkpoint #{}: Cursor={}, Events={}, Delay={:.1}ms, Size={}B, Total={}",
                                                 count,
@@ -150,10 +152,7 @@ pub async fn stream_until_target_events(
                                         LAST_LOG_TIME.store(current_time_secs, Ordering::Relaxed);
                                         println!(
                                             "Checkpoint #{}: Cursor={}, Events=0, Delay={:.1}ms, Size={}B",
-                                            count,
-                                            cursor_value,
-                                            delay_ms,
-                                            response_size
+                                            count, cursor_value, delay_ms, response_size
                                         );
                                     }
                                 }
@@ -161,10 +160,13 @@ pub async fn stream_until_target_events(
                                 if total_target_events >= target_event_count {
                                     let elapsed_time = start_time.elapsed().unwrap_or_default();
                                     let elapsed_secs = elapsed_time.as_secs_f64();
-                                    
+
                                     println!("\n=== SUMMARY ===");
                                     println!("Received {} checkpoints total", count);
-                                    println!("Checkpoints with target events: {}", total_checkpoints_with_events);
+                                    println!(
+                                        "Checkpoints with target events: {}",
+                                        total_checkpoints_with_events
+                                    );
                                     println!(
                                         "Total target events found: {} (target: {})",
                                         total_target_events, target_event_count
@@ -178,29 +180,44 @@ pub async fn stream_until_target_events(
                                             average_delay_ms
                                         );
                                     }
-                                    
+
                                     // Network statistics
                                     println!("\n=== NETWORK STATISTICS ===");
-                                    println!("Total bytes received: {} ({:.2} KB, {:.2} MB)", 
-                                            total_bytes_received, 
-                                            total_bytes_received as f64 / 1024.0,
-                                            total_bytes_received as f64 / (1024.0 * 1024.0));
-                                    println!("Average bytes per checkpoint: {:.1}", 
-                                            total_bytes_received as f64 / count as f64);
+                                    println!(
+                                        "Total bytes received: {} ({:.2} KB, {:.2} MB)",
+                                        total_bytes_received,
+                                        total_bytes_received as f64 / 1024.0,
+                                        total_bytes_received as f64 / (1024.0 * 1024.0)
+                                    );
+                                    println!(
+                                        "Average bytes per checkpoint: {:.1}",
+                                        total_bytes_received as f64 / count as f64
+                                    );
                                     if total_checkpoints_with_events > 0 {
-                                        println!("Average bytes per checkpoint with events: {:.1}", 
-                                                total_bytes_received as f64 / total_checkpoints_with_events as f64);
+                                        println!(
+                                            "Average bytes per checkpoint with events: {:.1}",
+                                            total_bytes_received as f64
+                                                / total_checkpoints_with_events as f64
+                                        );
                                     }
-                                    println!("Bytes per target event: {:.1}", 
-                                            total_bytes_received as f64 / total_target_events as f64);
+                                    println!(
+                                        "Bytes per target event: {:.1}",
+                                        total_bytes_received as f64 / total_target_events as f64
+                                    );
                                     println!("Duration: {:.2}s", elapsed_secs);
                                     if elapsed_secs > 0.0 {
-                                        println!("Data rate: {:.2} KB/s", 
-                                                (total_bytes_received as f64 / 1024.0) / elapsed_secs);
-                                        println!("Checkpoints per second: {:.2}", 
-                                                count as f64 / elapsed_secs);
-                                        println!("Events per second: {:.2}", 
-                                                total_target_events as f64 / elapsed_secs);
+                                        println!(
+                                            "Data rate: {:.2} KB/s",
+                                            (total_bytes_received as f64 / 1024.0) / elapsed_secs
+                                        );
+                                        println!(
+                                            "Checkpoints per second: {:.2}",
+                                            count as f64 / elapsed_secs
+                                        );
+                                        println!(
+                                            "Events per second: {:.2}",
+                                            total_target_events as f64 / elapsed_secs
+                                        );
                                     }
 
                                     println!(

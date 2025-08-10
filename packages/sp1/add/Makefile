@@ -1,7 +1,7 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute prove-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
+.PHONY: help build execute prove-core verify-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
 
 # Load environment variables from .env file
 include .env
@@ -17,8 +17,10 @@ help:
 	@echo "                   Usage: make execute OPERATIONS=10"
 	@echo ""
 	@echo "Proof Generation:"
-	@echo "  prove-core     - Generate SP1 core proof"
+	@echo "  prove-core     - Generate SP1 core proof and save as JSON"
 	@echo "                   Usage: make prove-core OPERATIONS=10 PROOFS=2"
+	@echo "  verify-core    - Verify a saved core proof from JSON"
+	@echo "                   Usage: make verify-core [PROOF=path/to/proof.json] [AGGREGATE=1]"
 	@echo "  prove-groth16  - Generate Groth16 EVM proof and fixture"
 	@echo "                   Usage: make prove-groth16 OPERATIONS=10 PROOFS=2"
 	@echo "  prove-plonk    - Generate PLONK EVM proof and fixture"
@@ -30,6 +32,7 @@ help:
 	@echo "  deploy-plonk   - Deploy Add contract with PLONK verifier"
 	@echo "  deploy-sui     - Build and deploy Sui Move contract"
 	@echo "  deploy-solana  - Build and deploy Solana Anchor program"
+	@echo "  deploy-arbitrum - Deploy to Arbitrum using Stylus"
 	@echo ""
 	@echo "Sui Client:"
 	@echo "  sui            - Run Sui client application"
@@ -82,7 +85,7 @@ execute:
 # Proof generation
 prove-core:
 	@echo "Generating SP1 core proof..."
-	@echo "Usage: make prove-core OPERATIONS=10 PROOFS=1"
+	@echo "Usage: make prove-core OPERATIONS=10 PROOFS=2"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release -- --prove --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
@@ -91,9 +94,32 @@ prove-core:
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	echo "⏱️  Duration: $${duration} seconds"
 
+verify-core:
+	@echo "Verifying SP1 core proof..."
+	@echo "Usage: make verify-core [PROOF=path/to/proof.json] [AGGREGATE=1]"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	if [ -n "$(PROOF)" ]; then \
+		if [ "$(AGGREGATE)" = "1" ]; then \
+			cd script && cargo run --release --bin verify -- --proof-type core --proof-file $(PROOF) --aggregate; \
+		else \
+			cd script && cargo run --release --bin verify -- --proof-type core --proof-file $(PROOF); \
+		fi; \
+	else \
+		if [ "$(AGGREGATE)" = "1" ]; then \
+			cd script && cargo run --release --bin verify -- --proof-type core --aggregate; \
+		else \
+			cd script && cargo run --release --bin verify -- --proof-type core; \
+		fi; \
+	fi; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
 prove-groth16:
 	@echo "Generating Groth16 EVM proof..."
-	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=1"
+	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=2"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
@@ -104,7 +130,7 @@ prove-groth16:
 
 prove-plonk:
 	@echo "Generating PLONK EVM proof..."
-	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=1"
+	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=2"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
@@ -307,6 +333,29 @@ deploy-solana:
 	anchor build && \
 	echo "Testing and deploying Anchor program..." && \
 	anchor deploy; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+deploy-arbitrum:
+	@echo "Deploying to Arbitrum using Stylus..."
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd arbitrum && cargo stylus deploy \
+		--verbose \
+		--endpoint='http://localhost:8547' \
+		--private-key="0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659"; \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+arbitrum:
+	@echo "Running Arbitrum verification example..."
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd arbitrum && cargo run --example verify; \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \

@@ -48,7 +48,7 @@ enum ProofSystem {
     Groth16,
 }
 
-/// A fixture that can be used to test the verification of SP1 zkVM proofs inside Solidity, Sui, and Solana.
+/// A fixture that can be used to test the verification of SP1 zkVM proofs inside Solidity, Sui, Solana, and Arbitrum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SP1AddProofFixture {
@@ -70,6 +70,10 @@ struct SP1AddProofFixture {
     solana_vkey_hash: String,
     solana_proof: String,
     solana_public_inputs: String,
+    
+    // Arbitrum-specific fields (for sp1-verifier crate)
+    arbitrum_proof: String,
+    arbitrum_public_values: String,
 }
 
 fn main() {
@@ -242,6 +246,12 @@ fn create_proof_fixture(
         ("".to_string(), "".to_string(), "".to_string())
     };
 
+    // Generate Arbitrum-specific proof data (for sp1-verifier crate)
+    // The sp1-verifier expects the raw proof bytes with the 4-byte prefix
+    // The proof.bytes() already includes this prefix
+    let arbitrum_proof = format!("0x{}", hex::encode(proof.bytes()));
+    let arbitrum_public_values = format!("0x{}", hex::encode(bytes));
+
     // Create the testing fixture so we can test things end-to-end.
     let fixture = SP1AddProofFixture {
         // Common fields
@@ -262,6 +272,10 @@ fn create_proof_fixture(
         solana_vkey_hash,
         solana_proof,
         solana_public_inputs,
+        
+        // Arbitrum-specific fields
+        arbitrum_proof,
+        arbitrum_public_values,
     };
 
     // The verification key is used to verify that the proof corresponds to the execution of the
@@ -294,6 +308,13 @@ fn create_proof_fixture(
         println!("Solana Verification Key Hash: {}", fixture.solana_vkey_hash);
         println!("Solana Public Inputs: {}", fixture.solana_public_inputs);
         println!("Solana Proof Bytes: {}", fixture.solana_proof);
+    }
+    
+    // Print Arbitrum-specific data
+    if !fixture.arbitrum_proof.is_empty() {
+        println!("\n--- Arbitrum-specific data (sp1-verifier) ---");
+        println!("Arbitrum Proof Bytes: {}", fixture.arbitrum_proof);
+        println!("Arbitrum Public Values: {}", fixture.arbitrum_public_values);
     }
 
     // Save the fixture to a file.

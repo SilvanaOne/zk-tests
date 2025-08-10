@@ -1,0 +1,55 @@
+[package]
+name = "proof"
+version = "0.1.0"
+edition = "2021"
+description = "Proof verification on Arbitrum with Stylus"
+
+[dependencies]
+alloy-primitives = "=0.8.20"
+alloy-sol-types = "=0.8.20"
+stylus-sdk = "0.9.0"
+# sp1-verifier removed - copying only needed Groth16 code directly
+# bn library now copied locally to src/bn
+sha2 = { version = "0.10.8", default-features = false }
+bytemuck = { version = "1.16", features = ["derive"] }
+lazy_static = { version = "1.5", features = ["spin_no_std"] }
+cfg-if = "1.0"
+crunchy = "0.2.2"
+rustc-hex = { version = "2.0", default-features = false }
+byteorder = { version = "1.5", default-features = false }
+
+[dev-dependencies]
+alloy-primitives = { version = "=0.8.20", features = ["sha3-keccak"] }
+tokio = { version = "1.12.0", features = ["full"] }
+ethers = "2.0"
+eyre = "0.6.8"
+stylus-sdk = { version = "0.9.0", features = ["stylus-test"] }
+dotenv = "0.15.0"
+hex = "0.4"
+
+[features]
+default = ["mini-alloc"]
+export-abi = ["stylus-sdk/export-abi"]
+debug = ["stylus-sdk/debug"]
+mini-alloc = ["stylus-sdk/mini-alloc"]
+
+[[bin]]
+name = "proof"
+path = "src/main.rs"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+debug = false
+rpath = false
+debug-assertions = false
+incremental = false
+
+# If you need to reduce the binary size, it is advisable to try other
+# optimization levels, such as "s" and "z"
+opt-level = "z"

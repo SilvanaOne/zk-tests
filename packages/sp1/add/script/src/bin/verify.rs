@@ -5,6 +5,9 @@ use alloy::{
 use clap::Parser;
 use dotenv::dotenv;
 use std::{env, fs};
+use add_script::verify::{verify_core_proof_from_file, verify_core_proof_from_json, CoreProofFixture};
+use sp1_sdk::include_elf;
+use std::path::PathBuf;
 
 sol!(
     #[allow(missing_docs)]
@@ -13,14 +16,27 @@ sol!(
     "abi/Add.json"
 );
 
+/// The ELF files for the programs
+pub const ADD_ELF: &[u8] = include_elf!("add-program");
+pub const AGGREGATE_ELF: &[u8] = include_elf!("aggregate-program");
+
 #[derive(Parser, Debug)]
-#[command(about = "Verify an Add proof on Sepolia")]
+#[command(about = "Verify an Add proof on Sepolia or locally")]
 struct Args {
     #[arg(long, help = "Path to the proof fixture JSON file")]
     proof_file: Option<String>,
 
-    #[arg(long, default_value = "groth16", help = "Proof type: groth16 or plonk")]
+    #[arg(long, default_value = "groth16", help = "Proof type: groth16, plonk, or core")]
     proof_type: String,
+    
+    #[arg(long, help = "Use aggregate ELF for core proof verification")]
+    aggregate: bool,
+    
+    #[arg(long, help = "Skip verification key check (useful for debugging)")]
+    skip_vkey_check: bool,
+    
+    #[arg(long, help = "Simulate on-chain verification (no ELF required)")]
+    onchain: bool,
 }
 
 #[tokio::main]
@@ -30,9 +46,53 @@ async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
     // Validate proof type
-    if args.proof_type != "groth16" && args.proof_type != "plonk" {
-        eprintln!("Error: proof_type must be either 'groth16' or 'plonk'");
+    if args.proof_type != "groth16" && args.proof_type != "plonk" && args.proof_type != "core" {
+        eprintln!("Error: proof_type must be 'groth16', 'plonk', or 'core'");
         std::process::exit(1);
+    }
+    
+    // Handle core proof verification separately
+    if args.proof_type == "core" {
+        // Setup logger for core proof
+        sp1_sdk::utils::setup_logger();
+        
+        // Get the proof file path
+        let proof_path = if let Some(path) = args.proof_file {
+            PathBuf::from(path)
+        } else {
+            // Find the most recent core proof
+            println!("No proof file specified, using the most recent core proof...");
+            add_script::verify::find_latest_core_proof()
+                .map_err(|e| eyre::eyre!("Failed to find latest core proof: {}", e))?
+        };
+        
+        // Check if we're doing on-chain simulation
+        if args.onchain {
+            // Load the JSON and verify without ELF
+            println!("Simulating on-chain verification (no ELF required)...");
+            let json_str = fs::read_to_string(&proof_path)
+                .map_err(|e| eyre::eyre!("Failed to read proof file: {}", e))?;
+            let fixture: CoreProofFixture = serde_json::from_str(&json_str)
+                .map_err(|e| eyre::eyre!("Failed to parse proof JSON: {}", e))?;
+            
+            verify_core_proof_from_json(&fixture)
+                .map_err(|e| eyre::eyre!("Failed to verify proof: {}", e))?;
+        } else {
+            // Regular verification with ELF
+            // Determine which ELF to use
+            let elf = if args.aggregate {
+                println!("Using aggregate program ELF for verification");
+                AGGREGATE_ELF
+            } else {
+                println!("Using add program ELF for verification");
+                ADD_ELF
+            };
+            
+            // Verify the core proof
+            verify_core_proof_from_file(&proof_path, elf, args.skip_vkey_check)
+                .map_err(|e| eyre::eyre!("Failed to verify core proof: {}", e))?;
+        }
+        return Ok(());
     }
 
     // Set default fixture file based on proof type

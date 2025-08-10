@@ -154,6 +154,9 @@ fn main() {
         println!("\n=== Performance Summary ===");
         println!("Total time:      {:.2}s", setup_duration.as_secs_f64());
         println!("Verification:    {:.2}s", verify_duration.as_secs_f64());
+        
+        // Save the core proof to JSON
+        proof::save_core_proof(&proof, &vk).expect("failed to save core proof");
     } else {
         // Multiple proofs with aggregation
         let result = proof::generate_and_aggregate_proofs(
@@ -168,5 +171,8 @@ fn main() {
         proof::print_proof_statistics(&result.proof);
         proof::print_aggregated_results(&result.aggregated_values);
         proof::print_aggregation_performance_summary(&result);
+        
+        // Save the aggregated core proof to JSON
+        proof::save_core_proof(&result.proof, &result.aggregate_vk).expect("failed to save aggregated core proof");
     }
 }

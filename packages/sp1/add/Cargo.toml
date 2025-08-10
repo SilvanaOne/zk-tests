@@ -12,6 +12,16 @@ members = [
     "programs/proof",
     "script",
 ]
+
+exclude = ["arbitrum"]
+
+default-members = [
+    "lib/add",
+    "lib/proof",
+    "sui/client",
+    "script",
+]
+
 resolver = "2"
 
 [workspace.dependencies]
