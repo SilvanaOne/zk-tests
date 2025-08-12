@@ -4,8 +4,8 @@ import { sleep } from "../src/sleep.js";
 import { fetchZekoFee } from "../src/zeko-fee.js";
 
 const MAX_FEE = 10_000_000n;
-//const url = "https://devnet.zeko.io/graphql";
-const url = "http://m1.zeko.io/graphql";
+const url = "https://devnet.zeko.io/graphql";
+//const url = "http://m1.zeko.io/graphql";
 
 describe("Zeko fee", async () => {
   it(`should wait for low fee`, async () => {

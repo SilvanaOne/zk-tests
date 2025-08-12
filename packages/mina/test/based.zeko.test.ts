@@ -40,8 +40,8 @@ let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
-//const url = "https://devnet.zeko.io/graphql";
-const url = "http://m1.zeko.io/graphql";
+const url = "https://devnet.zeko.io/graphql";
+//const url = "http://m1.zeko.io/graphql";
 
 let retries = 0;
 
