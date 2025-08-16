@@ -2,6 +2,8 @@
 .travis.yml
 Cargo.toml
 README.md
+docs/CreateRegistryRequest.md
+docs/CreateRegistryResponse.md
 docs/ErrorResponse.md
 docs/MathRequest.md
 docs/MathResponse.md
@@ -11,6 +13,8 @@ git_push.sh
 src/apis/configuration.rs
 src/apis/mod.rs
 src/lib.rs
+src/models/create_registry_request.rs
+src/models/create_registry_response.rs
 src/models/error_response.rs
 src/models/math_request.rs
 src/models/math_response.rs

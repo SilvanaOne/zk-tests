@@ -1,3 +1,7 @@
+pub mod create_registry_request;
+pub use self::create_registry_request::CreateRegistryRequest;
+pub mod create_registry_response;
+pub use self::create_registry_response::CreateRegistryResponse;
 pub mod error_response;
 pub use self::error_response::ErrorResponse;
 pub mod math_request;

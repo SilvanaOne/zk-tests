@@ -1,15 +1,16 @@
 # AWS Lambda Rust Calculator with Sui Blockchain Integration
 
-A serverless calculator API built with Rust, deployed on AWS Lambda, with optional Sui blockchain integration for mathematical operations, secure keypair management, and distributed key locking.
+A serverless calculator API built with Rust, deployed on AWS Lambda, with optional Sui blockchain integration for mathematical operations, secure keypair management, distributed key locking, Silvana registry creation, and automated backup capabilities.
 
 ## Architecture
 
 - **AWS Lambda**: Serverless compute using ARM64 architecture with custom Rust runtime
 - **API Gateway**: REST API endpoint for HTTP access
 - **OpenAPI**: API-first development with automated code generation
-- **Sui Blockchain**: On-chain computation for addition operations
+- **Sui Blockchain**: On-chain computation for addition operations and registry management
 - **DynamoDB**: Distributed locking for Sui keys and secure storage for encrypted keypairs
 - **KMS**: Encryption at rest for private keys
+- **AWS Backup**: Automated backup and recovery for DynamoDB tables
 - **Pulumi**: Infrastructure as Code for AWS resource management
 
 ## Prerequisites
@@ -187,10 +188,12 @@ The project follows a modular architecture with specialized crates:
   - Error handling and response formatting
   - Integration with blockchain and storage layers
 
-- **`sui`**: Sui blockchain client
-  - `client.rs`: Transaction building and execution
-  - `keypair.rs`: Ed25519 keypair generation
-  - Bech32 encoding for private keys
+- **`sui`**: Sui blockchain client (refactored modular structure)
+  - `chain.rs`: Shared RPC URL configuration and helper functions
+  - `add.rs`: Addition operation on blockchain
+  - `registry.rs`: Silvana registry creation with event extraction
+  - `client.rs`: Re-exports for backward compatibility
+  - `keypair.rs`: Ed25519 keypair generation with Bech32 encoding
 
 - **`db`**: DynamoDB operations
   - `lock.rs`: Distributed key locking mechanism
@@ -302,11 +305,15 @@ make remove-secrets  # Remove Sui secrets
 The Lambda function uses these environment variables (set via Pulumi):
 
 - `RUST_BACKTRACE`: Error tracing (default: "1")
-- `LOG_LEVEL`: Logging level (default: "info")
-- `SUI_PACKAGE_ID`: Sui smart contract address (optional)
+- `LOG_LEVEL`: Logging level (default: "debug")
+- `SUI_PACKAGE_ID`: Sui smart contract address for math operations (optional)
 - `SUI_CHAIN`: Sui network (mainnet/testnet/devnet)
 - `SUI_ADDRESS`: Sui wallet address
 - `SUI_SECRET_KEY`: Sui private key (stored as Pulumi secret)
+- `SILVANA_REGISTRY_PACKAGE`: Registry package ID for devnet
+- `SILVANA_REGISTRY_PACKAGE_DEVNET`: Alternative registry package for devnet
+- `SILVANA_REGISTRY_PACKAGE_TESTNET`: Registry package for testnet
+- `SILVANA_REGISTRY_PACKAGE_MAINNET`: Registry package for mainnet
 - `LOCKS_TABLE_NAME`: DynamoDB table for key locking (default: "sui-key-locks")
 - `KEYPAIRS_TABLE_NAME`: DynamoDB table for encrypted keypairs (default: "sui-keypairs")
 - `KMS_KEY_ID`: KMS key ID for encryption
@@ -321,6 +328,44 @@ Edit `pulumi/index.ts` to configure:
 - Log retention (default: 7 days)
 
 ## Key Features
+
+### Automated Backup and Recovery
+
+The system implements comprehensive backup strategies for DynamoDB tables to ensure data durability and recovery capabilities:
+
+#### Point-in-Time Recovery (PITR)
+- **Continuous backups**: Automatically enabled for both keypairs and locks tables
+- **35-day retention**: Can restore to any second within the past 35 days
+- **Per-second granularity**: Precise recovery to any point in time
+- **Zero data loss**: Ensures critical keypair data is never lost
+
+#### AWS Backup Integration
+- **Scheduled backups**: Three-tier backup strategy
+  - **Daily backups**: Retained for 35 days
+  - **Weekly backups**: Retained for 120 days (moved to cold storage after 30 days)
+  - **Monthly backups**: Retained for 365 days (moved to cold storage after 90 days)
+- **Cost optimization**: Automatic transition to cold storage for older backups
+- **Backup vault**: Secure storage in `silvana-dynamodb-backups` vault
+- **Automated scheduling**: No manual intervention required
+
+#### Recovery Procedures
+To restore from a backup:
+
+1. **Point-in-time recovery** (for recent data):
+   ```bash
+   aws dynamodb restore-table-to-point-in-time \
+     --source-table-name sui-keypairs \
+     --target-table-name sui-keypairs-restored \
+     --restore-date-time 2025-08-16T12:00:00Z
+   ```
+
+2. **Restore from backup vault** (for older snapshots):
+   ```bash
+   aws backup start-restore-job \
+     --recovery-point-arn <recovery-point-arn> \
+     --iam-role-arn <backup-role-arn> \
+     --metadata '{"newTableName":"sui-keypairs-restored"}'
+   ```
 
 ### Distributed Key Locking
 
@@ -411,6 +456,35 @@ Response:
 
 **Note**: Private keys are stored encrypted in DynamoDB and are not returned to the client for security.
 
+### POST /create-registry
+
+Creates a new Silvana registry on the Sui blockchain.
+
+Request:
+
+```json
+{
+  "name": "My Registry",
+  "chain": "devnet"  // Options: devnet, testnet, mainnet
+}
+```
+
+Response:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM",
+  "admin_address": "0x41d26f8218ba28e6ef35d58ddc937fc2e52706c2d0791cf1b3a03b229153f688"
+}
+```
+
+**Features**:
+- Creates a registry smart contract on Sui
+- Extracts registry ID from RegistryCreatedEvent
+- Uses distributed locking for transaction safety
+- Supports multiple Sui networks (devnet, testnet, mainnet)
+
 ## Monitoring
 
 ### CloudWatch Logs
@@ -429,6 +503,28 @@ Logs include timestamp, level, module, and message:
 2025-08-16 16:47:48.417 INFO  [lambda::handler] Incoming POST request to /add from 88.230.51.187
 2025-08-16 16:47:48.419 INFO  [api] Processing add operation: a=2, b=3
 ```
+
+## Recent Improvements
+
+### Code Refactoring (August 2025)
+- **Modular Sui crate structure**: Separated concerns into `chain.rs`, `add.rs`, and `registry.rs`
+- **Eliminated code duplication**: Shared helper functions for RPC URLs, gas selection, and sender loading
+- **Fixed timing bug in lock.rs**: Corrected elapsed time calculation preventing immediate timeouts
+- **Improved error detection**: Fixed ConditionalCheckFailedException detection for proper retry logic
+
+### New Features
+- **Silvana Registry Creation**: Added support for creating registries on Sui blockchain
+- **Event-based data extraction**: Registry ID extracted from RegistryCreatedEvent for reliability
+- **String serialization for Move**: Proper BCS encoding of Move String type (struct with bytes field)
+- **Transaction timing logs**: Added millisecond-precision timing for all blockchain operations
+- **Automated backups**: Comprehensive backup strategy with PITR and scheduled backups
+- **TypeScript client improvements**: Fixed type imports and added DOM.Iterable for Headers support
+
+### Bug Fixes
+- **Lock timing bug**: Fixed `Utc::now() - Utc::now()` always returning 0
+- **gRPC read_mask**: Removed unsupported fields like `object_changes` and `effects`
+- **String encoding**: Fixed Move String serialization as struct with bytes field
+- **TypeScript compatibility**: Updated imports to match generated OpenAPI types
 
 ## Troubleshooting
 

@@ -60,7 +60,13 @@ test-api:
 		-d '{"a": 2, "b": 3}' \
 		| python3 -m json.tool
 
-openapi-generate: openapi-validate
+test-client: 
+	@echo "Testing TypeScript client..."
+	cd client && npm run test
+
+openapi-generate: openapi-validate openapi-generate-rust openapi-generate-ts
+
+openapi-generate-rust: openapi-validate
 	@echo "Generating Rust code from OpenAPI spec..."
 	openapi-generator generate \
 		-i api/openapi.yaml \
@@ -68,6 +74,10 @@ openapi-generate: openapi-validate
 		-o ./crates/api-generated \
 		--additional-properties=packageName=api_generated,packageVersion=0.1.0 \
 		--global-property=models,supportingFiles
+
+openapi-generate-ts: openapi-validate
+	@echo "Generating TypeScript client from OpenAPI spec..."
+	cd client && npx openapi-ts
 
 openapi-validate:
 	@echo "Validating OpenAPI specification..."
@@ -97,16 +107,17 @@ test-generate-keypair:
 # Pulumi secrets management
 add-secrets:
 	@echo "Adding Sui secrets to Pulumi..."
-	@if [ -f ../../sui/rpc-tx/.env ]; then \
-		export $$(cat ../../sui/rpc-tx/.env | xargs) && \
+	@if [ -f .env ]; then \
+		export $$(cat .env | xargs) && \
 		cd pulumi && \
-		pulumi config set --secret suiPackageId "$$SUI_PACKAGE_ID" && \
+		pulumi config set --secret suiPackageId "$$SUI_ADD_PACKAGE_ID" && \
 		pulumi config set --secret suiChain "$$SUI_CHAIN" && \
 		pulumi config set --secret suiAddress "$$SUI_ADDRESS" && \
 		pulumi config set --secret suiSecretKey "$$SUI_SECRET_KEY" && \
+		pulumi config set --secret silvanaRegistryPackageDevnet "$$SILVANA_REGISTRY_PACKAGE_DEVNET" && \
 		echo "Secrets added successfully"; \
 	else \
-		echo "Error: ../../sui/rpc-tx/.env file not found"; \
+		echo "Error: .env file not found"; \
 		exit 1; \
 	fi
 
@@ -116,6 +127,7 @@ list-secrets:
 	@cd pulumi && echo -n "suiChain: " && (pulumi config get suiChain 2>/dev/null || echo "not set")
 	@cd pulumi && echo -n "suiAddress: " && (pulumi config get suiAddress 2>/dev/null || echo "not set")
 	@cd pulumi && echo -n "suiSecretKey: " && (pulumi config get suiSecretKey 2>/dev/null | sed 's/suiprivkey.*/[HIDDEN]/' || echo "not set")
+	@cd pulumi && echo -n "silvanaRegistryPackageDevnet: " && (pulumi config get silvanaRegistryPackageDevnet 2>/dev/null || echo "not set")
 
 remove-secrets:
 	@echo "Removing Sui secrets from Pulumi..."
@@ -124,4 +136,5 @@ remove-secrets:
 	pulumi config rm suiChain 2>/dev/null || true && \
 	pulumi config rm suiAddress 2>/dev/null || true && \
 	pulumi config rm suiSecretKey 2>/dev/null || true && \
+	pulumi config rm silvanaRegistryPackageDevnet 2>/dev/null || true && \
 	echo "Secrets removed"

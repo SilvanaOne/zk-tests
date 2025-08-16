@@ -10,10 +10,12 @@ config:
   sui:secretKey:
     secure: v1:JzMnFHvOE+XDmEPb:/kWotAAEosJJXzzrs2LaLqknfQo1QRkfXQbi8kZhN3RwWupUQ4MaP6e8dZJE6KTmLopM19S40VjzibXEc2JHzEEeQziapQnZMRV90Mu88m4qwvGFYKI=
   lambda:suiPackageId:
-    secure: v1:/F6dhfqTeqPe7MlC:oQx/wOTYH2eSXVK/D50shRi+zndLmh27pPsH9oXtqyBF+nH4TaPb0xwdWh1F7K/J9ChZHmZToa1bRrZD5HhxxhuhCvMFU9fAHJAZH2r69PHU3A==
+    secure: v1:QpjuEFXdu1sPOzmA:d8FVvmeP7+1RdHWJYFHSVen7ToP1jRNd5zxHU+9ALxfIpKSl92IgAMUlXS9fAuSOcy2wTfsUfEozznAc0QG9MZDmKgS/Gd7Y2bi6ElRqlJHzQQ==
   lambda:suiChain:
-    secure: v1:6jcttXDOJlo3p758:ZrnevtixYmYYUXNdqcwyTOQPV9Hmsg==
+    secure: v1:qXUz+tsAiPUOqA2p:ijfUP/p7dWYcp59rGh/e86zeuViQlQ==
   lambda:suiAddress:
-    secure: v1:OHO+PZIs5AkIj+Jl:+aecXukseAFijWkX7jvl5f4/rrQ2bkus2drNeyQLU3rvZVYut4w8VPcSlARWsTrAzIHsNS+7l1o0uioyzGx/R9Miuv/gVVfVmNQPoLiiakDTJA==
+    secure: v1:nAJFGoP4So4nZi7f:9gjD0tktRGek7YgTq4TfZhUoErDlGFIpWA8Iigd0xXYlkSdhONeqByJCny2A16J5CUOiWvA4mQDhTa5gdvyttYd7Dpzohv2Zd9v+x532EdkDIA==
   lambda:suiSecretKey:
-    secure: v1:5mdToxmH3jTKiksN:yxwK2hCNKGOQ2DI99ZAFscp+66mdm8ifaS04b0s0Rm/A34Yc3pkpWn/ridxaK/B3eDGj0/ueEZFEs4msf3SpxOkAvtzK50HeLwzRTV5eJBx/vBlBuOs=
+    secure: v1:pYyHD9VIhRFgCxCe:H5+nlLdpXNVIVByhed4arubEki2n4zJuzUGF5OsKoUnWoUEobD4rPXeHVR6iU6R9l5zGsZX/Wbf0M3w6DwwF++2mkCttYfX+8g95eO59blpUft13cYg=
+  lambda:silvanaRegistryPackageDevnet:
+    secure: v1:FrwTtBhTYDwbbRD+:hYNjd/5PEgEit0y2T4CaTFy8smY2h6p3+/VzBwEG3e56n/RLPVg12BUxT/LLUMSSQBSe0KzE/6HV01qeuVO0PrnofWa5z3SaU9lJd8+vHxTDIQ==

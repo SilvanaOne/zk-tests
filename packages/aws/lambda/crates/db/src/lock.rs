@@ -3,6 +3,7 @@ use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, Utc, Duration};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::error::Error;
 use tracing::{debug, info, warn, error};
 
 pub struct KeyLock {
@@ -38,6 +39,8 @@ impl KeyLock {
         let table_name = std::env::var("LOCKS_TABLE_NAME")
             .unwrap_or_else(|_| "sui-key-locks".to_string());
         
+        info!("KeyLock initialized with table: {}", table_name);
+        
         Ok(Self {
             client,
             table_name,
@@ -47,10 +50,11 @@ impl KeyLock {
     pub async fn acquire_lock(&self, address: &str, chain: &str) -> Result<LockGuard> {
         let mut retry_count = 0;
         let max_retries = 2;
+        let start_time = Utc::now();
         
         loop {
             // Check if we've exceeded the timeout
-            let elapsed = Utc::now() - Utc::now();
+            let elapsed = Utc::now() - start_time;
             let timeout = Duration::seconds(10);
             if elapsed > timeout {
                 let elapsed_ms = elapsed.num_milliseconds();
@@ -89,6 +93,7 @@ impl KeyLock {
             );
             
             // Try to acquire lock with conditional put (only if item doesn't exist)
+            debug!("Calling DynamoDB put_item on table: {}", self.table_name);
             let result = self.client
                 .put_item()
                 .table_name(&self.table_name)
@@ -99,7 +104,7 @@ impl KeyLock {
             
             match result {
                 Ok(_) => {
-                    let total_elapsed = Utc::now() - now;
+                    let total_elapsed = Utc::now() - start_time;
                     let elapsed_ms = total_elapsed.num_milliseconds();
                     info!("Lock acquired for {} after {}ms (attempt {})", 
                           lock_id, elapsed_ms, retry_count + 1);
@@ -114,11 +119,16 @@ impl KeyLock {
                 }
                 Err(e) => {
                     // Check if lock exists and is expired
-                    if e.to_string().contains("ConditionalCheckFailedException") {
+                    // Need to check both the error string and the actual error type
+                    // The SDK wraps the error in ServiceError, but the string still contains the error name
+                    let error_str = format!("{:?}", e);
+                    let is_conditional_check_failed = error_str.contains("ConditionalCheckFailedException");
+                    
+                    if is_conditional_check_failed {
                         // Try to check if existing lock is expired
                         if retry_count < max_retries && self.is_lock_expired(address, chain).await.unwrap_or(false) {
                             // Try to delete expired lock and retry
-                            let elapsed_ms = (Utc::now() - now).num_milliseconds();
+                            let elapsed_ms = (Utc::now() - start_time).num_milliseconds();
                             warn!("Found expired lock for {}, attempting to clean up (elapsed: {}ms)", 
                                   lock_id, elapsed_ms);
                             if self.delete_lock(address, chain).await.is_ok() {
@@ -138,8 +148,10 @@ impl KeyLock {
                         error!("Failed to acquire lock for {} - lock is held by another instance", lock_id);
                         return Err(anyhow!("Lock is currently held by another Lambda instance"));
                     } else {
-                        error!("Failed to acquire lock for {}: {}", lock_id, e);
-                        return Err(anyhow!("Failed to acquire lock: {}", e));
+                        error!("Failed to acquire lock for {} - service error: {}", lock_id, e);
+                        error!("Error details: {:?}", e);
+                        error!("Error source: {:?}", e.source());
+                        return Err(anyhow!("Failed to acquire lock: service error"));
                     }
                 }
             }

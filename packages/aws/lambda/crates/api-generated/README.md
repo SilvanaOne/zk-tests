@@ -30,6 +30,8 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [CreateRegistryRequest](docs/CreateRegistryRequest.md)
+ - [CreateRegistryResponse](docs/CreateRegistryResponse.md)
  - [ErrorResponse](docs/ErrorResponse.md)
  - [MathRequest](docs/MathRequest.md)
  - [MathResponse](docs/MathResponse.md)

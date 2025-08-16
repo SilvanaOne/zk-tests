@@ -1,0 +1,33 @@
+{
+  "name": "@silvana/lambda-client",
+  "version": "1.0.0",
+  "description": "TypeScript client for Silvana Lambda API",
+  "type": "module",
+  "author": "",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "start": "node dist/index.js",
+    "test": "NODE_NO_WARNINGS=1 node -r ./log.cjs --loader=ts-node/esm --enable-source-maps -r dotenv/config --test",
+    "test:keypair": "npm run test test/keypair.test.ts",
+    "test:registry": "npm run test test/registry.test.ts",
+    "dev": "NODE_NO_WARNINGS=1 node -r ./log.cjs --loader=ts-node/esm --enable-source-maps -r dotenv/config test/test.ts",
+    "build": "tsc",
+    "generate": "cd .. && make openapi-generate-ts"
+  },
+  "keywords": [
+    "sui",
+    "lambda",
+    "api",
+    "client"
+  ],
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.80.11",
+    "@types/node": "^20.11.5",
+    "dotenv": "^16.3.1",
+    "log-timestamp": "^0.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

@@ -15,6 +15,9 @@ export = async () => {
   const suiChain = config.getSecret("suiChain");
   const suiAddress = config.getSecret("suiAddress");
   const suiSecretKey = config.getSecret("suiSecretKey");
+  const silvanaRegistryPackageDevnet = config.getSecret(
+    "silvanaRegistryPackageDevnet"
+  );
 
   // Create an S3 bucket for Lambda deployment packages
   const deploymentBucket = new aws.s3.Bucket("lambda-deployment-bucket", {
@@ -139,9 +142,14 @@ export = async () => {
         type: "B", // Binary
       },
     ],
+    // Enable point-in-time recovery for the table
+    pointInTimeRecovery: {
+      enabled: true,
+    },
     tags: {
       Name: "sui-keypairs",
       Purpose: "Store encrypted Sui keypairs",
+      BackupEnabled: "true",
     },
   });
 
@@ -165,10 +173,120 @@ export = async () => {
       attributeName: "expires_at",
       enabled: true, // Automatically delete expired locks
     },
+    // Point-in-time recovery for locks table (optional but recommended)
+    pointInTimeRecovery: {
+      enabled: true,
+    },
     tags: {
       Name: "sui-key-locks",
       Purpose: "Prevent concurrent Sui transactions",
+      BackupEnabled: "true",
     },
+  });
+
+  // Create AWS Backup vault for DynamoDB backups
+  const backupVault = new aws.backup.Vault("dynamodb-backup-vault", {
+    name: "silvana-dynamodb-backups",
+    tags: {
+      Name: "silvana-dynamodb-backups",
+      Purpose: "Backup vault for Sui keypairs and locks",
+    },
+  });
+
+  // Create IAM role for AWS Backup
+  const backupRole = new aws.iam.Role("backup-service-role", {
+    assumeRolePolicy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: {
+            Service: "backup.amazonaws.com",
+          },
+          Action: "sts:AssumeRole",
+        },
+      ],
+    }),
+    tags: {
+      Name: "backup-service-role",
+    },
+  });
+
+  // Attach necessary policies to backup role
+  const backupRolePolicy = new aws.iam.RolePolicyAttachment(
+    "backup-service-role-policy",
+    {
+      role: backupRole.name,
+      policyArn: "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+    }
+  );
+
+  const backupRoleRestorePolicy = new aws.iam.RolePolicyAttachment(
+    "backup-service-role-restore-policy",
+    {
+      role: backupRole.name,
+      policyArn: "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores",
+    }
+  );
+
+  // Create backup plan for regular backups
+  const backupPlan = new aws.backup.Plan("dynamodb-backup-plan", {
+    name: "silvana-dynamodb-backup-plan",
+    rules: [
+      {
+        ruleName: "daily-backups",
+        targetVaultName: backupVault.name,
+        schedule: "cron(0 5 ? * * *)", // Daily at 5 AM UTC
+        lifecycle: {
+          deleteAfter: 35, // Keep backups for 35 days (minimum for warm storage)
+        },
+        recoveryPointTags: {
+          Type: "scheduled",
+          Frequency: "daily",
+        },
+      },
+      {
+        ruleName: "weekly-backups",
+        targetVaultName: backupVault.name,
+        schedule: "cron(0 6 ? * 1 *)", // Weekly on Monday at 6 AM UTC
+        lifecycle: {
+          deleteAfter: 120, // Keep weekly backups for 120 days
+          coldStorageAfter: 30, // Move to cold storage after 30 days (90 days before deletion)
+        },
+        recoveryPointTags: {
+          Type: "scheduled",
+          Frequency: "weekly",
+        },
+      },
+      {
+        ruleName: "monthly-backups",
+        targetVaultName: backupVault.name,
+        schedule: "cron(0 7 1 * ? *)", // Monthly on the 1st at 7 AM UTC
+        lifecycle: {
+          deleteAfter: 365, // Keep monthly backups for 1 year
+          coldStorageAfter: 90, // Move to cold storage after 90 days
+        },
+        recoveryPointTags: {
+          Type: "scheduled",
+          Frequency: "monthly",
+        },
+      },
+    ],
+    tags: {
+      Name: "silvana-dynamodb-backup-plan",
+      Purpose: "Regular backups of DynamoDB tables",
+    },
+  });
+
+  // Create backup selection to include both DynamoDB tables
+  const backupSelection = new aws.backup.Selection("dynamodb-backup-selection", {
+    planId: backupPlan.id,
+    name: "silvana-tables-selection",
+    iamRoleArn: backupRole.arn,
+    resources: [
+      keypairsTable.arn,
+      locksTable.arn,
+    ],
   });
 
   // Create CloudWatch Log Group for Lambda
@@ -224,6 +342,7 @@ Please build the Lambda function first with: make lambda
             suiChain,
             suiAddress,
             suiSecretKey,
+            silvanaRegistryPackageDevnet,
             locksTable.name,
             keypairsTable.name,
             kmsKey.id,
@@ -234,12 +353,13 @@ Please build the Lambda function first with: make lambda
               chain,
               address,
               secretKey,
+              registryPackageDevnet,
               locksTableName,
               keypairsTableName,
               kmsKeyId,
             ]) => ({
               RUST_BACKTRACE: "1",
-              LOG_LEVEL: "info",
+              LOG_LEVEL: "debug",
               LOCKS_TABLE_NAME: locksTableName,
               KEYPAIRS_TABLE_NAME: keypairsTableName,
               KMS_KEY_ID: kmsKeyId,
@@ -248,6 +368,10 @@ Please build the Lambda function first with: make lambda
               ...(chain && { SUI_CHAIN: chain }),
               ...(address && { SUI_ADDRESS: address }),
               ...(secretKey && { SUI_SECRET_KEY: secretKey }),
+              // Silvana registry configuration
+              ...(registryPackageDevnet && {
+                SILVANA_REGISTRY_PACKAGE: registryPackageDevnet,
+              }),
             })
           ),
       },
@@ -308,6 +432,9 @@ Please build the Lambda function first with: make lambda
     keypairsTableName: keypairsTable.name,
     kmsKeyId: kmsKey.id,
     kmsKeyAlias: kmsKeyAlias.name,
+    backupVaultName: backupVault.name,
+    backupPlanId: backupPlan.id,
+    backupPlanArn: backupPlan.arn,
     region: (region as any).name || region.id,
     accountId: accountId.accountId,
   };

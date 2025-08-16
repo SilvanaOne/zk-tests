@@ -104,6 +104,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+                
+  /create-registry:
+    post:
+      summary: Create a Silvana registry on Sui blockchain
+      operationId: createRegistry
+      description: Creates a new Silvana registry with the specified name on the chosen Sui network
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRegistryRequest'
+      responses:
+        '200':
+          description: Successfully created registry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRegistryResponse'
+        '400':
+          description: Invalid input or insufficient funds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error or blockchain error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -189,4 +220,40 @@ components:
         address:
           type: string
           description: Sui address derived from the public key
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+          
+    CreateRegistryRequest:
+      type: object
+      required:
+        - name
+        - chain
+      properties:
+        name:
+          type: string
+          description: Name of the registry to create
+          example: "My Silvana Registry"
+        chain:
+          type: string
+          enum: [devnet, testnet, mainnet]
+          description: Sui network to deploy the registry on
+          example: "devnet"
+          
+    CreateRegistryResponse:
+      type: object
+      required:
+        - registry_id
+        - tx_digest
+        - admin_address
+      properties:
+        registry_id:
+          type: string
+          description: Object ID of the created registry
+          example: "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+        tx_digest:
+          type: string
+          description: Transaction digest from the blockchain
+          example: "DXzqFwFqEFhXGZPgNvUnu1wZYXqzKPdJu5YoHauKNYjh"
+        admin_address:
+          type: string
+          description: Admin address (sender) of the registry
           example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"

@@ -10,7 +10,10 @@ pub use api_generated::models::{
     ErrorResponse,
     SuiKeypairRequest,
     SuiKeypairResponse,
-    math_response::Operation
+    CreateRegistryRequest,
+    CreateRegistryResponse,
+    math_response::Operation,
+    create_registry_request::Chain
 };
 
 /// API Errors
@@ -249,6 +252,48 @@ pub fn generate_sui_keypair(request: SuiKeypairRequest) -> Result<SuiKeypairResp
     }
 }
 
+/// Handler for creating a Silvana registry
+pub async fn create_registry_async(request: CreateRegistryRequest) -> Result<CreateRegistryResponse, ApiError> {
+    info!("Creating Silvana registry: name={}, chain={:?}", request.name, request.chain);
+    
+    // Get chain-specific configuration
+    let (rpc_url, registry_package, chain_name) = match request.chain {
+        Chain::Devnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE")
+                .or_else(|_| env::var("SILVANA_REGISTRY_PACKAGE_DEVNET"))
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for devnet".to_string()))?;
+            ("https://fullnode.devnet.sui.io:443", package, "devnet")
+        },
+        Chain::Testnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE_TESTNET")
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for testnet".to_string()))?;
+            ("https://fullnode.testnet.sui.io:443", package, "testnet")
+        },
+        Chain::Mainnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE_MAINNET")
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for mainnet".to_string()))?;
+            ("https://fullnode.mainnet.sui.io:443", package, "mainnet")
+        },
+    };
+    
+    // Call create_registry function
+    let result = sui::create_registry(
+        rpc_url,
+        &registry_package,
+        request.name,
+        chain_name,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to create registry: {}", e)))?;
+    
+    info!("Successfully created registry: id={}, tx_digest={}", result.registry_id, result.tx_digest);
+    
+    Ok(CreateRegistryResponse::new(
+        result.registry_id,
+        result.tx_digest,
+        result.admin_address,
+    ))
+}
+
 /// Process API request based on path (async version)
 pub async fn process_request_async(path: &str, body: &str) -> Result<String, ApiError> {
     debug!("Processing request for path: {}", path);
@@ -288,6 +333,18 @@ pub async fn process_request_async(path: &str, body: &str) -> Result<String, Api
             let response = generate_sui_keypair_async(request).await?;
             let json = serde_json::to_string(&response)?;
             info!("Sui keypair request completed successfully");
+            Ok(json)
+        },
+        "/create-registry" => {
+            debug!("Processing create registry request");
+            let request: CreateRegistryRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = create_registry_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Registry creation completed successfully");
             Ok(json)
         },
         _ => {
