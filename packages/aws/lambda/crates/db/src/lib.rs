@@ -1,14 +1,11 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use std::sync::{Arc, OnceLock};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// Module declarations
+pub mod lock;
+pub mod secure_storage;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Re-export commonly used types
+pub use lock::{KeyLock, LockGuard};
+
+// Global static to store the DynamoDB client configuration (shared across modules)
+static DYNAMODB_CLIENT: OnceLock<Arc<aws_sdk_dynamodb::Client>> = OnceLock::new();

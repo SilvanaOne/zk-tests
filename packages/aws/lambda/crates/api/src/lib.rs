@@ -8,6 +8,8 @@ pub use api_generated::models::{
     MathRequest, 
     MathResponse, 
     ErrorResponse,
+    SuiKeypairRequest,
+    SuiKeypairResponse,
     math_response::Operation
 };
 
@@ -188,6 +190,65 @@ pub fn multiply_numbers(request: MathRequest) -> Result<MathResponse, ApiError> 
     ))
 }
 
+/// Handler for generating or retrieving a Sui keypair (async version)
+pub async fn generate_sui_keypair_async(request: SuiKeypairRequest) -> Result<SuiKeypairResponse, ApiError> {
+    info!("Processing Sui keypair request for {}:{}", request.login_type, request.login);
+    
+    // Get configuration from environment
+    let table_name = env::var("KEYPAIRS_TABLE_NAME")
+        .unwrap_or_else(|_| "sui-keypairs".to_string());
+    let kms_key_id = env::var("KMS_KEY_ID")
+        .map_err(|_| ApiError::InvalidOperation("KMS_KEY_ID not configured".to_string()))?;
+    
+    // Initialize secure storage
+    let storage = db::secure_storage::SecureKeyStorage::new(table_name, kms_key_id).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to initialize secure storage: {}", e)))?;
+    
+    // Check if keypair already exists
+    if let Some(address) = storage.get_keypair_address(&request.login_type, &request.login).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to check existing keypair: {}", e)))? {
+        info!("Retrieved existing Sui keypair for {}:{} with address: {}", 
+              request.login_type, request.login, address);
+        return Ok(SuiKeypairResponse::new(address));
+    }
+    
+    // Generate new keypair
+    info!("Generating new Sui keypair for {}:{}", request.login_type, request.login);
+    let keypair = sui::keypair::generate_ed25519();
+    let address = keypair.address.to_string();
+    
+    // Store the new keypair
+    storage.store_new_keypair(
+        &request.login_type, 
+        &request.login, 
+        &address,
+        &keypair.sui_private_key
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to store keypair: {}", e)))?;
+    
+    info!("Generated new Sui keypair for {}:{} with address: {}", 
+          request.login_type, request.login, address);
+    
+    Ok(SuiKeypairResponse::new(address))
+}
+
+/// Handler for generating or retrieving a Sui keypair (sync wrapper)
+pub fn generate_sui_keypair(request: SuiKeypairRequest) -> Result<SuiKeypairResponse, ApiError> {
+    // Use the existing tokio runtime if available, otherwise create a new one
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            // We're already in a tokio runtime, use it
+            handle.block_on(generate_sui_keypair_async(request))
+        },
+        Err(_) => {
+            // No runtime exists, create one
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| ApiError::Blockchain(format!("Failed to create runtime: {}", e)))?;
+            runtime.block_on(generate_sui_keypair_async(request))
+        }
+    }
+}
+
 /// Process API request based on path (async version)
 pub async fn process_request_async(path: &str, body: &str) -> Result<String, ApiError> {
     debug!("Processing request for path: {}", path);
@@ -215,6 +276,18 @@ pub async fn process_request_async(path: &str, body: &str) -> Result<String, Api
             let response = multiply_numbers(request)?;
             let json = serde_json::to_string(&response)?;
             info!("Multiply operation completed successfully");
+            Ok(json)
+        },
+        "/generate-sui-keypair" => {
+            debug!("Processing Sui keypair request");
+            let request: SuiKeypairRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = generate_sui_keypair_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Sui keypair request completed successfully");
             Ok(json)
         },
         _ => {

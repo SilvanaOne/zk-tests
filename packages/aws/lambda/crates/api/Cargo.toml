@@ -11,3 +11,4 @@ tracing = "0.1"
 tokio = { version = "1", features = ["full"] }
 api_generated = { path = "../api-generated" }
 sui = { path = "../sui" }
+db = { path = "../db" }

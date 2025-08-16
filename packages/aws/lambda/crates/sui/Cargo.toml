@@ -23,3 +23,11 @@ sui-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.gi
 
 # For Move call
 bcs = "0.1"
+
+# For keypair generation
+blake2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+
+# Local dependency for database/locking
+db = { path = "../db" }

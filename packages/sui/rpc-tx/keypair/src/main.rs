@@ -7,7 +7,7 @@ fn main() {
     println!("Sui Address: {}", generated.address);
     println!(
         "Secret Key (bech32 suiprivkey): {}",
-        generated.suiprivkey_bech32
+        generated.sui_private_key
     );
     println!("Public Key (hex): {}", hex::encode(generated.public_key));
 

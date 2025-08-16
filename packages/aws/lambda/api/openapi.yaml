@@ -73,6 +73,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+                
+  /generate-sui-keypair:
+    post:
+      summary: Generate or retrieve a Sui keypair
+      operationId: generateSuiKeypair
+      description: Generates a new Ed25519 keypair for the given login identifier or retrieves existing one
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuiKeypairRequest'
+      responses:
+        '200':
+          description: Successfully generated or retrieved keypair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiKeypairResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -134,3 +165,28 @@ components:
           type: string
           description: Human-readable error message
           example: Invalid input parameters
+          
+    SuiKeypairRequest:
+      type: object
+      required:
+        - login_type
+        - login
+      properties:
+        login_type:
+          type: string
+          description: Type of login (e.g., google, github, email)
+          example: "email"
+        login:
+          type: string
+          description: Login identifier (e.g., email address, username)
+          example: "user@example.com"
+          
+    SuiKeypairResponse:
+      type: object
+      required:
+        - address
+      properties:
+        address:
+          type: string
+          description: Sui address derived from the public key
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"

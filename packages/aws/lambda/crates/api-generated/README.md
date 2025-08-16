@@ -33,6 +33,8 @@ Class | Method | HTTP request | Description
  - [ErrorResponse](docs/ErrorResponse.md)
  - [MathRequest](docs/MathRequest.md)
  - [MathResponse](docs/MathResponse.md)
+ - [SuiKeypairRequest](docs/SuiKeypairRequest.md)
+ - [SuiKeypairResponse](docs/SuiKeypairResponse.md)
 
 
 To get access to the crate's generated documentation, use:

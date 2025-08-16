@@ -60,7 +60,7 @@ test-api:
 		-d '{"a": 2, "b": 3}' \
 		| python3 -m json.tool
 
-openapi-generate:
+openapi-generate: openapi-validate
 	@echo "Generating Rust code from OpenAPI spec..."
 	openapi-generator generate \
 		-i api/openapi.yaml \
@@ -85,6 +85,13 @@ test-multiply:
 	@curl -X POST https://dhctq4vocgpmdbp5so7jfql26q0ubzms.lambda-url.us-east-1.on.aws/multiply \
 		-H "Content-Type: application/json" \
 		-d '{"a": 10, "b": 20}' \
+		| python3 -m json.tool
+
+test-generate-keypair:
+	@echo "Testing generate Sui keypair endpoint..."
+	@curl -X POST https://dhctq4vocgpmdbp5so7jfql26q0ubzms.lambda-url.us-east-1.on.aws/generate-sui-keypair \
+		-H "Content-Type: application/json" \
+		-d '{"login_type": "email", "login": "test@example.com"}' \
 		| python3 -m json.tool
 
 # Pulumi secrets management

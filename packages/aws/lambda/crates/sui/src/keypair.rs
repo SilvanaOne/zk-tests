@@ -1,7 +1,7 @@
 use blake2::{Blake2b512, Digest};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::Serialize;
 use sui_sdk_types as sui;
 

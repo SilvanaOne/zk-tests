@@ -4,3 +4,7 @@ pub mod math_request;
 pub use self::math_request::MathRequest;
 pub mod math_response;
 pub use self::math_response::MathResponse;
+pub mod sui_keypair_request;
+pub use self::sui_keypair_request::SuiKeypairRequest;
+pub mod sui_keypair_response;
+pub use self::sui_keypair_response::SuiKeypairResponse;

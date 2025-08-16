@@ -63,6 +63,23 @@ export = async () => {
     }
   );
 
+  // Create KMS key for encrypting private keys
+  const kmsKey = new aws.kms.Key("sui-keypair-encryption-key", {
+    description: "KMS key for encrypting Sui private keys",
+    keyUsage: "ENCRYPT_DECRYPT",
+    customerMasterKeySpec: "SYMMETRIC_DEFAULT",
+    tags: {
+      Name: "sui-keypair-encryption",
+      Purpose: "Encrypt Sui private keys at rest",
+    },
+  });
+
+  // Create KMS key alias for easier reference
+  const kmsKeyAlias = new aws.kms.Alias("sui-keypair-encryption-alias", {
+    name: "alias/sui-keypair-encryption",
+    targetKeyId: kmsKey.id,
+  });
+
   // Create custom policy for additional permissions
   const lambdaCustomPolicy = new aws.iam.RolePolicy("lambda-custom-policy", {
     role: lambdaRole.id,
@@ -85,9 +102,73 @@ export = async () => {
             "s3:PutObject"
           ],
           "Resource": "${deploymentBucket.arn}/*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:UpdateItem"
+          ],
+          "Resource": [
+            "arn:aws:dynamodb:us-east-1:${accountId.accountId}:table/sui-key-locks",
+            "arn:aws:dynamodb:us-east-1:${accountId.accountId}:table/sui-keypairs"
+          ]
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "kms:Decrypt",
+            "kms:GenerateDataKey"
+          ],
+          "Resource": "${kmsKey.arn}"
         }
       ]
     }`,
+  });
+
+  // Create DynamoDB table for storing encrypted keypairs
+  const keypairsTable = new aws.dynamodb.Table("sui-keypairs", {
+    name: "sui-keypairs",
+    billingMode: "PAY_PER_REQUEST", // On-demand pricing
+    hashKey: "id", // Binary composite key (login_type + login)
+    attributes: [
+      {
+        name: "id",
+        type: "B", // Binary
+      },
+    ],
+    tags: {
+      Name: "sui-keypairs",
+      Purpose: "Store encrypted Sui keypairs",
+    },
+  });
+
+  // Create DynamoDB table for Sui key locks
+  const locksTable = new aws.dynamodb.Table("sui-key-locks", {
+    name: "sui-key-locks",
+    billingMode: "PAY_PER_REQUEST", // On-demand pricing
+    hashKey: "address",
+    rangeKey: "chain",
+    attributes: [
+      {
+        name: "address",
+        type: "S", // String
+      },
+      {
+        name: "chain",
+        type: "S", // String (devnet, testnet, mainnet)
+      },
+    ],
+    ttl: {
+      attributeName: "expires_at",
+      enabled: true, // Automatically delete expired locks
+    },
+    tags: {
+      Name: "sui-key-locks",
+      Purpose: "Prevent concurrent Sui transactions",
+    },
   });
 
   // Create CloudWatch Log Group for Lambda
@@ -134,20 +215,41 @@ Please build the Lambda function first with: make lambda
       handler: "bootstrap", // For custom runtime, this is the executable name
       code: lambdaCode,
       architectures: ["arm64"], // Use ARM64 for better price/performance
-      memorySize: 512,
+      memorySize: 128,
       timeout: 30,
       environment: {
-        variables: pulumi.all([suiPackageId, suiChain, suiAddress, suiSecretKey]).apply(
-          ([packageId, chain, address, secretKey]) => ({
-            RUST_BACKTRACE: "1",
-            LOG_LEVEL: "info",
-            // Sui blockchain configuration
-            ...(packageId && { SUI_PACKAGE_ID: packageId }),
-            ...(chain && { SUI_CHAIN: chain }),
-            ...(address && { SUI_ADDRESS: address }),
-            ...(secretKey && { SUI_SECRET_KEY: secretKey }),
-          })
-        ),
+        variables: pulumi
+          .all([
+            suiPackageId,
+            suiChain,
+            suiAddress,
+            suiSecretKey,
+            locksTable.name,
+            keypairsTable.name,
+            kmsKey.id,
+          ])
+          .apply(
+            ([
+              packageId,
+              chain,
+              address,
+              secretKey,
+              locksTableName,
+              keypairsTableName,
+              kmsKeyId,
+            ]) => ({
+              RUST_BACKTRACE: "1",
+              LOG_LEVEL: "info",
+              LOCKS_TABLE_NAME: locksTableName,
+              KEYPAIRS_TABLE_NAME: keypairsTableName,
+              KMS_KEY_ID: kmsKeyId,
+              // Sui blockchain configuration
+              ...(packageId && { SUI_PACKAGE_ID: packageId }),
+              ...(chain && { SUI_CHAIN: chain }),
+              ...(address && { SUI_ADDRESS: address }),
+              ...(secretKey && { SUI_SECRET_KEY: secretKey }),
+            })
+          ),
       },
       tags: {
         Name: "rust-lambda-function",
@@ -202,6 +304,10 @@ Please build the Lambda function first with: make lambda
     functionUrl: functionUrl.functionUrl,
     apiUrl: api.url,
     logGroupName: logGroup.name,
+    locksTableName: locksTable.name,
+    keypairsTableName: keypairsTable.name,
+    kmsKeyId: kmsKey.id,
+    kmsKeyAlias: kmsKeyAlias.name,
     region: (region as any).name || region.id,
     accountId: accountId.accountId,
   };
