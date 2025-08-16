@@ -1,4 +1,39 @@
-build:
+.PHONY: help
+help: ## Show this help message
+	@echo "AWS Lambda Rust Calculator - Available Commands"
+	@echo "==============================================="
+	@echo ""
+	@echo "Usage: make [command]"
+	@echo ""
+	@echo "Build Commands:"
+	@echo "  build              Build all Rust crates"
+	@echo "  lambda             Build Lambda deployment package (ARM64)"
+	@echo ""
+	@echo "Deployment Commands:"
+	@echo "  deploy             Build and deploy to AWS (runs 'make lambda' first)"
+	@echo "  preview            Preview Pulumi infrastructure changes"
+	@echo ""
+	@echo "OpenAPI Commands:"
+	@echo "  openapi-validate   Validate OpenAPI specification"
+	@echo "  openapi-generate   Generate Rust models from OpenAPI spec"
+	@echo ""
+	@echo "Testing Commands:"
+	@echo "  test               Test the deployed /add endpoint with a=2, b=3"
+	@echo "  test-api           Test via API Gateway"
+	@echo "  test-add           Test /add with a=100, b=200"
+	@echo "  test-multiply      Test /multiply with a=10, b=20"
+	@echo ""
+	@echo "Secrets Management:"
+	@echo "  add-secrets        Add Sui blockchain secrets to Pulumi"
+	@echo "  list-secrets       List configured Pulumi secrets"
+	@echo "  remove-secrets     Remove Sui secrets from Pulumi"
+	@echo ""
+	@echo "For detailed documentation, see README.md"
+	@echo ""
+
+.DEFAULT_GOAL := help
+
+build: ## Build all Rust crates
 	cargo build
 
 lambda:
