@@ -27,30 +27,30 @@ pub async fn agent(
 
     let time_start = Instant::now();
 
-    // // Number of parallel requests to run
-    // let num_parallel_requests = 1;
+    // Number of parallel requests to run
+    let num_parallel_requests = 1;
 
-    // // Create futures for all parallel requests
-    // let mut futures = Vec::new();
-    // for _ in 0..num_parallel_requests {
-    //     futures.push(reply_to_request(
-    //         &key,
-    //         &request.agent,
-    //         &request.action,
-    //         &request.request,
-    //         5_000_000,
-    //     ));
-    // }
+    // Create futures for all parallel requests
+    let mut futures = Vec::new();
+    for _ in 0..num_parallel_requests {
+        futures.push(reply_to_request(
+            &key,
+            &request.agent,
+            &request.action,
+            &request.request,
+            5_000_000,
+        ));
+    }
 
-    // // Run all requests in parallel
-    // let results = futures::future::join_all(futures).await;
+    // Run all requests in parallel
+    let results = futures::future::join_all(futures).await;
 
-    // // Check all results for errors
-    // for result in results {
-    //     result?;
-    // }
-    // println!("Executed in {:?} ms", time_start.elapsed().as_millis());
-    // return Ok(request.nonce);
+    // Check all results for errors
+    for result in results {
+        result?;
+    }
+    println!("Executed in {:?} ms", time_start.elapsed().as_millis());
+    return Ok(request.nonce);
 
     // Parameters for container loading
     let use_local_image = false; // Set to false to use Docker Hub

@@ -18,6 +18,7 @@
     "events": "npm run test test/events.test.ts",
     "ipfs": "npm run test test/ipfs.test.ts",
     "key": "npm run test test/key.test.ts",
+    "keypair": "npm run test test/sui-keypair.test.ts",
     "table": "npm run test test/table.test.ts",
     "enclave": "npm run test test/enclave.test.ts",
     "rpc": "npm run test test/rpc.test.ts",

@@ -1,0 +1,12 @@
+[package]
+name = "sum"
+edition = "2024.beta"
+# license = "Apache 2.0"
+# authors = ["DFST"]
+
+[dependencies]
+
+
+[addresses]
+sum = "0x0"
+

@@ -1,0 +1,6 @@
+[package]
+name = "kms"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
