@@ -1,9 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/api",
+    "crates/api-generated",
     "crates/db",
     "crates/kms", 
     "crates/lambda",
+    "crates/sui",
 ]
 
 [workspace.package]

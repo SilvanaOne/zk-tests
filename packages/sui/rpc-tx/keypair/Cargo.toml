@@ -1,0 +1,15 @@
+[package]
+name = "keypair"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bech32 = "0.9"
+rand = "0.8"
+sui-crypto = { package = "sui-crypto", git = "https://github.com/MystenLabs/sui-rust-sdk.git", features = ["ed25519"] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git" }
+blake2 = "0.10"
+hex = "0.4"
+bcs = "0.1.6"
+serde = { version = "1", features = ["derive"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }

@@ -1,3 +1,19 @@
 encryptionsalt: v1:8NkV5J+g3Fs=:v1:Kq6FUwTuCYg3ouct:CZznC+HL4Ql1rOcv4OinaS8teWmI+Q==
 config:
   aws:region: us-east-1
+  sui:packageId:
+    secure: v1:55m5pzYuk4NATwBi:qQrDlTjIT10YAvsPKP0chogn5TXJgQaonDqnnp5KCDAWeIrVlgl2PtxacsaiMo7QSHKQFdunnxVgjJb7vnFKJ/4F1RQ/6Hnu27HFPhZ5kynpYA==
+  sui:chain:
+    secure: v1:DAMEqJQK2FebRUSJ:oue6DNfICc2Ex1uS8vY6K/8bsp6pdg==
+  sui:address:
+    secure: v1:S5JlMsF+LkwmCgTx:S22tJgOjwypaiJQZM6cqXy97Aref75Nny1z78aWBF2jMvZ5sWbmLHljfqEZLX9/KvzeZjJM6PIpBfYDkAaVL1Qy2RgzYyweY/gJicPrbberJ8w==
+  sui:secretKey:
+    secure: v1:JzMnFHvOE+XDmEPb:/kWotAAEosJJXzzrs2LaLqknfQo1QRkfXQbi8kZhN3RwWupUQ4MaP6e8dZJE6KTmLopM19S40VjzibXEc2JHzEEeQziapQnZMRV90Mu88m4qwvGFYKI=
+  lambda:suiPackageId:
+    secure: v1:/F6dhfqTeqPe7MlC:oQx/wOTYH2eSXVK/D50shRi+zndLmh27pPsH9oXtqyBF+nH4TaPb0xwdWh1F7K/J9ChZHmZToa1bRrZD5HhxxhuhCvMFU9fAHJAZH2r69PHU3A==
+  lambda:suiChain:
+    secure: v1:6jcttXDOJlo3p758:ZrnevtixYmYYUXNdqcwyTOQPV9Hmsg==
+  lambda:suiAddress:
+    secure: v1:OHO+PZIs5AkIj+Jl:+aecXukseAFijWkX7jvl5f4/rrQ2bkus2drNeyQLU3rvZVYut4w8VPcSlARWsTrAzIHsNS+7l1o0uioyzGx/R9Miuv/gVVfVmNQPoLiiakDTJA==
+  lambda:suiSecretKey:
+    secure: v1:5mdToxmH3jTKiksN:yxwK2hCNKGOQ2DI99ZAFscp+66mdm8ifaS04b0s0Rm/A34Yc3pkpWn/ridxaK/B3eDGj0/ueEZFEs4msf3SpxOkAvtzK50HeLwzRTV5eJBx/vBlBuOs=

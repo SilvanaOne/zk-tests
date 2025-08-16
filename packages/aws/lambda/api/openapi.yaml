@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: Calculator API
+  description: Simple API for mathematical operations
+  version: 1.0.0
+  contact:
+    name: API Support
+servers:
+  - url: https://dhctq4vocgpmdbp5so7jfql26q0ubzms.lambda-url.us-east-1.on.aws
+    description: Lambda Function URL
+  - url: https://wprchl5wjd.execute-api.us-east-1.amazonaws.com/stage
+    description: API Gateway
+
+paths:
+  /add:
+    post:
+      summary: Add two numbers
+      operationId: addNumbers
+      description: Calculates the sum of two unsigned 64-bit integers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MathRequest'
+      responses:
+        '200':
+          description: Successful calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MathResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /multiply:
+    post:
+      summary: Multiply two numbers
+      operationId: multiplyNumbers
+      description: Calculates the product of two unsigned 64-bit integers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MathRequest'
+      responses:
+        '200':
+          description: Successful calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MathResponse'
+        '400':
+          description: Invalid input or overflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    MathRequest:
+      type: object
+      required:
+        - a
+        - b
+      properties:
+        a:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 18446744073709551615
+          description: First unsigned 64-bit integer
+          example: 100
+        b:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 18446744073709551615
+          description: Second unsigned 64-bit integer
+          example: 200
+          
+    MathResponse:
+      type: object
+      required:
+        - result
+        - operation
+      properties:
+        result:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 18446744073709551615
+          description: Result of the mathematical operation
+          example: 300
+        operation:
+          type: string
+          enum: [add, multiply]
+          description: The operation that was performed
+          example: add
+        tx_hash:
+          type: string
+          description: Transaction hash from blockchain (only for add operation when using blockchain)
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+          
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: INVALID_INPUT
+        message:
+          type: string
+          description: Human-readable error message
+          example: Invalid input parameters

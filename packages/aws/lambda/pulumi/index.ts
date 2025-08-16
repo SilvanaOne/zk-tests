@@ -9,6 +9,13 @@ export = async () => {
   const region = await aws.getRegion();
   const accountId = await aws.getCallerIdentity();
 
+  // Get Pulumi config for Sui secrets
+  const config = new pulumi.Config();
+  const suiPackageId = config.getSecret("suiPackageId");
+  const suiChain = config.getSecret("suiChain");
+  const suiAddress = config.getSecret("suiAddress");
+  const suiSecretKey = config.getSecret("suiSecretKey");
+
   // Create an S3 bucket for Lambda deployment packages
   const deploymentBucket = new aws.s3.Bucket("lambda-deployment-bucket", {
     bucket: "silvana-lambda",
@@ -20,15 +27,12 @@ export = async () => {
   });
 
   // Enable versioning on the bucket
-  new aws.s3.BucketVersioning(
-    "lambda-deployment-bucket-versioning",
-    {
-      bucket: deploymentBucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
-      },
-    }
-  );
+  new aws.s3.BucketVersioning("lambda-deployment-bucket-versioning", {
+    bucket: deploymentBucket.id,
+    versioningConfiguration: {
+      status: "Enabled",
+    },
+  });
 
   // Create IAM role for Lambda execution
   const lambdaRole = new aws.iam.Role("lambda-execution-role", {
@@ -95,8 +99,8 @@ export = async () => {
     },
   });
 
-  // Path to the Lambda binary (built with cargo lambda)
-  // The actual binary is at target/lambda/bootstrap/bootstrap
+  // Path to the Lambda binary directory (built with cargo lambda)
+  // The bootstrap binary is at target/lambda/bootstrap/bootstrap
   const lambdaBinaryPath = path.join(
     __dirname,
     "..",
@@ -114,7 +118,8 @@ Please build the Lambda function first with: make lambda
     `);
   }
 
-  // Create a zip archive of the bootstrap binary
+  // Create a zip archive with the bootstrap binary at the root
+  // The binary must be named "bootstrap" at the root of the zip
   const lambdaCode = new pulumi.asset.AssetArchive({
     bootstrap: new pulumi.asset.FileAsset(lambdaBinaryPath),
   });
@@ -132,11 +137,17 @@ Please build the Lambda function first with: make lambda
       memorySize: 512,
       timeout: 30,
       environment: {
-        variables: {
-          RUST_BACKTRACE: "1",
-          LOG_LEVEL: "info",
-          // Add any environment variables your Lambda needs
-        },
+        variables: pulumi.all([suiPackageId, suiChain, suiAddress, suiSecretKey]).apply(
+          ([packageId, chain, address, secretKey]) => ({
+            RUST_BACKTRACE: "1",
+            LOG_LEVEL: "info",
+            // Sui blockchain configuration
+            ...(packageId && { SUI_PACKAGE_ID: packageId }),
+            ...(chain && { SUI_CHAIN: chain }),
+            ...(address && { SUI_ADDRESS: address }),
+            ...(secretKey && { SUI_SECRET_KEY: secretKey }),
+          })
+        ),
       },
       tags: {
         Name: "rust-lambda-function",
@@ -164,7 +175,17 @@ Please build the Lambda function first with: make lambda
   const api = new awsx.classic.apigateway.API("lambda-api", {
     routes: [
       {
-        path: "/",
+        path: "/add",
+        method: "POST",
+        eventHandler: lambdaFunction,
+      },
+      {
+        path: "/multiply",
+        method: "POST",
+        eventHandler: lambdaFunction,
+      },
+      {
+        path: "/{proxy+}",
         method: "ANY",
         eventHandler: lambdaFunction,
       },
