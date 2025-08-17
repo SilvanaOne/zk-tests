@@ -3,12 +3,12 @@ use std::env;
 use std::str::FromStr;
 use sui_rpc::field::FieldMask;
 use sui_rpc::proto::sui::rpc::v2beta2 as proto;
-use sui_rpc::Client as GrpcClient;
 use sui_sdk_types as sui;
 use sui_crypto::SuiSigner;
 use tracing::{info, debug, warn};
 use db::KeyLock;
-use crate::chain::{rpc_url_from_env, load_sender_from_env, get_reference_gas_price, pick_gas_object};
+use crate::chain::{load_sender_from_env, get_reference_gas_price, pick_gas_object};
+use crate::client::get_client_by_str;
 
 pub struct SuiClient {
     // We'll manage the connection per-call rather than storing it
@@ -40,8 +40,6 @@ impl SuiClient {
         
         // Now proceed with transaction preparation
         let package_id = sui::Address::from_str(&env::var("SUI_PACKAGE_ID")?)?;
-        let rpc_url = rpc_url_from_env();
-        debug!("Using RPC URL: {}", rpc_url);
         
         let (sender, sk) = load_sender_from_env()?;
         debug!("Loaded sender: {}", sender);
@@ -51,12 +49,13 @@ impl SuiClient {
         tb.set_sender(sender);
         tb.set_gas_budget(10_000_000);
         
-        let mut price_client = GrpcClient::new(rpc_url.clone())?;
-        tb.set_gas_price(get_reference_gas_price(&mut price_client).await?);
+        // Get gas price and gas object using single client
+        let mut client = get_client_by_str(&chain)?;
+        let gas_price = get_reference_gas_price(&mut client).await?;
+        tb.set_gas_price(gas_price);
         
         // Select gas
-        let mut coin_client = GrpcClient::new(rpc_url.clone())?;
-        let gas_ref = pick_gas_object(&mut coin_client, sender).await?;
+        let gas_ref = pick_gas_object(&mut client, sender).await?;
         let gas_input = sui_transaction_builder::unresolved::Input::owned(
             *gas_ref.object_id(),
             gas_ref.version(),
@@ -85,7 +84,7 @@ impl SuiClient {
         let sig = sk.sign_transaction(&tx)?;
         
         // gRPC execute
-        let mut grpc = GrpcClient::new(rpc_url)?;
+        let mut grpc = get_client_by_str(&chain)?;
         let mut exec = grpc.execution_client();
         let req = proto::ExecuteTransactionRequest {
             transaction: Some(tx.into()),

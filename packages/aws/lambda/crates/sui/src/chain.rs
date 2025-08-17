@@ -6,16 +6,17 @@ use sui_rpc::Client as GrpcClient;
 use sui_sdk_types as sui;
 use tracing::{debug};
 use prost_types;
+use crate::client::Network;
+
+/// Get the network for the current chain environment
+pub fn network_from_env() -> Network {
+    let chain = env::var("SUI_CHAIN").unwrap_or_else(|_| "devnet".to_string());
+    Network::from_str(&chain).unwrap_or(Network::Devnet)
+}
 
 /// Get the RPC URL for the current chain environment
 pub fn rpc_url_from_env() -> String {
-    let chain = env::var("SUI_CHAIN").unwrap_or_else(|_| "devnet".to_string());
-    match chain.as_str() {
-        "mainnet" => "https://fullnode.mainnet.sui.io:443".to_string(),
-        "testnet" => "https://fullnode.testnet.sui.io:443".to_string(),
-        "devnet" => "https://fullnode.devnet.sui.io:443".to_string(),
-        _ => "https://fullnode.devnet.sui.io:443".to_string(),
-    }
+    network_from_env().rpc_url().to_string()
 }
 
 /// Load sender address and private key from environment variables
@@ -72,6 +73,7 @@ pub fn load_sender_from_env() -> Result<(sui::Address, sui_crypto::ed25519::Ed25
     Ok((addr, sk))
 }
 
+
 /// Get reference gas price from the network
 pub async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
     let mut ledger = client.ledger_client();
@@ -84,6 +86,7 @@ pub async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
     debug!("Using reference gas price: {}", price);
     Ok(price)
 }
+
 
 /// Pick a gas object owned by the sender
 pub async fn pick_gas_object(client: &mut GrpcClient, sender: sui::Address) -> Result<sui::ObjectReference> {

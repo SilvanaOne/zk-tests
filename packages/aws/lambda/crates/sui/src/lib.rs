@@ -1,6 +1,7 @@
 // Module declarations
 pub mod add;
 pub mod chain;
+pub mod client;
 pub mod keypair;
 pub mod registry;
 
