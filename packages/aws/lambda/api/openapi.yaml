@@ -136,6 +136,222 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /add-developer:
+    post:
+      summary: Add a developer to the registry
+      operationId: addDeveloper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddDeveloperRequest'
+      responses:
+        '200':
+          description: Successfully added developer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /update-developer:
+    post:
+      summary: Update a developer in the registry
+      operationId: updateDeveloper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeveloperRequest'
+      responses:
+        '200':
+          description: Successfully updated developer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /remove-developer:
+    post:
+      summary: Remove a developer from the registry
+      operationId: removeDeveloper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveDeveloperRequest'
+      responses:
+        '200':
+          description: Successfully removed developer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /add-agent:
+    post:
+      summary: Add an agent to the registry
+      operationId: addAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddAgentRequest'
+      responses:
+        '200':
+          description: Successfully added agent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /update-agent:
+    post:
+      summary: Update an agent in the registry
+      operationId: updateAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentRequest'
+      responses:
+        '200':
+          description: Successfully updated agent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /remove-agent:
+    post:
+      summary: Remove an agent from the registry
+      operationId: removeAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveAgentRequest'
+      responses:
+        '200':
+          description: Successfully removed agent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /add-app:
+    post:
+      summary: Add an app to the registry
+      operationId: addApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddAppRequest'
+      responses:
+        '200':
+          description: Successfully added app
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /update-app:
+    post:
+      summary: Update an app in the registry
+      operationId: updateApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAppRequest'
+      responses:
+        '200':
+          description: Successfully updated app
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /remove-app:
+    post:
+      summary: Remove an app from the registry
+      operationId: removeApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveAppRequest'
+      responses:
+        '200':
+          description: Successfully removed app
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     MathRequest:
@@ -182,6 +398,12 @@ components:
           description: Transaction hash from blockchain (only for add operation when using blockchain)
           example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
           
+    Chain:
+      type: string
+      enum: [devnet, testnet, mainnet]
+      description: Sui network
+      example: "devnet"
+    
     ErrorResponse:
       type: object
       required:
@@ -233,10 +455,7 @@ components:
           description: Name of the registry to create
           example: "My Silvana Registry"
         chain:
-          type: string
-          enum: [devnet, testnet, mainnet]
-          description: Sui network to deploy the registry on
-          example: "devnet"
+          $ref: '#/components/schemas/Chain'
           
     CreateRegistryResponse:
       type: object
@@ -257,3 +476,271 @@ components:
           type: string
           description: Admin address (sender) of the registry
           example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    
+    TransactionResponse:
+      type: object
+      required:
+        - tx_digest
+      properties:
+        tx_digest:
+          type: string
+          description: Transaction digest from the blockchain
+          example: "DXzqFwFqEFhXGZPgNvUnu1wZYXqzKPdJu5YoHauKNYjh"
+    
+    AddDeveloperRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+        - github
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: Developer name
+        github:
+          type: string
+          description: GitHub username
+        image:
+          type: string
+          description: Profile image URL
+          nullable: true
+        description:
+          type: string
+          description: Developer description
+          nullable: true
+        site:
+          type: string
+          description: Website URL
+          nullable: true
+    
+    UpdateDeveloperRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+        - github
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: Developer name
+        github:
+          type: string
+          description: GitHub username
+        image:
+          type: string
+          description: Profile image URL
+          nullable: true
+        description:
+          type: string
+          description: Developer description
+          nullable: true
+        site:
+          type: string
+          description: Website URL
+          nullable: true
+    
+    RemoveDeveloperRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+        - agent_names
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: Developer name
+        agent_names:
+          type: array
+          items:
+            type: string
+          description: List of agent names to remove with the developer
+    
+    AddAgentRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - developer
+        - name
+        - chains
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        developer:
+          type: string
+          description: Developer name
+        name:
+          type: string
+          description: Agent name
+        image:
+          type: string
+          description: Agent image URL
+          nullable: true
+        description:
+          type: string
+          description: Agent description
+          nullable: true
+        site:
+          type: string
+          description: Agent website
+          nullable: true
+        chains:
+          type: array
+          items:
+            type: string
+          description: Supported blockchains
+    
+    UpdateAgentRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - developer
+        - name
+        - chains
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        developer:
+          type: string
+          description: Developer name
+        name:
+          type: string
+          description: Agent name
+        image:
+          type: string
+          description: Agent image URL
+          nullable: true
+        description:
+          type: string
+          description: Agent description
+          nullable: true
+        site:
+          type: string
+          description: Agent website
+          nullable: true
+        chains:
+          type: array
+          items:
+            type: string
+          description: Supported blockchains
+    
+    RemoveAgentRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - developer
+        - name
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        developer:
+          type: string
+          description: Developer name
+        name:
+          type: string
+          description: Agent name
+    
+    AddAppRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: App name
+        description:
+          type: string
+          description: App description
+          nullable: true
+        image:
+          type: string
+          description: App image URL
+          nullable: true
+        site:
+          type: string
+          description: App website
+          nullable: true
+        app_cap:
+          type: string
+          description: App capability object ID
+          nullable: true
+    
+    UpdateAppRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: App name
+        description:
+          type: string
+          description: App description
+          nullable: true
+        image:
+          type: string
+          description: App image URL
+          nullable: true
+        site:
+          type: string
+          description: App website
+          nullable: true
+    
+    RemoveAppRequest:
+      type: object
+      required:
+        - registry_id
+        - chain
+        - name
+      properties:
+        registry_id:
+          type: string
+          description: Registry object ID
+        chain:
+          $ref: '#/components/schemas/Chain'
+        name:
+          type: string
+          description: App name

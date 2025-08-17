@@ -26,6 +26,11 @@ export type MathResponse = {
     tx_hash?: string;
 };
 
+/**
+ * Sui network
+ */
+export type Chain = 'devnet' | 'testnet' | 'mainnet';
+
 export type ErrorResponse = {
     /**
      * Error code
@@ -60,10 +65,7 @@ export type CreateRegistryRequest = {
      * Name of the registry to create
      */
     name: string;
-    /**
-     * Sui network to deploy the registry on
-     */
-    chain: 'devnet' | 'testnet' | 'mainnet';
+    chain: Chain;
 };
 
 export type CreateRegistryResponse = {
@@ -79,6 +81,229 @@ export type CreateRegistryResponse = {
      * Admin address (sender) of the registry
      */
     admin_address: string;
+};
+
+export type TransactionResponse = {
+    /**
+     * Transaction digest from the blockchain
+     */
+    tx_digest: string;
+};
+
+export type AddDeveloperRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    name: string;
+    /**
+     * GitHub username
+     */
+    github: string;
+    /**
+     * Profile image URL
+     */
+    image?: string | null;
+    /**
+     * Developer description
+     */
+    description?: string | null;
+    /**
+     * Website URL
+     */
+    site?: string | null;
+};
+
+export type UpdateDeveloperRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    name: string;
+    /**
+     * GitHub username
+     */
+    github: string;
+    /**
+     * Profile image URL
+     */
+    image?: string | null;
+    /**
+     * Developer description
+     */
+    description?: string | null;
+    /**
+     * Website URL
+     */
+    site?: string | null;
+};
+
+export type RemoveDeveloperRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    name: string;
+    /**
+     * List of agent names to remove with the developer
+     */
+    agent_names: Array<string>;
+};
+
+export type AddAgentRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    developer: string;
+    /**
+     * Agent name
+     */
+    name: string;
+    /**
+     * Agent image URL
+     */
+    image?: string | null;
+    /**
+     * Agent description
+     */
+    description?: string | null;
+    /**
+     * Agent website
+     */
+    site?: string | null;
+    /**
+     * Supported blockchains
+     */
+    chains: Array<string>;
+};
+
+export type UpdateAgentRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    developer: string;
+    /**
+     * Agent name
+     */
+    name: string;
+    /**
+     * Agent image URL
+     */
+    image?: string | null;
+    /**
+     * Agent description
+     */
+    description?: string | null;
+    /**
+     * Agent website
+     */
+    site?: string | null;
+    /**
+     * Supported blockchains
+     */
+    chains: Array<string>;
+};
+
+export type RemoveAgentRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * Developer name
+     */
+    developer: string;
+    /**
+     * Agent name
+     */
+    name: string;
+};
+
+export type AddAppRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * App name
+     */
+    name: string;
+    /**
+     * App description
+     */
+    description?: string | null;
+    /**
+     * App image URL
+     */
+    image?: string | null;
+    /**
+     * App website
+     */
+    site?: string | null;
+    /**
+     * App capability object ID
+     */
+    app_cap?: string | null;
+};
+
+export type UpdateAppRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * App name
+     */
+    name: string;
+    /**
+     * App description
+     */
+    description?: string | null;
+    /**
+     * App image URL
+     */
+    image?: string | null;
+    /**
+     * App website
+     */
+    site?: string | null;
+};
+
+export type RemoveAppRequest = {
+    /**
+     * Registry object ID
+     */
+    registry_id: string;
+    chain: Chain;
+    /**
+     * App name
+     */
+    name: string;
 };
 
 export type AddNumbersData = {
@@ -196,6 +421,231 @@ export type CreateRegistryResponses = {
 };
 
 export type CreateRegistryResponse2 = CreateRegistryResponses[keyof CreateRegistryResponses];
+
+export type AddDeveloperData = {
+    body: AddDeveloperRequest;
+    path?: never;
+    query?: never;
+    url: '/add-developer';
+};
+
+export type AddDeveloperErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type AddDeveloperError = AddDeveloperErrors[keyof AddDeveloperErrors];
+
+export type AddDeveloperResponses = {
+    /**
+     * Successfully added developer
+     */
+    200: TransactionResponse;
+};
+
+export type AddDeveloperResponse = AddDeveloperResponses[keyof AddDeveloperResponses];
+
+export type UpdateDeveloperData = {
+    body: UpdateDeveloperRequest;
+    path?: never;
+    query?: never;
+    url: '/update-developer';
+};
+
+export type UpdateDeveloperErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type UpdateDeveloperError = UpdateDeveloperErrors[keyof UpdateDeveloperErrors];
+
+export type UpdateDeveloperResponses = {
+    /**
+     * Successfully updated developer
+     */
+    200: TransactionResponse;
+};
+
+export type UpdateDeveloperResponse = UpdateDeveloperResponses[keyof UpdateDeveloperResponses];
+
+export type RemoveDeveloperData = {
+    body: RemoveDeveloperRequest;
+    path?: never;
+    query?: never;
+    url: '/remove-developer';
+};
+
+export type RemoveDeveloperErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type RemoveDeveloperError = RemoveDeveloperErrors[keyof RemoveDeveloperErrors];
+
+export type RemoveDeveloperResponses = {
+    /**
+     * Successfully removed developer
+     */
+    200: TransactionResponse;
+};
+
+export type RemoveDeveloperResponse = RemoveDeveloperResponses[keyof RemoveDeveloperResponses];
+
+export type AddAgentData = {
+    body: AddAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/add-agent';
+};
+
+export type AddAgentErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type AddAgentError = AddAgentErrors[keyof AddAgentErrors];
+
+export type AddAgentResponses = {
+    /**
+     * Successfully added agent
+     */
+    200: TransactionResponse;
+};
+
+export type AddAgentResponse = AddAgentResponses[keyof AddAgentResponses];
+
+export type UpdateAgentData = {
+    body: UpdateAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/update-agent';
+};
+
+export type UpdateAgentErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type UpdateAgentError = UpdateAgentErrors[keyof UpdateAgentErrors];
+
+export type UpdateAgentResponses = {
+    /**
+     * Successfully updated agent
+     */
+    200: TransactionResponse;
+};
+
+export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
+
+export type RemoveAgentData = {
+    body: RemoveAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/remove-agent';
+};
+
+export type RemoveAgentErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type RemoveAgentError = RemoveAgentErrors[keyof RemoveAgentErrors];
+
+export type RemoveAgentResponses = {
+    /**
+     * Successfully removed agent
+     */
+    200: TransactionResponse;
+};
+
+export type RemoveAgentResponse = RemoveAgentResponses[keyof RemoveAgentResponses];
+
+export type AddAppData = {
+    body: AddAppRequest;
+    path?: never;
+    query?: never;
+    url: '/add-app';
+};
+
+export type AddAppErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type AddAppError = AddAppErrors[keyof AddAppErrors];
+
+export type AddAppResponses = {
+    /**
+     * Successfully added app
+     */
+    200: TransactionResponse;
+};
+
+export type AddAppResponse = AddAppResponses[keyof AddAppResponses];
+
+export type UpdateAppData = {
+    body: UpdateAppRequest;
+    path?: never;
+    query?: never;
+    url: '/update-app';
+};
+
+export type UpdateAppErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type UpdateAppError = UpdateAppErrors[keyof UpdateAppErrors];
+
+export type UpdateAppResponses = {
+    /**
+     * Successfully updated app
+     */
+    200: TransactionResponse;
+};
+
+export type UpdateAppResponse = UpdateAppResponses[keyof UpdateAppResponses];
+
+export type RemoveAppData = {
+    body: RemoveAppRequest;
+    path?: never;
+    query?: never;
+    url: '/remove-app';
+};
+
+export type RemoveAppErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+};
+
+export type RemoveAppError = RemoveAppErrors[keyof RemoveAppErrors];
+
+export type RemoveAppResponses = {
+    /**
+     * Successfully removed app
+     */
+    200: TransactionResponse;
+};
+
+export type RemoveAppResponse = RemoveAppResponses[keyof RemoveAppResponses];
 
 export type ClientOptions = {
     baseUrl: 'https://dhctq4vocgpmdbp5so7jfql26q0ubzms.lambda-url.us-east-1.on.aws' | 'https://wprchl5wjd.execute-api.us-east-1.amazonaws.com/stage' | (string & {});

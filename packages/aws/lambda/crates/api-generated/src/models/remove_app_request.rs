@@ -12,19 +12,23 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CreateRegistryRequest {
-    /// Name of the registry to create
-    #[serde(rename = "name")]
-    pub name: String,
+pub struct RemoveAppRequest {
+    /// Registry object ID
+    #[serde(rename = "registry_id")]
+    pub registry_id: String,
     #[serde(rename = "chain")]
     pub chain: models::Chain,
+    /// App name
+    #[serde(rename = "name")]
+    pub name: String,
 }
 
-impl CreateRegistryRequest {
-    pub fn new(name: String, chain: models::Chain) -> CreateRegistryRequest {
-        CreateRegistryRequest {
-            name,
+impl RemoveAppRequest {
+    pub fn new(registry_id: String, chain: models::Chain, name: String) -> RemoveAppRequest {
+        RemoveAppRequest {
+            registry_id,
             chain,
+            name,
         }
     }
 }

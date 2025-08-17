@@ -30,13 +30,24 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [AddAgentRequest](docs/AddAgentRequest.md)
+ - [AddAppRequest](docs/AddAppRequest.md)
+ - [AddDeveloperRequest](docs/AddDeveloperRequest.md)
+ - [Chain](docs/Chain.md)
  - [CreateRegistryRequest](docs/CreateRegistryRequest.md)
  - [CreateRegistryResponse](docs/CreateRegistryResponse.md)
  - [ErrorResponse](docs/ErrorResponse.md)
  - [MathRequest](docs/MathRequest.md)
  - [MathResponse](docs/MathResponse.md)
+ - [RemoveAgentRequest](docs/RemoveAgentRequest.md)
+ - [RemoveAppRequest](docs/RemoveAppRequest.md)
+ - [RemoveDeveloperRequest](docs/RemoveDeveloperRequest.md)
  - [SuiKeypairRequest](docs/SuiKeypairRequest.md)
  - [SuiKeypairResponse](docs/SuiKeypairResponse.md)
+ - [TransactionResponse](docs/TransactionResponse.md)
+ - [UpdateAgentRequest](docs/UpdateAgentRequest.md)
+ - [UpdateAppRequest](docs/UpdateAppRequest.md)
+ - [UpdateDeveloperRequest](docs/UpdateDeveloperRequest.md)
 
 
 To get access to the crate's generated documentation, use:

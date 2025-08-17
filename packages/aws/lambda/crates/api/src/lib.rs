@@ -12,8 +12,18 @@ pub use api_generated::models::{
     SuiKeypairResponse,
     CreateRegistryRequest,
     CreateRegistryResponse,
+    TransactionResponse,
+    AddDeveloperRequest,
+    UpdateDeveloperRequest,
+    RemoveDeveloperRequest,
+    AddAgentRequest,
+    UpdateAgentRequest,
+    RemoveAgentRequest,
+    AddAppRequest,
+    UpdateAppRequest,
+    RemoveAppRequest,
+    Chain,
     math_response::Operation,
-    create_registry_request::Chain
 };
 
 /// API Errors
@@ -252,36 +262,41 @@ pub fn generate_sui_keypair(request: SuiKeypairRequest) -> Result<SuiKeypairResp
     }
 }
 
+/// Get RPC URL and registry package for a chain
+fn get_chain_config(chain: Chain) -> Result<(String, String, String), ApiError> {
+    match chain {
+        Chain::Devnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE")
+                .or_else(|_| env::var("SILVANA_REGISTRY_PACKAGE_DEVNET"))
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for devnet".to_string()))?;
+            Ok(("https://fullnode.devnet.sui.io:443".to_string(), package, "devnet".to_string()))
+        },
+        Chain::Testnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE_TESTNET")
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for testnet".to_string()))?;
+            Ok(("https://fullnode.testnet.sui.io:443".to_string(), package, "testnet".to_string()))
+        },
+        Chain::Mainnet => {
+            let package = env::var("SILVANA_REGISTRY_PACKAGE_MAINNET")
+                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for mainnet".to_string()))?;
+            Ok(("https://fullnode.mainnet.sui.io:443".to_string(), package, "mainnet".to_string()))
+        },
+    }
+}
+
 /// Handler for creating a Silvana registry
 pub async fn create_registry_async(request: CreateRegistryRequest) -> Result<CreateRegistryResponse, ApiError> {
     info!("Creating Silvana registry: name={}, chain={:?}", request.name, request.chain);
     
     // Get chain-specific configuration
-    let (rpc_url, registry_package, chain_name) = match request.chain {
-        Chain::Devnet => {
-            let package = env::var("SILVANA_REGISTRY_PACKAGE")
-                .or_else(|_| env::var("SILVANA_REGISTRY_PACKAGE_DEVNET"))
-                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for devnet".to_string()))?;
-            ("https://fullnode.devnet.sui.io:443", package, "devnet")
-        },
-        Chain::Testnet => {
-            let package = env::var("SILVANA_REGISTRY_PACKAGE_TESTNET")
-                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for testnet".to_string()))?;
-            ("https://fullnode.testnet.sui.io:443", package, "testnet")
-        },
-        Chain::Mainnet => {
-            let package = env::var("SILVANA_REGISTRY_PACKAGE_MAINNET")
-                .map_err(|_| ApiError::InvalidOperation("Registry package not configured for mainnet".to_string()))?;
-            ("https://fullnode.mainnet.sui.io:443", package, "mainnet")
-        },
-    };
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
     
     // Call create_registry function
     let result = sui::create_registry(
-        rpc_url,
+        &rpc_url,
         &registry_package,
         request.name,
-        chain_name,
+        &chain_name,
     ).await
         .map_err(|e| ApiError::Blockchain(format!("Failed to create registry: {}", e)))?;
     
@@ -292,6 +307,195 @@ pub async fn create_registry_async(request: CreateRegistryRequest) -> Result<Cre
         result.tx_digest,
         result.admin_address,
     ))
+}
+
+/// Handler for adding a developer
+pub async fn add_developer_async(request: AddDeveloperRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Adding developer: name={}, github={}", request.name, request.github);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::add_developer(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+        request.github,
+        request.image.flatten(),
+        request.description.flatten(),
+        request.site.flatten(),
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to add developer: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for updating a developer
+pub async fn update_developer_async(request: UpdateDeveloperRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Updating developer: name={}, github={}", request.name, request.github);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::update_developer(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+        request.github,
+        request.image.flatten(),
+        request.description.flatten(),
+        request.site.flatten(),
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to update developer: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for removing a developer
+pub async fn remove_developer_async(request: RemoveDeveloperRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Removing developer: name={}", request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::remove_developer(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+        request.agent_names,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to remove developer: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for adding an agent
+pub async fn add_agent_async(request: AddAgentRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Adding agent: developer={}, name={}", request.developer, request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::add_agent(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.developer,
+        request.name,
+        request.image.flatten(),
+        request.description.flatten(),
+        request.site.flatten(),
+        request.chains,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to add agent: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for updating an agent
+pub async fn update_agent_async(request: UpdateAgentRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Updating agent: developer={}, name={}", request.developer, request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::update_agent(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.developer,
+        request.name,
+        request.image.flatten(),
+        request.description.flatten(),
+        request.site.flatten(),
+        request.chains,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to update agent: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for removing an agent
+pub async fn remove_agent_async(request: RemoveAgentRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Removing agent: developer={}, name={}", request.developer, request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::remove_agent(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.developer,
+        request.name,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to remove agent: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for adding an app
+pub async fn add_app_async(request: AddAppRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Adding app: name={}", request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::add_app(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+        request.description.flatten(),
+        request.image.flatten(),
+        request.site.flatten(),
+        request.app_cap.flatten(),
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to add app: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for updating an app
+pub async fn update_app_async(request: UpdateAppRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Updating app: name={}", request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::update_app(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+        request.description.flatten(),
+        request.image.flatten(),
+        request.site.flatten(),
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to update app: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
+}
+
+/// Handler for removing an app
+pub async fn remove_app_async(request: RemoveAppRequest) -> Result<TransactionResponse, ApiError> {
+    info!("Removing app: name={}", request.name);
+    
+    let (rpc_url, registry_package, chain_name) = get_chain_config(request.chain)?;
+    
+    let tx_digest = sui::remove_app(
+        &rpc_url,
+        &registry_package,
+        &request.registry_id,
+        &chain_name,
+        request.name,
+    ).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to remove app: {}", e)))?;
+    
+    Ok(TransactionResponse::new(tx_digest))
 }
 
 /// Process API request based on path (async version)
@@ -345,6 +549,114 @@ pub async fn process_request_async(path: &str, body: &str) -> Result<String, Api
             let response = create_registry_async(request).await?;
             let json = serde_json::to_string(&response)?;
             info!("Registry creation completed successfully");
+            Ok(json)
+        },
+        "/add-developer" => {
+            debug!("Processing add developer request");
+            let request: AddDeveloperRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = add_developer_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Add developer completed successfully");
+            Ok(json)
+        },
+        "/update-developer" => {
+            debug!("Processing update developer request");
+            let request: UpdateDeveloperRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = update_developer_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Update developer completed successfully");
+            Ok(json)
+        },
+        "/remove-developer" => {
+            debug!("Processing remove developer request");
+            let request: RemoveDeveloperRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = remove_developer_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Remove developer completed successfully");
+            Ok(json)
+        },
+        "/add-agent" => {
+            debug!("Processing add agent request");
+            let request: AddAgentRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = add_agent_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Add agent completed successfully");
+            Ok(json)
+        },
+        "/update-agent" => {
+            debug!("Processing update agent request");
+            let request: UpdateAgentRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = update_agent_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Update agent completed successfully");
+            Ok(json)
+        },
+        "/remove-agent" => {
+            debug!("Processing remove agent request");
+            let request: RemoveAgentRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = remove_agent_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Remove agent completed successfully");
+            Ok(json)
+        },
+        "/add-app" => {
+            debug!("Processing add app request");
+            let request: AddAppRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = add_app_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Add app completed successfully");
+            Ok(json)
+        },
+        "/update-app" => {
+            debug!("Processing update app request");
+            let request: UpdateAppRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = update_app_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Update app completed successfully");
+            Ok(json)
+        },
+        "/remove-app" => {
+            debug!("Processing remove app request");
+            let request: RemoveAppRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = remove_app_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Remove app completed successfully");
             Ok(json)
         },
         _ => {

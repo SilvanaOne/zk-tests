@@ -832,10 +832,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64ct",
+ "bcs",
  "bech32",
  "dotenv",
  "hex",
  "prost-types",
+ "serde",
  "serde_json",
  "sui-crypto",
  "sui-rpc",

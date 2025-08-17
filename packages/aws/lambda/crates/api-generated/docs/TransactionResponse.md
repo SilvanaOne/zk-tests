@@ -1,11 +1,10 @@
-# CreateRegistryRequest
+# TransactionResponse
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**name** | **String** | Name of the registry to create | 
-**chain** | [**models::Chain**](Chain.md) |  | 
+**tx_digest** | **String** | Transaction digest from the blockchain | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

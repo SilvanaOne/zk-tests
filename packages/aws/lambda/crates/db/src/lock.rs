@@ -234,14 +234,44 @@ impl LockGuard {
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        // Only log if the lock wasn't explicitly released
+        // If the lock wasn't explicitly released, release it now
         if !self.released {
             let held_duration = Utc::now() - self.acquired_at;
             let held_ms = held_duration.num_milliseconds();
-            warn!(
-                "LockGuard for {}#{} dropped without explicit release after {}ms",
-                self.address, self.chain, held_ms
-            );
+            
+            // Clone what we need for the async operation
+            let client = self.client.clone();
+            let table_name = self.table_name.clone();
+            let address = self.address.clone();
+            let chain = self.chain.clone();
+            
+            // We can't use async in Drop, so we spawn a blocking task
+            // to release the lock from DynamoDB
+            let rt = tokio::runtime::Handle::current();
+            let _ = rt.spawn(async move {
+                let result = client
+                    .delete_item()
+                    .table_name(&table_name)
+                    .key("address", AttributeValue::S(address.clone()))
+                    .key("chain", AttributeValue::S(chain.clone()))
+                    .send()
+                    .await;
+                
+                match result {
+                    Ok(_) => {
+                        warn!(
+                            "LockGuard for {}#{} dropped without explicit release after {}ms - lock released in Drop",
+                            address, chain, held_ms
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to release lock for {}#{} in Drop after {}ms: {}",
+                            address, chain, held_ms, e
+                        );
+                    }
+                }
+            });
         }
     }
 }
