@@ -229,7 +229,11 @@ pub async fn generate_sui_keypair_async(request: SuiKeypairRequest) -> Result<Su
     
     // Generate new keypair
     info!("Generating new Sui keypair for {}:{}", request.login_type, request.login);
-    let keypair = sui::keypair::generate_ed25519();
+    let keypair = sui::keypair::generate_ed25519()
+        .map_err(|e| {
+            tracing::error!("Failed to generate keypair for {}:{}: {}", request.login_type, request.login, e);
+            ApiError::InvalidOperation(format!("Failed to generate keypair: {}", e))
+        })?;
     let address = keypair.address.to_string();
     
     // Store the new keypair
@@ -239,7 +243,10 @@ pub async fn generate_sui_keypair_async(request: SuiKeypairRequest) -> Result<Su
         &address,
         &keypair.sui_private_key
     ).await
-        .map_err(|e| ApiError::Blockchain(format!("Failed to store keypair: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Failed to store keypair for {}:{}: {}", request.login_type, request.login, e);
+            ApiError::Blockchain(format!("Failed to store keypair: {}", e))
+        })?;
     
     info!("Generated new Sui keypair for {}:{} with address: {}", 
           request.login_type, request.login, address);

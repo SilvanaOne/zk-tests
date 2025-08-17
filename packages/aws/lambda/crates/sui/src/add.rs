@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::env;
 use std::str::FromStr;
 use sui_rpc::field::FieldMask;
@@ -72,8 +72,10 @@ impl SuiClient {
         // Function call: package::main::calculate_sum(u64,u64)
         let func = sui_transaction_builder::Function::new(
             package_id,
-            "main".parse().unwrap(),
-            "calculate_sum".parse().unwrap(),
+            "main".parse()
+                .map_err(|e| anyhow!("Failed to parse module name 'main': {}", e))?,
+            "calculate_sum".parse()
+                .map_err(|e| anyhow!("Failed to parse function name 'calculate_sum': {}", e))?,
             vec![],
         );
         tb.move_call(func, vec![a_arg, b_arg]);

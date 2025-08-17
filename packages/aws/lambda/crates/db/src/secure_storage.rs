@@ -46,7 +46,9 @@ impl SecureKeyStorage {
                 }
                 Err(_) => {
                     // Another thread initialized it first
-                    super::DYNAMODB_CLIENT.get().unwrap().clone()
+                    super::DYNAMODB_CLIENT.get()
+                        .ok_or_else(|| anyhow!("DynamoDB client not initialized despite concurrent set"))?
+                        .clone()
                 }
             }
         };

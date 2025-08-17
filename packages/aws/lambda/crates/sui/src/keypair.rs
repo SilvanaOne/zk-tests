@@ -13,7 +13,7 @@ pub struct GeneratedKeypair {
     pub sui_private_key: String,
 }
 
-pub fn generate_ed25519() -> GeneratedKeypair {
+pub fn generate_ed25519() -> Result<GeneratedKeypair, String> {
     let mut csprng = OsRng;
     let mut sk_bytes = [0u8; 32];
     csprng.fill_bytes(&mut sk_bytes);
@@ -30,7 +30,8 @@ pub fn generate_ed25519() -> GeneratedKeypair {
     let full = hasher.finalize();
     let mut addr_bytes = [0u8; 32];
     addr_bytes.copy_from_slice(&full[..32]);
-    let address = sui::Address::from_bytes(&addr_bytes).expect("address length");
+    let address = sui::Address::from_bytes(&addr_bytes)
+        .map_err(|e| format!("Failed to create address from bytes: {}", e))?;
 
     // suiprivkey bech32 encoding: [flag || 32-byte secret]
     let mut payload = Vec::with_capacity(33);
@@ -41,14 +42,14 @@ pub fn generate_ed25519() -> GeneratedKeypair {
         bech32::ToBase32::to_base32(&payload),
         bech32::Variant::Bech32,
     )
-    .expect("bech32 encode");
+    .map_err(|e| format!("Failed to encode bech32 private key: {}", e))?;
 
-    GeneratedKeypair {
+    Ok(GeneratedKeypair {
         secret_key: sk_bytes,
         public_key: pk_bytes,
         address,
         sui_private_key,
-    }
+    })
 }
 
 pub fn sign_message(secret_key: &[u8; 32], message: &[u8]) -> Vec<u8> {

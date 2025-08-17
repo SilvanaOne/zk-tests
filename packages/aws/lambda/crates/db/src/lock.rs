@@ -31,7 +31,9 @@ impl KeyLock {
                 Err(_) => {
                     // Another thread initialized it first, use that one
                     debug!("Another thread initialized DynamoDB client, using that");
-                    super::DYNAMODB_CLIENT.get().unwrap().clone()
+                    super::DYNAMODB_CLIENT.get()
+                        .ok_or_else(|| anyhow!("DynamoDB client not initialized despite concurrent set"))?
+                        .clone()
                 }
             }
         };

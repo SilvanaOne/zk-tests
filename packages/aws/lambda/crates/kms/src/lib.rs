@@ -49,7 +49,9 @@ impl KMS {
                 Err(_) => {
                     // Another thread initialized it first, use that one
                     info!("Another thread initialized KMS client, using that");
-                    KMS_CLIENT.get().unwrap().clone()
+                    KMS_CLIENT.get()
+                        .ok_or_else(|| anyhow!("KMS client not initialized despite concurrent set"))?
+                        .clone()
                 }
             }
         };
@@ -69,7 +71,10 @@ impl KMS {
             .key_spec(aws_sdk_kms::types::DataKeySpec::Aes256)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to generate KMS data key: {}", e))?;
+            .map_err(|e| {
+                tracing::error!("Failed to generate KMS data key: {}", e);
+                anyhow!("Failed to generate KMS data key: {}", e)
+            })?;
 
         let plaintext_key = data_key_response
             .plaintext()
@@ -111,7 +116,10 @@ impl KMS {
             .key_id(&self.key_id)
             .send()
             .await
-            .map_err(|e| anyhow!("Failed to decrypt KMS data key: {}", e))?;
+            .map_err(|e| {
+                tracing::error!("Failed to decrypt KMS data key: {}", e);
+                anyhow!("Failed to decrypt KMS data key: {}", e)
+            })?;
 
         let plaintext_key = decrypt_response
             .plaintext()

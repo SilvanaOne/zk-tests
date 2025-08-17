@@ -62,7 +62,11 @@ async fn main() -> Result<(), Error> {
 
     let subscriber = tracing_subscriber::registry().with(filter).with(fmt_layer);
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|e| {
+            eprintln!("Failed to set tracing subscriber: {}", e);
+            Error::from(format!("Failed to set tracing subscriber: {}", e))
+        })?;
 
     run(service_fn(function_handler)).await
 }

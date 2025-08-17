@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::env;
 use std::str::FromStr;
 use sui_rpc::field::FieldMask;
@@ -77,8 +77,10 @@ pub async fn create_registry(
     // Function call: coordination::registry::create_registry(String)
     let func = sui_transaction_builder::Function::new(
         package_id,
-        "registry".parse().unwrap(),
-        "create_registry".parse().unwrap(),
+        "registry".parse()
+            .map_err(|e| anyhow!("Failed to parse module name 'registry': {}", e))?,
+        "create_registry".parse()
+            .map_err(|e| anyhow!("Failed to parse function name 'create_registry': {}", e))?,
         vec![],
     );
     tb.move_call(func, vec![name_arg]);
@@ -715,8 +717,10 @@ where
     // Function call
     let func = sui_transaction_builder::Function::new(
         package_id,
-        "registry".parse().unwrap(),
-        function_name.parse().unwrap(),
+        "registry".parse()
+            .map_err(|e| anyhow!("Failed to parse module name 'registry': {}", e))?,
+        function_name.parse()
+            .map_err(|e| anyhow!("Failed to parse function name '{}': {}", function_name, e))?,
         vec![],
     );
     tb.move_call(func, args);
