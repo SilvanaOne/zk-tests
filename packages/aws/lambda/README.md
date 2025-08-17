@@ -2,6 +2,24 @@
 
 A serverless API backend built with Rust, deployed on AWS Lambda, with Sui blockchain integration for on-chain operations, secure keypair management, distributed key locking, Silvana registry creation and management, and automated backup capabilities.
 
+## Features
+
+- **Serverless Rust on AWS Lambda**: ARM64 custom runtime behind API Gateway.
+- **OpenAPI‑driven development**: Single source of truth with automated Rust models and TypeScript client generation.
+- **Sui blockchain integration**: On‑chain math and full Silvana registry CRUD with event extraction and shared‑object version handling; supports devnet, testnet, and mainnet.
+- **Secure key management**: KMS envelope encryption (AES‑256‑GCM), encrypted keypairs in DynamoDB; private keys never returned.
+- **Distributed key locking**: DynamoDB‑based locks with expiry, retries, and timing metrics to prevent concurrent key use.
+- **Automated backups**: Point‑in‑time recovery (35 days) plus scheduled daily/weekly/monthly backups via AWS Backup.
+- **Observability**: Structured logs with per‑operation timing in CloudWatch.
+- **Infrastructure as Code**: Pulumi provisioning with configurable memory, timeout, architecture, and secrets.
+- **Ready‑made workflows**: Makefile tasks for build, test, openapi generation, and deploy.
+- **TypeScript SDK**: Generated client and tests covering all endpoints.
+- **S3 deployment bucket**: Versioned S3 bucket for Lambda artifacts.
+- **Lambda Function URL with CORS**: Public function URL with permissive CORS for quick testing.
+- **IAM policies**: Scoped permissions for DynamoDB (keypairs/locks) and KMS (Decrypt/GenerateDataKey).
+- **DynamoDB TTL for locks**: Automatic cleanup of expired locks via `expires_at`.
+- **Warm client reuse**: AWS SDK clients cached across invocations using `OnceLock` for lower cold‑start overhead.
+
 ## Architecture
 
 - **AWS Lambda**: Serverless compute using ARM64 architecture with custom Rust runtime
@@ -140,15 +158,18 @@ aws configure
 If you want to use blockchain integration:
 
 ```bash
-# Create a .env file with your Sui credentials
-cat > ../../sui/rpc-tx/.env << EOF
-SUI_PACKAGE_ID=0x...
+# Create a .env file with your Sui credentials (in this directory)
+cat > .env << EOF
+# Note: variable names must match the Makefile
+SUI_ADD_PACKAGE_ID=0x...
 SUI_CHAIN=devnet
 SUI_ADDRESS=0x...
 SUI_SECRET_KEY=suiprivkey...
+# Optional: Silvana registry package for devnet
+SILVANA_REGISTRY_PACKAGE_DEVNET=0x...
 EOF
 
-# Add secrets to Pulumi
+# Add secrets to Pulumi (reads from .env)
 make add-secrets
 ```
 
@@ -184,11 +205,13 @@ The project follows a modular architecture with specialized crates:
 ### Core Crates
 
 - **`api`**: Business logic and request handlers
+
   - Async/sync wrappers for Lambda compatibility
   - Error handling and response formatting
   - Integration with blockchain and storage layers
 
 - **`sui`**: Sui blockchain client (modular structure)
+
   - `chain.rs`: Shared RPC URL configuration and helper functions
   - `add.rs`: Addition operation on blockchain
   - `registry.rs`: Silvana registry creation and management with event extraction
@@ -196,11 +219,13 @@ The project follows a modular architecture with specialized crates:
   - `keypair.rs`: Ed25519 keypair generation with Bech32 encoding
 
 - **`db`**: DynamoDB operations
+
   - `lock.rs`: Distributed key locking mechanism
   - `secure_storage.rs`: Encrypted keypair storage
   - Shared DynamoDB client with `OnceLock` pattern
 
 - **`kms`**: AWS KMS integration
+
   - AES-256-GCM encryption/decryption
   - Envelope encryption with data keys
   - Secure key material handling
@@ -290,7 +315,12 @@ make build           # Build all crates
 make lambda          # Build Lambda deployment package
 make deploy          # Deploy to AWS (builds first)
 make preview         # Preview infrastructure changes
-make test            # Test the deployed API
+make test            # Test the deployed Function URL /add with a=2, b=3
+make test-api        # Test via API Gateway /add with a=2, b=3
+make test-add        # Test Function URL /add with a=100, b=200
+make test-multiply   # Test Function URL /multiply with a=10, b=20
+make test-client     # Run TypeScript client tests
+make test-generate-keypair # Test /generate-sui-keypair endpoint
 make openapi-validate # Validate OpenAPI specification
 make openapi-generate # Generate Rust code from OpenAPI
 make add-secrets     # Add Sui secrets to Pulumi
@@ -322,10 +352,14 @@ The Lambda function uses these environment variables (set via Pulumi):
 
 Edit `pulumi/index.ts` to configure:
 
-- Lambda memory size (default: 512MB)
+- Lambda memory size (default: 128MB)
 - Lambda timeout (default: 30s)
 - Architecture (default: ARM64)
 - Log retention (default: 7 days)
+
+Notes:
+
+- Devnet registry is wired via `SILVANA_REGISTRY_PACKAGE`. Testnet/mainnet are supported by the code but require setting `SILVANA_REGISTRY_PACKAGE_TESTNET` and `SILVANA_REGISTRY_PACKAGE_MAINNET` as environment variables (extend Pulumi config if needed).
 
 ## Key Features
 
@@ -334,12 +368,14 @@ Edit `pulumi/index.ts` to configure:
 The system implements comprehensive backup strategies for DynamoDB tables to ensure data durability and recovery capabilities:
 
 #### Point-in-Time Recovery (PITR)
+
 - **Continuous backups**: Automatically enabled for both keypairs and locks tables
 - **35-day retention**: Can restore to any second within the past 35 days
 - **Per-second granularity**: Precise recovery to any point in time
 - **Zero data loss**: Ensures critical keypair data is never lost
 
 #### AWS Backup Integration
+
 - **Scheduled backups**: Three-tier backup strategy
   - **Daily backups**: Retained for 35 days
   - **Weekly backups**: Retained for 120 days (moved to cold storage after 30 days)
@@ -349,9 +385,11 @@ The system implements comprehensive backup strategies for DynamoDB tables to ens
 - **Automated scheduling**: No manual intervention required
 
 #### Recovery Procedures
+
 To restore from a backup:
 
 1. **Point-in-time recovery** (for recent data):
+
    ```bash
    aws dynamodb restore-table-to-point-in-time \
      --source-table-name sui-keypairs \
@@ -469,7 +507,7 @@ Request:
 ```json
 {
   "name": "My Registry",
-  "chain": "devnet"  // Options: devnet, testnet, mainnet
+  "chain": "devnet" // Options: devnet, testnet, mainnet
 }
 ```
 
@@ -484,6 +522,7 @@ Response:
 ```
 
 **Features**:
+
 - Creates a registry smart contract on Sui
 - Extracts registry ID from RegistryCreatedEvent
 - Uses distributed locking for transaction safety
@@ -503,9 +542,9 @@ Request:
   "chain": "devnet",
   "name": "Developer Name",
   "github": "github-username",
-  "image": "https://example.com/avatar.png",  // Optional
-  "description": "Developer description",      // Optional
-  "site": "https://developer-site.com"        // Optional
+  "image": "https://example.com/avatar.png", // Optional
+  "description": "Developer description", // Optional
+  "site": "https://developer-site.com" // Optional
 }
 ```
 
@@ -536,7 +575,7 @@ Request:
   "registry_id": "0x1234567890abcdef...",
   "chain": "devnet",
   "name": "Developer Name",
-  "agent_names": ["Agent1", "Agent2"]  // List of agent names to remove
+  "agent_names": ["Agent1", "Agent2"] // List of agent names to remove
 }
 ```
 
@@ -560,10 +599,10 @@ Request:
   "chain": "devnet",
   "developer": "Developer Name",
   "name": "Agent Name",
-  "image": "https://example.com/agent.png",    // Optional
-  "description": "Agent description",           // Optional
-  "site": "https://agent-site.com",            // Optional
-  "chains": ["sui-devnet", "sui-testnet"]      // Supported chains
+  "image": "https://example.com/agent.png", // Optional
+  "description": "Agent description", // Optional
+  "site": "https://agent-site.com", // Optional
+  "chains": ["sui-devnet", "sui-testnet"] // Supported chains
 }
 ```
 
@@ -617,10 +656,10 @@ Request:
   "registry_id": "0x1234567890abcdef...",
   "chain": "devnet",
   "name": "App Name",
-  "description": "App description",             // Optional
-  "image": "https://example.com/app.png",      // Optional
-  "site": "https://app-site.com",              // Optional
-  "app_cap": null                              // Optional app capability
+  "description": "App description", // Optional
+  "image": "https://example.com/app.png", // Optional
+  "site": "https://app-site.com", // Optional
+  "app_cap": null // Optional app capability
 }
 ```
 
@@ -643,9 +682,9 @@ Request:
   "registry_id": "0x1234567890abcdef...",
   "chain": "devnet",
   "name": "App Name",
-  "description": "Updated description",         // Optional
-  "image": "https://example.com/app2.png",     // Optional
-  "site": "https://new-app-site.com"           // Optional
+  "description": "Updated description", // Optional
+  "image": "https://example.com/app2.png", // Optional
+  "site": "https://new-app-site.com" // Optional
 }
 ```
 
@@ -680,6 +719,7 @@ Response:
 ```
 
 **Registry Management Features**:
+
 - Full CRUD operations for developers, agents, and apps
 - Proper handling of Sui shared objects with initial version fetching
 - Support for optional Move types (Option<String>)
@@ -705,32 +745,6 @@ Logs include timestamp, level, module, and message:
 2025-08-16 16:47:48.417 INFO  [lambda::handler] Incoming POST request to /add from 88.230.51.187
 2025-08-16 16:47:48.419 INFO  [api] Processing add operation: a=2, b=3
 ```
-
-## Recent Improvements
-
-### Code Refactoring (August 2025)
-- **Modular Sui crate structure**: Separated concerns into `chain.rs`, `add.rs`, and `registry.rs`
-- **Eliminated code duplication**: Shared helper functions for RPC URLs, gas selection, and sender loading
-- **Fixed timing bug in lock.rs**: Corrected elapsed time calculation preventing immediate timeouts
-- **Improved error detection**: Fixed ConditionalCheckFailedException detection for proper retry logic
-
-### New Features
-- **Silvana Registry Management**: Complete CRUD operations for registries, developers, agents, and apps
-- **Event-based data extraction**: Registry ID properly extracted from RegistryCreatedEvent
-- **Shared object handling**: Proper fetching and use of initial shared versions for Sui objects
-- **Retry mechanism**: Automatic retries when fetching shared object versions
-- **String and Option serialization**: Proper BCS encoding of Move types (String as struct with bytes, Option as struct with vec)
-- **Transaction timing logs**: Added millisecond-precision timing for all blockchain operations
-- **Automated backups**: Comprehensive backup strategy with PITR and scheduled backups
-- **TypeScript client**: Full support for all registry management endpoints with proper types
-
-### Bug Fixes
-- **Lock timing bug**: Fixed `Utc::now() - Utc::now()` always returning 0
-- **gRPC read_mask**: Removed unsupported fields like `object_changes` and `effects`
-- **String encoding**: Fixed Move String serialization as struct with bytes field
-- **Registry ID extraction**: Fixed to properly extract registry object ID from events instead of coin addresses
-- **Shared object versions**: Fixed "Missing initial shared version" errors by properly fetching from blockchain
-- **TypeScript compatibility**: Updated imports to match generated OpenAPI types
 
 ## Troubleshooting
 
