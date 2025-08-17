@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: Calculator API
-  description: Simple API for mathematical operations
+  title: Silvana Registry Lambda API
+  description: API for Silvana Lambda functions
   version: 1.0.0
   contact:
     name: API Support
