@@ -14,6 +14,8 @@ docs/MathResponse.md
 docs/RemoveAgentRequest.md
 docs/RemoveAppRequest.md
 docs/RemoveDeveloperRequest.md
+docs/SignMessageRequest.md
+docs/SignMessageResponse.md
 docs/SuiKeypairRequest.md
 docs/SuiKeypairResponse.md
 docs/TransactionResponse.md
@@ -37,6 +39,8 @@ src/models/mod.rs
 src/models/remove_agent_request.rs
 src/models/remove_app_request.rs
 src/models/remove_developer_request.rs
+src/models/sign_message_request.rs
+src/models/sign_message_response.rs
 src/models/sui_keypair_request.rs
 src/models/sui_keypair_response.rs
 src/models/transaction_response.rs

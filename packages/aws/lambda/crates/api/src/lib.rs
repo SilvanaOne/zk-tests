@@ -10,6 +10,8 @@ pub use api_generated::models::{
     ErrorResponse,
     SuiKeypairRequest,
     SuiKeypairResponse,
+    SignMessageRequest,
+    SignMessageResponse,
     CreateRegistryRequest,
     CreateRegistryResponse,
     TransactionResponse,
@@ -93,7 +95,7 @@ pub async fn add_numbers_async(request: MathRequest) -> Result<MathResponse, Api
     if use_blockchain {
         info!("Using Sui blockchain for calculation");
         // Use Sui blockchain for calculation
-        match sui::SuiClient::from_env().await {
+        match sui::add::SuiClient::from_env().await {
             Ok(client) => {
                 match client.call_add_function(a, b).await {
                     Ok((sum, tx_hash)) => {
@@ -258,6 +260,83 @@ pub fn generate_sui_keypair(request: SuiKeypairRequest) -> Result<SuiKeypairResp
             let runtime = tokio::runtime::Runtime::new()
                 .map_err(|e| ApiError::Blockchain(format!("Failed to create runtime: {}", e)))?;
             runtime.block_on(generate_sui_keypair_async(request))
+        }
+    }
+}
+
+/// Handler for signing a message with a Sui keypair (async version)
+pub async fn sign_message_async(request: SignMessageRequest) -> Result<SignMessageResponse, ApiError> {
+    info!("Processing sign message request for {}:{}", request.login_type, request.login);
+    
+    // Get configuration from environment
+    let table_name = env::var("KEYPAIRS_TABLE_NAME")
+        .unwrap_or_else(|_| "sui-keypairs".to_string());
+    let kms_key_id = env::var("KMS_KEY_ID")
+        .map_err(|_| ApiError::InvalidOperation("KMS_KEY_ID not configured".to_string()))?;
+    
+    // Initialize secure storage
+    let storage = db::secure_storage::SecureKeyStorage::new(table_name, kms_key_id).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to initialize secure storage: {}", e)))?;
+    
+    // Get the address first to check if keypair exists
+    let address = storage.get_keypair_address(&request.login_type, &request.login).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to check keypair: {}", e)))?
+        .ok_or_else(|| ApiError::InvalidInput(format!("Keypair not found for {}:{}", request.login_type, request.login)))?;
+    
+    // Get the private key
+    let sui_private_key = storage.get_private_key(&request.login_type, &request.login).await
+        .map_err(|e| ApiError::Blockchain(format!("Failed to retrieve private key: {}", e)))?;
+    
+    // Parse the private key to get the secret key bytes
+    let secret_key = sui::keypair::parse_sui_private_key(&sui_private_key)
+        .map_err(|e| ApiError::Blockchain(format!("Failed to parse private key: {}", e)))?;
+    
+    // Convert message from Vec<i32> to Vec<u8>
+    let message_bytes: Vec<u8> = request.message.iter()
+        .map(|&b| b as u8)
+        .collect();
+    
+    // Sign the message
+    let signature = sui::keypair::sign_message(&secret_key, &message_bytes);
+    
+    // Verify the signature and measure the time
+    let sui_address = sui::keypair::parse_address(&address)
+        .map_err(|e| ApiError::Blockchain(format!("Failed to parse address: {}", e)))?;
+    
+    let start_verify = std::time::Instant::now();
+    let verification_result = sui::keypair::verify_with_address(&sui_address, &message_bytes, &signature);
+    let verify_elapsed_ms = start_verify.elapsed().as_millis();
+    
+    info!("Signature verification result: {} (took {}ms)", verification_result, verify_elapsed_ms);
+    
+    if !verification_result {
+        return Err(ApiError::Blockchain("Signature verification failed".to_string()));
+    }
+    
+    // Convert signature to Vec<i32> for response
+    let signature_response: Vec<i32> = signature.iter()
+        .map(|&b| b as i32)
+        .collect();
+    
+    info!("Successfully signed message for {}:{} with address: {}", 
+          request.login_type, request.login, address);
+    
+    Ok(SignMessageResponse::new(signature_response, address))
+}
+
+/// Handler for signing a message with a Sui keypair (sync wrapper)
+pub fn sign_message(request: SignMessageRequest) -> Result<SignMessageResponse, ApiError> {
+    // Use the existing tokio runtime if available, otherwise create a new one
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            // We're already in a tokio runtime, use it
+            handle.block_on(sign_message_async(request))
+        },
+        Err(_) => {
+            // No runtime exists, create one
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| ApiError::Blockchain(format!("Failed to create runtime: {}", e)))?;
+            runtime.block_on(sign_message_async(request))
         }
     }
 }
@@ -537,6 +616,18 @@ pub async fn process_request_async(path: &str, body: &str) -> Result<String, Api
             let response = generate_sui_keypair_async(request).await?;
             let json = serde_json::to_string(&response)?;
             info!("Sui keypair request completed successfully");
+            Ok(json)
+        },
+        "/sign-message" => {
+            debug!("Processing sign message request");
+            let request: SignMessageRequest = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse request body: {}", e);
+                    e
+                })?;
+            let response = sign_message_async(request).await?;
+            let json = serde_json::to_string(&response)?;
+            info!("Sign message request completed successfully");
             Ok(json)
         },
         "/create-registry" => {

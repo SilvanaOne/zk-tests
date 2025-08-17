@@ -104,6 +104,13 @@ test-generate-keypair:
 		-d '{"login_type": "email", "login": "test@example.com"}' \
 		| python3 -m json.tool
 
+test-sign-message:
+	@echo "Testing sign message endpoint..."
+	@curl -X POST https://dhctq4vocgpmdbp5so7jfql26q0ubzms.lambda-url.us-east-1.on.aws/sign-message \
+		-H "Content-Type: application/json" \
+		-d '{"login_type": "email", "login": "test@example.com", "message": [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]}' \
+		| python3 -m json.tool
+
 # Pulumi secrets management
 add-secrets:
 	@echo "Adding Sui secrets to Pulumi..."

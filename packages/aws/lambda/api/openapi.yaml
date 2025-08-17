@@ -105,6 +105,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
                 
+  /sign-message:
+    post:
+      summary: Sign a message with a Sui keypair
+      operationId: signMessage
+      description: Signs a message using the Ed25519 keypair for the given login identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignMessageRequest'
+      responses:
+        '200':
+          description: Successfully signed message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignMessageResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Keypair not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
   /create-registry:
     post:
       summary: Create a Silvana registry on Sui blockchain
@@ -442,6 +479,49 @@ components:
         address:
           type: string
           description: Sui address derived from the public key
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+          
+    SignMessageRequest:
+      type: object
+      required:
+        - login_type
+        - login
+        - message
+      properties:
+        login_type:
+          type: string
+          description: Type of login (e.g., google, github, email)
+          example: "email"
+        login:
+          type: string
+          description: Login identifier (e.g., email address, username)
+          example: "user@example.com"
+        message:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Message to sign as a vector of bytes (u8)
+          example: [72, 101, 108, 108, 111]
+          
+    SignMessageResponse:
+      type: object
+      required:
+        - signature
+        - address
+      properties:
+        signature:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Signed message as a vector of bytes (u8) in Sui signature format
+          example: [0, 156, 234, 123, 45, 67, 89, 101, 112, 134, 156, 178, 190, 201, 223, 234]
+        address:
+          type: string
+          description: Sui address of the signer
           example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
           
     CreateRegistryRequest:

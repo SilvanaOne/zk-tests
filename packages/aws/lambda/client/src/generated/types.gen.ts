@@ -60,6 +60,32 @@ export type SuiKeypairResponse = {
     address: string;
 };
 
+export type SignMessageRequest = {
+    /**
+     * Type of login (e.g., google, github, email)
+     */
+    login_type: string;
+    /**
+     * Login identifier (e.g., email address, username)
+     */
+    login: string;
+    /**
+     * Message to sign as a vector of bytes (u8)
+     */
+    message: Array<number>;
+};
+
+export type SignMessageResponse = {
+    /**
+     * Signed message as a vector of bytes (u8) in Sui signature format
+     */
+    signature: Array<number>;
+    /**
+     * Sui address of the signer
+     */
+    address: string;
+};
+
 export type CreateRegistryRequest = {
     /**
      * Name of the registry to create
@@ -392,6 +418,39 @@ export type GenerateSuiKeypairResponses = {
 };
 
 export type GenerateSuiKeypairResponse = GenerateSuiKeypairResponses[keyof GenerateSuiKeypairResponses];
+
+export type SignMessageData = {
+    body: SignMessageRequest;
+    path?: never;
+    query?: never;
+    url: '/sign-message';
+};
+
+export type SignMessageErrors = {
+    /**
+     * Invalid input
+     */
+    400: ErrorResponse;
+    /**
+     * Keypair not found
+     */
+    404: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type SignMessageError = SignMessageErrors[keyof SignMessageErrors];
+
+export type SignMessageResponses = {
+    /**
+     * Successfully signed message
+     */
+    200: SignMessageResponse;
+};
+
+export type SignMessageResponse2 = SignMessageResponses[keyof SignMessageResponses];
 
 export type CreateRegistryData = {
     body: CreateRegistryRequest;

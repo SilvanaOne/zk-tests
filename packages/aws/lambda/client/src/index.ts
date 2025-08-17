@@ -1,6 +1,7 @@
 import { client } from './generated/client.gen.js';
 import { 
   generateSuiKeypair, 
+  signMessage,
   addNumbers, 
   multiplyNumbers, 
   createRegistry,
@@ -17,6 +18,8 @@ import {
 import type { 
   SuiKeypairRequest, 
   SuiKeypairResponse,
+  SignMessageRequest,
+  SignMessageResponse,
   MathRequest,
   MathResponse,
   CreateRegistryRequest,
@@ -92,6 +95,25 @@ export class LambdaClient {
     }
     
     return response.data as SuiKeypairResponse;
+  }
+
+  /**
+   * Sign a message with a Sui keypair
+   */
+  async signMessage(loginType: string, login: string, message: number[]) {
+    const response = await signMessage({
+      body: { 
+        login_type: loginType,
+        login: login,
+        message: message
+      }
+    });
+    
+    if (response.error) {
+      throw new Error(`API Error: ${JSON.stringify(response.error)}`);
+    }
+    
+    return response.data as SignMessageResponse;
   }
 
   /**
@@ -252,6 +274,8 @@ export class LambdaClient {
 export type {
   SuiKeypairRequest,
   SuiKeypairResponse,
+  SignMessageRequest,
+  SignMessageResponse,
   MathRequest,
   MathResponse,
   CreateRegistryRequest,

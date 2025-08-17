@@ -60,6 +60,90 @@ describe('LambdaClient', () => {
     });
   });
 
+  describe('signMessage', () => {
+    it('should sign a message and return signature with address', async () => {
+      const loginType = 'email';
+      const login = 'signer@example.com';
+      
+      // First ensure we have a keypair
+      const keypairResponse = await client.generateSuiKeypair(loginType, login);
+      assert.ok(keypairResponse.address, 'Should have an address');
+      
+      // Create a message to sign (Hello World in bytes)
+      const message = [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100];
+      
+      // Sign the message
+      const signResponse = await client.signMessage(loginType, login, message);
+      
+      assert.ok(signResponse.signature, 'Response should contain a signature');
+      assert.ok(Array.isArray(signResponse.signature), 'Signature should be an array');
+      assert.strictEqual(signResponse.signature.length, 97, 'Sui signature should be 97 bytes (flag + sig + pubkey)');
+      assert.strictEqual(signResponse.signature[0], 0, 'First byte should be 0 (Ed25519 flag)');
+      
+      assert.ok(signResponse.address, 'Response should contain an address');
+      assert.strictEqual(signResponse.address, keypairResponse.address, 'Address should match the keypair address');
+      
+      console.log(`Signed message for ${signResponse.address}`);
+      console.log(`Signature length: ${signResponse.signature.length} bytes`);
+    });
+
+    it('should sign different messages with same keypair', async () => {
+      const loginType = 'github';
+      const login = 'multi-signer';
+      
+      // Ensure we have a keypair
+      await client.generateSuiKeypair(loginType, login);
+      
+      // Sign first message
+      const message1 = [72, 101, 108, 108, 111]; // "Hello"
+      const response1 = await client.signMessage(loginType, login, message1);
+      
+      // Sign second message
+      const message2 = [87, 111, 114, 108, 100]; // "World"
+      const response2 = await client.signMessage(loginType, login, message2);
+      
+      // Same address, different signatures
+      assert.strictEqual(response1.address, response2.address, 'Should use same address');
+      assert.notDeepStrictEqual(response1.signature, response2.signature, 'Different messages should have different signatures');
+      
+      console.log(`Signed two different messages with address: ${response1.address}`);
+    });
+
+    it('should handle empty message', async () => {
+      const loginType = 'email';
+      const login = 'empty-signer@example.com';
+      
+      // Ensure we have a keypair
+      await client.generateSuiKeypair(loginType, login);
+      
+      // Sign empty message
+      const emptyMessage: number[] = [];
+      const response = await client.signMessage(loginType, login, emptyMessage);
+      
+      assert.ok(response.signature, 'Should sign empty message');
+      assert.strictEqual(response.signature.length, 97, 'Signature should still be 97 bytes');
+      
+      console.log(`Signed empty message with address: ${response.address}`);
+    });
+
+    it('should fail for non-existent keypair', async () => {
+      const loginType = 'email';
+      const login = `nonexistent-${Date.now()}@example.com`;
+      
+      // Try to sign without generating keypair first
+      const message = [1, 2, 3];
+      
+      try {
+        await client.signMessage(loginType, login, message);
+        assert.fail('Should have thrown an error for non-existent keypair');
+      } catch (error: any) {
+        assert.ok(error.message.includes('Keypair not found') || error.message.includes('API Error'), 
+          'Should indicate keypair not found');
+        console.log(`Expected error for non-existent keypair: ${error.message}`);
+      }
+    });
+  });
+
   describe('math operations', () => {
     it('should add two numbers', async () => {
       const response = await client.add(5, 3);

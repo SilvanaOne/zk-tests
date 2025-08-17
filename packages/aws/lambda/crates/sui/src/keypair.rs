@@ -3,6 +3,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::RngCore;
 use rand::rngs::OsRng;
 use serde::Serialize;
+use std::str::FromStr;
 use sui_sdk_types as sui;
 
 pub struct GeneratedKeypair {
@@ -104,4 +105,31 @@ pub fn verify_with_address(address: &sui::Address, message: &[u8], sui_sig: &[u8
 
 pub fn bcs_serialize<T: Serialize>(payload: &T) -> Result<Vec<u8>, bcs::Error> {
     bcs::to_bytes(payload)
+}
+
+pub fn parse_sui_private_key(sui_private_key: &str) -> Result<[u8; 32], String> {
+    // Decode the private key from bech32
+    let (hrp, data, _variant) = bech32::decode(sui_private_key)
+        .map_err(|e| format!("Failed to decode private key: {}", e))?;
+    
+    if hrp != "suiprivkey" {
+        return Err("Invalid private key format".to_string());
+    }
+    
+    let key_bytes: Vec<u8> = bech32::FromBase32::from_base32(&data)
+        .map_err(|e| format!("Failed to convert private key: {}", e))?;
+    
+    // The format is [flag || 32-byte secret]
+    if key_bytes.len() != 33 || key_bytes[0] != 0x00 {
+        return Err("Invalid Ed25519 private key".to_string());
+    }
+    
+    let mut secret_key = [0u8; 32];
+    secret_key.copy_from_slice(&key_bytes[1..33]);
+    Ok(secret_key)
+}
+
+pub fn parse_address(address_str: &str) -> Result<sui::Address, String> {
+    sui::Address::from_str(address_str)
+        .map_err(|e| format!("Invalid address: {}", e))
 }

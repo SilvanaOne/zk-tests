@@ -42,6 +42,8 @@ Class | Method | HTTP request | Description
  - [RemoveAgentRequest](docs/RemoveAgentRequest.md)
  - [RemoveAppRequest](docs/RemoveAppRequest.md)
  - [RemoveDeveloperRequest](docs/RemoveDeveloperRequest.md)
+ - [SignMessageRequest](docs/SignMessageRequest.md)
+ - [SignMessageResponse](docs/SignMessageResponse.md)
  - [SuiKeypairRequest](docs/SuiKeypairRequest.md)
  - [SuiKeypairResponse](docs/SuiKeypairResponse.md)
  - [TransactionResponse](docs/TransactionResponse.md)
