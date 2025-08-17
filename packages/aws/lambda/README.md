@@ -1,6 +1,6 @@
-# AWS Lambda Rust Calculator with Sui Blockchain Integration
+# AWS Lambda Rust Backend with Sui Blockchain Integration
 
-A serverless calculator API built with Rust, deployed on AWS Lambda, with optional Sui blockchain integration for mathematical operations, secure keypair management, distributed key locking, Silvana registry creation, and automated backup capabilities.
+A serverless API backend built with Rust, deployed on AWS Lambda, with Sui blockchain integration for on-chain operations, secure keypair management, distributed key locking, Silvana registry creation and management, and automated backup capabilities.
 
 ## Architecture
 
@@ -188,11 +188,11 @@ The project follows a modular architecture with specialized crates:
   - Error handling and response formatting
   - Integration with blockchain and storage layers
 
-- **`sui`**: Sui blockchain client (refactored modular structure)
+- **`sui`**: Sui blockchain client (modular structure)
   - `chain.rs`: Shared RPC URL configuration and helper functions
   - `add.rs`: Addition operation on blockchain
-  - `registry.rs`: Silvana registry creation with event extraction
-  - `client.rs`: Re-exports for backward compatibility
+  - `registry.rs`: Silvana registry creation and management with event extraction
+  - `client.rs`: Public API exports
   - `keypair.rs`: Ed25519 keypair generation with Bech32 encoding
 
 - **`db`**: DynamoDB operations
@@ -388,9 +388,11 @@ Private keys are securely stored using AWS KMS encryption:
 
 ## API Endpoints
 
-### POST /add
+### Math Operations
 
-Adds two numbers. Uses Sui blockchain if configured.
+#### POST /add
+
+Performs addition on the Sui blockchain (if configured) or locally.
 
 Request:
 
@@ -411,9 +413,9 @@ Response:
 }
 ```
 
-### POST /multiply
+#### POST /multiply
 
-Multiplies two numbers (local computation only).
+Performs multiplication (local computation only).
 
 Request:
 
@@ -433,7 +435,9 @@ Response:
 }
 ```
 
-### POST /generate-sui-keypair
+### Blockchain Operations
+
+#### POST /generate-sui-keypair
 
 Generates or retrieves a Sui Ed25519 keypair for a specific login. Private keys are encrypted and stored securely using AWS KMS.
 
@@ -456,7 +460,7 @@ Response:
 
 **Note**: Private keys are stored encrypted in DynamoDB and are not returned to the client for security.
 
-### POST /create-registry
+#### POST /create-registry
 
 Creates a new Silvana registry on the Sui blockchain.
 
@@ -484,6 +488,204 @@ Response:
 - Extracts registry ID from RegistryCreatedEvent
 - Uses distributed locking for transaction safety
 - Supports multiple Sui networks (devnet, testnet, mainnet)
+
+### Registry Management Endpoints
+
+#### POST /add-developer
+
+Adds a developer to a registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "name": "Developer Name",
+  "github": "github-username",
+  "image": "https://example.com/avatar.png",  // Optional
+  "description": "Developer description",      // Optional
+  "site": "https://developer-site.com"        // Optional
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /update-developer
+
+Updates an existing developer in the registry.
+
+Request: Same as `/add-developer`
+
+Response: Same as `/add-developer`
+
+#### POST /remove-developer
+
+Removes a developer and their agents from the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "name": "Developer Name",
+  "agent_names": ["Agent1", "Agent2"]  // List of agent names to remove
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /add-agent
+
+Adds an agent to a developer in the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "developer": "Developer Name",
+  "name": "Agent Name",
+  "image": "https://example.com/agent.png",    // Optional
+  "description": "Agent description",           // Optional
+  "site": "https://agent-site.com",            // Optional
+  "chains": ["sui-devnet", "sui-testnet"]      // Supported chains
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /update-agent
+
+Updates an existing agent in the registry.
+
+Request: Same as `/add-agent`
+
+Response: Same as `/add-agent`
+
+#### POST /remove-agent
+
+Removes an agent from the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "developer": "Developer Name",
+  "name": "Agent Name"
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /add-app
+
+Adds an application to the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "name": "App Name",
+  "description": "App description",             // Optional
+  "image": "https://example.com/app.png",      // Optional
+  "site": "https://app-site.com",              // Optional
+  "app_cap": null                              // Optional app capability
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /update-app
+
+Updates an existing app in the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "name": "App Name",
+  "description": "Updated description",         // Optional
+  "image": "https://example.com/app2.png",     // Optional
+  "site": "https://new-app-site.com"           // Optional
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+#### POST /remove-app
+
+Removes an app from the registry.
+
+Request:
+
+```json
+{
+  "registry_id": "0x1234567890abcdef...",
+  "chain": "devnet",
+  "name": "App Name"
+}
+```
+
+Response:
+
+```json
+{
+  "tx_digest": "231EUwYN9iXw4fUDWjoqnV6zfc5zaCG96wX71KwzdfqM"
+}
+```
+
+**Registry Management Features**:
+- Full CRUD operations for developers, agents, and apps
+- Proper handling of Sui shared objects with initial version fetching
+- Support for optional Move types (Option<String>)
+- Retry mechanism for fetching shared object versions
+- Comprehensive event extraction from blockchain transactions
+- Distributed locking for all registry operations
 
 ## Monitoring
 
@@ -513,17 +715,21 @@ Logs include timestamp, level, module, and message:
 - **Improved error detection**: Fixed ConditionalCheckFailedException detection for proper retry logic
 
 ### New Features
-- **Silvana Registry Creation**: Added support for creating registries on Sui blockchain
-- **Event-based data extraction**: Registry ID extracted from RegistryCreatedEvent for reliability
-- **String serialization for Move**: Proper BCS encoding of Move String type (struct with bytes field)
+- **Silvana Registry Management**: Complete CRUD operations for registries, developers, agents, and apps
+- **Event-based data extraction**: Registry ID properly extracted from RegistryCreatedEvent
+- **Shared object handling**: Proper fetching and use of initial shared versions for Sui objects
+- **Retry mechanism**: Automatic retries when fetching shared object versions
+- **String and Option serialization**: Proper BCS encoding of Move types (String as struct with bytes, Option as struct with vec)
 - **Transaction timing logs**: Added millisecond-precision timing for all blockchain operations
 - **Automated backups**: Comprehensive backup strategy with PITR and scheduled backups
-- **TypeScript client improvements**: Fixed type imports and added DOM.Iterable for Headers support
+- **TypeScript client**: Full support for all registry management endpoints with proper types
 
 ### Bug Fixes
 - **Lock timing bug**: Fixed `Utc::now() - Utc::now()` always returning 0
 - **gRPC read_mask**: Removed unsupported fields like `object_changes` and `effects`
 - **String encoding**: Fixed Move String serialization as struct with bytes field
+- **Registry ID extraction**: Fixed to properly extract registry object ID from events instead of coin addresses
+- **Shared object versions**: Fixed "Missing initial shared version" errors by properly fetching from blockchain
 - **TypeScript compatibility**: Updated imports to match generated OpenAPI types
 
 ## Troubleshooting
