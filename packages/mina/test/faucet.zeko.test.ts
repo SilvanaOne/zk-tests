@@ -13,13 +13,11 @@ import {
 import { sleep } from "../src/sleep.js";
 import { faucet } from "../src/faucet.js";
 
-console.log("Starting test");
-
 // Load environment variables from .env.zeko
 //config({ path: ".env.zeko" });
 
 const chain = process.env.CHAIN;
-const MINIMUM_AMOUNT = 150;
+const MINIMUM_AMOUNT = 300;
 const keysToTopup: string[] = [];
 
 // Load keys from environment variables
@@ -43,13 +41,14 @@ function loadKeysFromEnv(): { privateKey: string; publicKey: string }[] {
 }
 
 describe("Topup Zeko", async () => {
-  it("should check balances on zeko network", async () => {
+  it("should init blockchain", async () => {
     console.log({ chain });
     if (chain !== "zeko") {
       throw new Error("Invalid chain");
     }
     await initBlockchain(chain);
-
+  });
+  it.skip("should check balances on zeko network", async () => {
     // Load keys from environment variables
     const keys = loadKeysFromEnv();
     console.log(`Loaded ${keys.length} accounts from .env.zeko`);

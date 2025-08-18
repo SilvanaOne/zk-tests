@@ -89,6 +89,7 @@ describe("balance instability check", () => {
     const tx = await Mina.transaction(
       { sender, fee: 100_000_000, memo: "balance contract deploy" },
       async () => {
+        //AccountUpdate.fundNewAccount(sender, 1); - not working with o1js 2.4.0
         const au = AccountUpdate.createSigned(sender);
         au.balance.subInPlace(UInt64.from(100_000_000));
         await balanceContract.deploy({});
