@@ -11,7 +11,7 @@
     "signature-rust": "npm run test test/signature-rust.test.ts",
     "keys": "npm run test test/keys.test.ts",
     "hash": "npm run test test/hash.test.ts",
-    "faucet:zeko": "CHAIN=zeko npm run test test/faucet.test.ts",
+    "faucet:zeko": "CHAIN=zeko npm run test test/faucet.zeko.test.ts",
     "faucet:devnet": "CHAIN=devnet npm run test test/faucet.test.ts",
     "nft-faucet:zeko": "CHAIN=zeko npm run test test/nft-faucet.test.ts",
     "nft-faucet:devnet": "CHAIN=devnet npm run test test/nft-faucet.test.ts",
@@ -25,6 +25,7 @@
     "status": "CHAIN=zeko npm run test test/status.test.ts",
     "slot": "npm run test test/slot.test.ts",
     "vk": "npm run test test/vk.test.ts",
+    "ipfs": "npm run test test/ipfs.test.ts",
     "poseidon": "npm run test test/poseidon.test.ts",
     "nonce": "npm run test test/nonce.test.ts",
     "nonces": "npm run test test/nonces.test.ts",
@@ -38,7 +39,7 @@
     "two-programs": "npm run test test/two-programs.test.ts"
   },
   "node": {
-    "version": ">=20.0.0"
+    "version": ">=22.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.12",
@@ -50,14 +51,15 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@silvana-one/api": "^1.0.23",
-    "@silvana-one/mina-utils": "^1.0.23",
+    "@silvana-one/api": "^1.0.28",
+    "@silvana-one/mina-utils": "^1.0.28",
+    "@silvana-one/storage": "^1.0.28",
     "blakejs": "^1.2.1",
     "bs58": "^6.0.0",
     "jose": "^6.0.11",
     "js-sha256": "^0.11.1",
     "mina-signer": "^3.0.7",
-    "o1js": "^2.7.0",
+    "o1js": "2.4.0",
     "secp256k1": "^5.0.1"
   },
   "c8": {

@@ -30,7 +30,7 @@ export async function faucet(params: {
       };
     }
     const result = await response.text();
-    console.log("Faucet result", result);
+    //console.log("Faucet result", result);
     return { success: true, result };
   } catch (error: any) {
     console.error("faucet error:", error);
