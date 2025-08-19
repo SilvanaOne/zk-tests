@@ -1,7 +1,6 @@
-use blake2::{Blake2b512, Digest};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::Serialize;
 use sui_sdk_types as sui;
 
@@ -22,14 +21,9 @@ pub fn generate_ed25519() -> GeneratedKeypair {
     let mut pk_bytes = [0u8; 32];
     pk_bytes.copy_from_slice(verifying_key.as_bytes());
 
-    // Compute Sui address from [flag || pubkey]
-    let mut hasher = Blake2b512::new();
-    hasher.update([0x00u8]);
-    hasher.update(&pk_bytes);
-    let full = hasher.finalize();
-    let mut addr_bytes = [0u8; 32];
-    addr_bytes.copy_from_slice(&full[..32]);
-    let address = sui::Address::from_bytes(&addr_bytes).expect("address length");
+    // Compute Sui address using SDK
+    let sui_public_key = sui::Ed25519PublicKey::new(pk_bytes);
+    let address = sui_public_key.derive_address();
 
     // suiprivkey bech32 encoding: [flag || 32-byte secret]
     let mut payload = Vec::with_capacity(33);
@@ -78,17 +72,9 @@ pub fn verify_with_address(address: &sui::Address, message: &[u8], sui_sig: &[u8
         Err(_) => return false,
     };
 
-    // Recompute address
-    let mut hasher = Blake2b512::new();
-    hasher.update([0x00u8]);
-    hasher.update(&pk_bytes);
-    let full = hasher.finalize();
-    let mut addr_bytes = [0u8; 32];
-    addr_bytes.copy_from_slice(&full[..32]);
-    let derived = match sui::Address::from_bytes(&addr_bytes) {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
+    // Recompute address using SDK
+    let sui_public_key = sui::Ed25519PublicKey::new(pk_bytes);
+    let derived = sui_public_key.derive_address();
     if &derived != address {
         return false;
     }
@@ -100,6 +86,47 @@ pub fn verify_with_address(address: &sui::Address, message: &[u8], sui_sig: &[u8
     };
     let sig = Signature::from_bytes(&sig_bytes);
     vk.verify(message, &sig).is_ok()
+}
+
+pub fn from_sui_private_key(sui_private_key: &str) -> Result<GeneratedKeypair, String> {
+    // Decode bech32
+    let (hrp, data, _) =
+        bech32::decode(sui_private_key).map_err(|e| format!("Failed to decode bech32: {}", e))?;
+
+    if hrp != "suiprivkey" {
+        return Err("Invalid HRP, expected 'suiprivkey'".to_string());
+    }
+
+    let decoded: Vec<u8> = bech32::FromBase32::from_base32(&data)
+        .map_err(|e| format!("Failed to decode base32: {}", e))?;
+
+    if decoded.len() != 33 {
+        return Err("Invalid private key length".to_string());
+    }
+
+    if decoded[0] != 0x00 {
+        return Err("Invalid flag byte".to_string());
+    }
+
+    let mut sk_bytes = [0u8; 32];
+    sk_bytes.copy_from_slice(&decoded[1..33]);
+
+    // Derive public key and address
+    let signing_key = SigningKey::from_bytes(&sk_bytes);
+    let verifying_key = signing_key.verifying_key();
+    let mut pk_bytes = [0u8; 32];
+    pk_bytes.copy_from_slice(verifying_key.as_bytes());
+
+    // Compute Sui address using SDK
+    let sui_public_key = sui::Ed25519PublicKey::new(pk_bytes);
+    let address = sui_public_key.derive_address();
+
+    Ok(GeneratedKeypair {
+        secret_key: sk_bytes,
+        public_key: pk_bytes,
+        address,
+        sui_private_key: sui_private_key.to_string(),
+    })
 }
 
 pub fn bcs_serialize<T: Serialize>(payload: &T) -> Result<Vec<u8>, bcs::Error> {
