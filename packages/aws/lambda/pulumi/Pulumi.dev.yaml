@@ -10,12 +10,14 @@ config:
   sui:secretKey:
     secure: v1:JzMnFHvOE+XDmEPb:/kWotAAEosJJXzzrs2LaLqknfQo1QRkfXQbi8kZhN3RwWupUQ4MaP6e8dZJE6KTmLopM19S40VjzibXEc2JHzEEeQziapQnZMRV90Mu88m4qwvGFYKI=
   lambda:suiPackageId:
-    secure: v1:QpjuEFXdu1sPOzmA:d8FVvmeP7+1RdHWJYFHSVen7ToP1jRNd5zxHU+9ALxfIpKSl92IgAMUlXS9fAuSOcy2wTfsUfEozznAc0QG9MZDmKgS/Gd7Y2bi6ElRqlJHzQQ==
+    secure: v1:oz+ahxdHHH1OLwWU:v/jsd+z0Qyy8nkHjCx2aiL8pP0pu5eF6dOWZpLg2TxJtcEpki7PXe+PueZQLKRyX36PBWDkt9AJjx1MGo9nKXVKYxnJfQZh5yHEuj1ebwCLuAA==
   lambda:suiChain:
-    secure: v1:qXUz+tsAiPUOqA2p:ijfUP/p7dWYcp59rGh/e86zeuViQlQ==
+    secure: v1:ufRv/h6UXQNifRyb:oyfgmNegNK9abE+HzYuXNN74lwWNcx4=
   lambda:suiAddress:
-    secure: v1:nAJFGoP4So4nZi7f:9gjD0tktRGek7YgTq4TfZhUoErDlGFIpWA8Iigd0xXYlkSdhONeqByJCny2A16J5CUOiWvA4mQDhTa5gdvyttYd7Dpzohv2Zd9v+x532EdkDIA==
+    secure: v1:HFc1DZ0qstDNBrlL:qCnxWNKfV3Fksb2RusBo8CELGl31V+g/Ds/X8nRysfKYS1w0bYbt5x4j+ikLglXHsLbgr79hQ6W6VbIhpObKrmjOK+ZA1ISOoVA7dh5+3S3bxg==
   lambda:suiSecretKey:
-    secure: v1:pYyHD9VIhRFgCxCe:H5+nlLdpXNVIVByhed4arubEki2n4zJuzUGF5OsKoUnWoUEobD4rPXeHVR6iU6R9l5zGsZX/Wbf0M3w6DwwF++2mkCttYfX+8g95eO59blpUft13cYg=
+    secure: v1:uX3Dx15OwcEINRtw:GjyxWa9ZmnTFLRKo5k1DjBoBNGUKJyC3b62wpG5HtVODafSt48t0R6PQj7vhv8zBv4cS0bjAbTo70yrTIDj81uRvW6+INDfW1NRgJLS0L+4bxY+iPcg=
   lambda:silvanaRegistryPackageDevnet:
-    secure: v1:FrwTtBhTYDwbbRD+:hYNjd/5PEgEit0y2T4CaTFy8smY2h6p3+/VzBwEG3e56n/RLPVg12BUxT/LLUMSSQBSe0KzE/6HV01qeuVO0PrnofWa5z3SaU9lJd8+vHxTDIQ==
+    secure: v1:/m1mg0A1UnYjcDyd:4I0RQnbLr5odivUdLzW5LkqWATsP7+ZSD5vEup389d4Vejw0ZaUrta2rYs+bB4x+O+ZAogkLKqw+50eywP0tOOkSJcgYqKtZz045Tk6bvd592w==
+  lambda:silvanaRegistryPackageTestnet:
+    secure: v1:o1Y31sbmywqMo1LC:oigUjlYxhaMt7Oo6SiuCUP37GQ+oNuvDKaqbZMAw0n8JhVeHBO5pI+OrGoIfOZvOQyCgGWWPK5t+WrB0CSnacw3lf315unlyShOst/n16bgDeQ==

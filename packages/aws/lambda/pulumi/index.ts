@@ -18,6 +18,9 @@ export = async () => {
   const silvanaRegistryPackageDevnet = config.getSecret(
     "silvanaRegistryPackageDevnet"
   );
+  const silvanaRegistryPackageTestnet = config.getSecret(
+    "silvanaRegistryPackageTestnet"
+  );
 
   // Create an S3 bucket for Lambda deployment packages
   const deploymentBucket = new aws.s3.Bucket("lambda-deployment-bucket", {
@@ -217,7 +220,8 @@ export = async () => {
     "backup-service-role-policy",
     {
       role: backupRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+      policyArn:
+        "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
     }
   );
 
@@ -225,7 +229,8 @@ export = async () => {
     "backup-service-role-restore-policy",
     {
       role: backupRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores",
+      policyArn:
+        "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores",
     }
   );
 
@@ -279,15 +284,15 @@ export = async () => {
   });
 
   // Create backup selection to include both DynamoDB tables
-  const backupSelection = new aws.backup.Selection("dynamodb-backup-selection", {
-    planId: backupPlan.id,
-    name: "silvana-tables-selection",
-    iamRoleArn: backupRole.arn,
-    resources: [
-      keypairsTable.arn,
-      locksTable.arn,
-    ],
-  });
+  const backupSelection = new aws.backup.Selection(
+    "dynamodb-backup-selection",
+    {
+      planId: backupPlan.id,
+      name: "silvana-tables-selection",
+      iamRoleArn: backupRole.arn,
+      resources: [keypairsTable.arn, locksTable.arn],
+    }
+  );
 
   // Create CloudWatch Log Group for Lambda
   const logGroup = new aws.cloudwatch.LogGroup("lambda-log-group", {
@@ -343,6 +348,7 @@ Please build the Lambda function first with: make lambda
             suiAddress,
             suiSecretKey,
             silvanaRegistryPackageDevnet,
+            silvanaRegistryPackageTestnet,
             locksTable.name,
             keypairsTable.name,
             kmsKey.id,
@@ -354,25 +360,32 @@ Please build the Lambda function first with: make lambda
               address,
               secretKey,
               registryPackageDevnet,
+              registryPackageTestnet,
               locksTableName,
               keypairsTableName,
               kmsKeyId,
-            ]) => ({
-              RUST_BACKTRACE: "1",
-              LOG_LEVEL: "debug",
-              LOCKS_TABLE_NAME: locksTableName,
-              KEYPAIRS_TABLE_NAME: keypairsTableName,
-              KMS_KEY_ID: kmsKeyId,
-              // Sui blockchain configuration
-              ...(packageId && { SUI_PACKAGE_ID: packageId }),
-              ...(chain && { SUI_CHAIN: chain }),
-              ...(address && { SUI_ADDRESS: address }),
-              ...(secretKey && { SUI_SECRET_KEY: secretKey }),
-              // Silvana registry configuration
-              ...(registryPackageDevnet && {
-                SILVANA_REGISTRY_PACKAGE: registryPackageDevnet,
-              }),
-            })
+            ]) => {
+              const env: { [key: string]: string } = {
+                RUST_BACKTRACE: "1",
+                LOG_LEVEL: "debug",
+              };
+
+              // Add optional values only if they exist
+              if (locksTableName) env.LOCKS_TABLE_NAME = locksTableName;
+              if (keypairsTableName)
+                env.KEYPAIRS_TABLE_NAME = keypairsTableName;
+              if (kmsKeyId) env.KMS_KEY_ID = kmsKeyId;
+              if (packageId) env.SUI_PACKAGE_ID = packageId;
+              if (chain) env.SUI_CHAIN = chain;
+              if (address) env.SUI_ADDRESS = address;
+              if (secretKey) env.SUI_SECRET_KEY = secretKey;
+              if (registryPackageDevnet)
+                env.SILVANA_REGISTRY_PACKAGE_DEVNET = registryPackageDevnet;
+              if (registryPackageTestnet)
+                env.SILVANA_REGISTRY_PACKAGE_TESTNET = registryPackageTestnet;
+
+              return env;
+            }
           ),
       },
       tags: {

@@ -122,6 +122,7 @@ add-secrets:
 		pulumi config set --secret suiAddress "$$SUI_ADDRESS" && \
 		pulumi config set --secret suiSecretKey "$$SUI_SECRET_KEY" && \
 		pulumi config set --secret silvanaRegistryPackageDevnet "$$SILVANA_REGISTRY_PACKAGE_DEVNET" && \
+		pulumi config set --secret silvanaRegistryPackageTestnet "$$SILVANA_REGISTRY_PACKAGE_TESTNET" && \
 		echo "Secrets added successfully"; \
 	else \
 		echo "Error: .env file not found"; \
@@ -135,6 +136,7 @@ list-secrets:
 	@cd pulumi && echo -n "suiAddress: " && (pulumi config get suiAddress 2>/dev/null || echo "not set")
 	@cd pulumi && echo -n "suiSecretKey: " && (pulumi config get suiSecretKey 2>/dev/null | sed 's/suiprivkey.*/[HIDDEN]/' || echo "not set")
 	@cd pulumi && echo -n "silvanaRegistryPackageDevnet: " && (pulumi config get silvanaRegistryPackageDevnet 2>/dev/null || echo "not set")
+	@cd pulumi && echo -n "silvanaRegistryPackageTestnet: " && (pulumi config get silvanaRegistryPackageTestnet 2>/dev/null || echo "not set")
 
 remove-secrets:
 	@echo "Removing Sui secrets from Pulumi..."
@@ -144,4 +146,5 @@ remove-secrets:
 	pulumi config rm suiAddress 2>/dev/null || true && \
 	pulumi config rm suiSecretKey 2>/dev/null || true && \
 	pulumi config rm silvanaRegistryPackageDevnet 2>/dev/null || true && \
+	pulumi config rm silvanaRegistryPackageTestnet 2>/dev/null || true && \
 	echo "Secrets removed"

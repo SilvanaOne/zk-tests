@@ -132,3 +132,30 @@ pub fn from_sui_private_key(sui_private_key: &str) -> Result<GeneratedKeypair, S
 pub fn bcs_serialize<T: Serialize>(payload: &T) -> Result<Vec<u8>, bcs::Error> {
     bcs::to_bytes(payload)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_sui_private_key_produces_expected_address() {
+        let secret_key = "suiprivkey1qqg9ex8p8e8fdz2ex5r0muptts3e4zctv8eahdxcrl5vne73szs365yfhkp";
+        let expected_address = "0xdaf4e0011c0df11dfca353dd9e11124f0a9a08e622787c3210f773b0d5312174";
+
+        let keypair = from_sui_private_key(secret_key).expect("Failed to parse private key");
+        let address_hex = format!("0x{}", hex::encode(keypair.address.as_bytes()));
+
+        assert_eq!(address_hex, expected_address);
+    }
+
+    #[test]
+    fn test_from_sui_private_key_produces_expected_address_2() {
+        let secret_key = "suiprivkey1qzxr2y0cwppjeqkrjfjy7nyskxf2k23zsjx3pawde6f45egw5szns52cxra";
+        let expected_address = "0xbd22aa69c59813435088fa59b5fc5018a434fa9714dcf46108271682d89f7393";
+
+        let keypair = from_sui_private_key(secret_key).expect("Failed to parse private key");
+        let address_hex = format!("0x{}", hex::encode(keypair.address.as_bytes()));
+
+        assert_eq!(address_hex, expected_address);
+    }
+}
