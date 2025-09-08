@@ -1,0 +1,18 @@
+[package]
+name = "mina_keypair"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"
+mina-signer = { git = "https://github.com/o1-labs/proof-systems", package = "mina-signer" }
+mina-hasher = { git = "https://github.com/o1-labs/proof-systems", package = "mina-hasher" }
+bs58 = "0.5"
+sha2 = "0.10"
+o1-utils = { git = "https://github.com/o1-labs/proof-systems", package = "o1-utils" }
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+dotenvy = "0.15"

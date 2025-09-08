@@ -8,12 +8,28 @@ async fn main() -> anyhow::Result<()> {
     let a: u64 = 5;
     let b: u64 = 10;
 
-    println!("Sending transaction to calculate_sum({a}, {b})...");
-    let started = Instant::now();
-    let sum = tx::calculate_sum(a, b).await?;
-    let elapsed_ms = started.elapsed().as_millis();
-    println!("Transaction executed. Returned sum: {sum}");
-    println!("calculate_sum duration: {elapsed_ms} ms");
+    // println!("Sending transaction to calculate_sum({a}, {b})...");
+    // let started = Instant::now();
+    // let sum = tx::calculate_sum(a, b).await?;
+    // let elapsed_ms = started.elapsed().as_millis();
+    // println!("Transaction executed. Returned sum: {sum}");
+    // println!("calculate_sum duration: {elapsed_ms} ms");
+
+    // // Test chained calculate_sums
+    // let pairs = vec![(3, 4), (5, 6), (7, 8)];
+    // println!("\nSending transaction with chained calculate_sums for pairs: {:?}...", pairs);
+    // let started = Instant::now();
+    // let sums = tx::calculate_sums(pairs.clone()).await?;
+    // let elapsed_ms = started.elapsed().as_millis();
+    // println!("Transaction executed. Results:");
+    // for (i, sum) in sums.iter().enumerate() {
+    //     if i == 0 {
+    //         println!("  {} + {} = {}", pairs[i].0, pairs[i].1, sum);
+    //     } else {
+    //         println!("  {} + {} = {}", sums[i-1], pairs[i].1, sum);
+    //     }
+    // }
+    // println!("calculate_sums duration: {elapsed_ms} ms");
 
     println!("Creating shared State...");
     let started = Instant::now();
@@ -29,6 +45,22 @@ async fn main() -> anyhow::Result<()> {
     let elapsed_ms = started.elapsed().as_millis();
     println!("State updated. New sum: {new_sum}");
     println!("add_to_state duration: {elapsed_ms} ms");
+
+    // Test multiple adds in one transaction
+    let add_values = vec![3, 5, 2];
+    println!("\nAdding multiple values {:?} to State {state_id} in one transaction...", add_values);
+    let started = Instant::now();
+    let new_sums = state::multiple_add_to_state(state_id, add_values.clone()).await?;
+    let elapsed_ms = started.elapsed().as_millis();
+    println!("State updated through multiple operations. Results:");
+    for (i, sum) in new_sums.iter().enumerate() {
+        if i == 0 {
+            println!("  {} + {} = {}", new_sum, add_values[i], sum);
+        } else {
+            println!("  {} + {} = {}", new_sums[i-1], add_values[i], sum);
+        }
+    }
+    println!("multiple_add_to_state duration: {elapsed_ms} ms");
 
     Ok(())
 }

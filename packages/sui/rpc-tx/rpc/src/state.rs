@@ -534,3 +534,126 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         "StateChangeEvent not found in transaction events"
     ))
 }
+
+pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> Result<Vec<u64>> {
+    if values.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let package_id = sui::Address::from_str(&env::var("SUI_PACKAGE_ID")?)?;
+    let rpc_url = rpc_url_from_env();
+    println!("[rpc] rpc_url={}", rpc_url);
+    let (sender, sk) = load_sender_from_env()?;
+    println!("[rpc] sender={}", sender);
+
+    let initial_shared_version = fetch_initial_shared_version(&rpc_url, state_id).await?;
+    println!(
+        "[rpc] state_id={} initial_shared_version={}",
+        state_id, initial_shared_version
+    );
+
+    // Build PTB
+    let mut tb = sui_transaction_builder::TransactionBuilder::new();
+    tb.set_sender(sender);
+    tb.set_gas_budget(10_000_000);
+    let mut price_client = GrpcClient::new(rpc_url.clone())?;
+    tb.set_gas_price(get_reference_gas_price(&mut price_client).await?);
+
+    // Select gas
+    let mut coin_client = GrpcClient::new(rpc_url.clone())?;
+    let gas_ref = pick_gas_object(&mut coin_client, sender).await?;
+    let gas_input = sui_transaction_builder::unresolved::Input::owned(
+        *gas_ref.object_id(),
+        gas_ref.version(),
+        *gas_ref.digest(),
+    );
+    tb.add_gas_objects(vec![gas_input]);
+    println!(
+        "[rpc] gas object_ref added: id={} ver={} digest={}",
+        gas_ref.object_id(),
+        gas_ref.version(),
+        gas_ref.digest()
+    );
+
+    // Create shared state input (mutable)
+    let state_input = sui_transaction_builder::unresolved::Input::shared(state_id, initial_shared_version, true);
+    let state_arg = tb.input(state_input);
+
+    // Chain multiple add_to_state calls
+    // Each call modifies the shared state and returns the new sum
+    let mut results = Vec::new();
+    for (i, value) in values.iter().enumerate() {
+        println!("[rpc] adding move call #{}: add_to_state(&mut State, {})", i, value);
+        
+        let value_arg = tb.input(sui_transaction_builder::Serialized(value));
+        
+        // Function call: package::main::add_to_state(&mut State, u64)
+        let func = sui_transaction_builder::Function::new(
+            package_id,
+            "main".parse().unwrap(),
+            "add_to_state".parse().unwrap(),
+            vec![],
+        );
+        
+        // add_to_state takes the shared state (which is automatically passed by reference)
+        // and the value to add
+        let result = tb.move_call(func, vec![state_arg.clone(), value_arg]);
+        results.push(result);
+    }
+
+    // Finalize
+    let tx = tb.finish()?;
+    let sig = sk.sign_transaction(&tx)?;
+
+    // gRPC execute
+    let mut grpc = GrpcClient::new(rpc_url)?;
+    let mut exec = grpc.execution_client();
+    let req = proto::ExecuteTransactionRequest {
+        transaction: Some(tx.into()),
+        signatures: vec![sig.into()],
+        read_mask: Some(FieldMask {
+            paths: vec![
+                "finality".into(), 
+                "transaction".into(), 
+                "transaction.events".into(),
+                "transaction.events.events".into(),
+                "transaction.events.events.contents".into(),
+            ],
+        }),
+    };
+    println!("[rpc] sending ExecuteTransaction with {} chained add_to_state calls...", values.len());
+    let resp = exec.execute_transaction(req).await?;
+    let executed = resp
+        .into_inner()
+        .transaction
+        .ok_or_else(|| anyhow::anyhow!("no transaction in response"))?;
+
+    // Extract all StateChangeEvents
+    let mut sums = Vec::new();
+    if let Some(events) = executed.events.as_ref() {
+        for e in &events.events {
+            if e.event_type
+                .as_deref()
+                .map(|t| t.ends_with("::StateChangeEvent"))
+                .unwrap_or(false)
+            {
+                if let Some(contents) = &e.contents {
+                    if let Some(value) = &contents.value {
+                        // StateChangeEvent has 2 u64 fields: old_sum, new_sum (16 bytes total)
+                        // We want the new_sum which is at bytes 8-16
+                        if value.len() >= 16 {
+                            let new_sum = u64::from_le_bytes(value[8..16].try_into().unwrap());
+                            sums.push(new_sum);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if sums.len() != values.len() {
+        return Err(anyhow::anyhow!("Expected {} StateChangeEvents but got {}", values.len(), sums.len()));
+    }
+
+    Ok(sums)
+}

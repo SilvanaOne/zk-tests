@@ -26,7 +26,7 @@ describe("Topup", async () => {
       throw new Error("Invalid chain");
     }
     await initBlockchain(chain);
-    const keysJson = await readFile("./data/keys.json", "utf-8");
+    const keysJson = await readFile("./data/keys-2.json", "utf-8");
     const { keys: loadedKeys } = JSON.parse(keysJson) as {
       keys: { privateKey: string; publicKey: string }[];
     };
@@ -39,7 +39,7 @@ describe("Topup", async () => {
         envContent += `TEST_ACCOUNT_${i + 1}_PRIVATE_KEY=${privateKey}\n`;
         envContent += `TEST_ACCOUNT_${i + 1}_PUBLIC_KEY=${publicKey}\n\n`;
       }
-      await writeFile("./data/.env", envContent);
+      await writeFile("./data/.env.silvana", envContent);
     }
     for (let i = 0; i < keys.length; i++) {
       const { privateKey, publicKey } = keys[i];

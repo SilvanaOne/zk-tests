@@ -1,0 +1,5 @@
+create:
+  sui client ptb --move-call 0xf576e3349634f3420f7635797bbb26ca974b2e1ccc2c56fdebd0d0b9c57f889c::storage::create
+
+change:
+  sui client ptb --move-call 0xf576e3349634f3420f7635797bbb26ca974b2e1ccc2c56fdebd0d0b9c57f889c::storage::change @0xefdb8623670b433d0f5e90c91f707a6e047137b79956842c60cfa73252c0f2ba

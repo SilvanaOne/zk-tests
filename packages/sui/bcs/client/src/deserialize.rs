@@ -96,7 +96,7 @@ impl UserStateEvent {
 
     /// Deserialize the serialized_state field from BCS bytes into UserStateData
     pub fn deserialize_state(&self) -> Result<UserStateData, bcs::Error> {
-        bcs::from_bytes(&self.serialized_state)
+        bcs::from_bytes::<UserStateData>(&self.serialized_state)
     }
 
     /// Verify that the deserialized state matches the event parameters

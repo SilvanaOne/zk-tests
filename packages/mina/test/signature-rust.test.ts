@@ -30,4 +30,24 @@ describe("Signature", () => {
     const verified = signature.verify(publicKey, [1n, 2n].map(Field));
     console.log("verified:", verified.toBoolean());
   });
+
+  it(`should sign and verify as rust`, async () => {
+    await initBlockchain("devnet");
+    console.log("Rust test");
+    const privateKey = PrivateKey.fromBase58(
+      process.env.TEST_ACCOUNT_1_PRIVATE_KEY as string
+    );
+    const publicKey = privateKey.toPublicKey();
+    console.log("publicKey:", publicKey.toBase58());
+    const signature = Signature.create(privateKey, [1n, 2n, 3n].map(Field));
+    console.log("signature:", signature.toJSON());
+    const signature_base58 = signature.toBase58();
+    console.log("signature:", signature_base58);
+    const signature_hex = Buffer.from(bs58.decode(signature_base58)).toString(
+      "hex"
+    );
+    console.log("signature_hex:", signature_hex);
+    const verified = signature.verify(publicKey, [1n, 2n].map(Field));
+    console.log("verified:", verified.toBoolean());
+  });
 });

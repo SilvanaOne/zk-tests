@@ -55,20 +55,6 @@ fn load_sender_from_env() -> Result<(sui::Address, sui_crypto::ed25519::Ed25519P
 	Ok((addr, sk))
 }
 
-fn extract_sum_from_json_boxed(value: &prost_types::Value) -> Option<u64> {
-	use prost_types::value::Kind;
-	match &value.kind {
-		Some(Kind::StructValue(s)) => {
-			let m = &s.fields;
-			m.get("sum").and_then(|v| match &v.kind {
-				Some(Kind::NumberValue(n)) => Some(*n as u64),
-				Some(Kind::StringValue(s)) => s.parse::<u64>().ok(),
-				_ => None,
-			})
-		}
-		_ => None,
-	}
-}
 
 async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
 	let mut ledger = client.ledger_client();
@@ -182,7 +168,7 @@ pub async fn calculate_sum(a: u64, b: u64) -> Result<u64> {
 	let req = proto::ExecuteTransactionRequest {
 		transaction: Some(tx.into()),
 		signatures: vec![sig.into()],
-		read_mask: Some(FieldMask { paths: vec!["finality".into(), "transaction".into()] }),
+		read_mask: Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
 	};
 	println!("[rpc] sending ExecuteTransaction...");
 	let resp = exec.execute_transaction(req).await?;
@@ -195,13 +181,21 @@ pub async fn calculate_sum(a: u64, b: u64) -> Result<u64> {
 	if let Some(events) = executed.events.as_ref() {
 		for e in &events.events {
 			if e.module.as_deref() == Some("main") && e.event_type.as_deref().map(|t| t.ends_with("::SumEvent")).unwrap_or(false) {
-				if let Some(json) = &e.json { if let Some(sum) = extract_sum_from_json_boxed(json.as_ref()) { return Ok(sum); } }
+				if let Some(contents) = &e.contents {
+					if let Some(value) = &contents.value {
+						// SumEvent has 3 u64 fields: a, b, sum (24 bytes total)
+						if value.len() >= 24 {
+							let sum = u64::from_le_bytes(value[16..24].try_into().unwrap());
+							return Ok(sum);
+						}
+					}
+				}
 			}
 		}
 	}
 
-	// Fallback
-	Ok(a + b)
+	// If no event found, return error
+	Err(anyhow::anyhow!("SumEvent not found in transaction events"))
 }
 
 pub async fn get_sum_from_tx_digest(digest_hex: &str) -> Result<u64> {
@@ -211,7 +205,7 @@ pub async fn get_sum_from_tx_digest(digest_hex: &str) -> Result<u64> {
 	let resp = ledger
 		.get_transaction(proto::GetTransactionRequest {
 			digest: Some(digest_hex.to_string()),
-			read_mask: Some(FieldMask { paths: vec!["transaction".into()] }),
+			read_mask: Some(FieldMask { paths: vec!["transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
 		})
 		.await?
 		.into_inner();
@@ -219,12 +213,125 @@ pub async fn get_sum_from_tx_digest(digest_hex: &str) -> Result<u64> {
 		if let Some(events) = txn.events.as_ref() {
 			for e in &events.events {
 				if e.module.as_deref() == Some("main") && e.event_type.as_deref().map(|t| t.ends_with("::SumEvent")).unwrap_or(false) {
-					if let Some(json) = &e.json { if let Some(sum) = extract_sum_from_json_boxed(json.as_ref()) { return Ok(sum); } }
+					if let Some(contents) = &e.contents {
+						if let Some(value) = &contents.value {
+							if value.len() >= 8 {
+								let sum = u64::from_le_bytes(value[0..8].try_into().unwrap());
+								return Ok(sum);
+							}
+						}
+					}
 				}
 			}
 		}
 	}
 	Err(anyhow::anyhow!("SumEvent not found in transaction events"))
+}
+
+pub async fn calculate_sums(pairs: Vec<(u64, u64)>) -> Result<Vec<u64>> {
+	if pairs.is_empty() {
+		return Ok(vec![]);
+	}
+
+	let package_id = sui::Address::from_str(&env::var("SUI_PACKAGE_ID")?)?;
+	let rpc_url = rpc_url_from_env();
+	println!("[rpc] rpc_url={}", rpc_url);
+	let (sender, sk) = load_sender_from_env()?;
+	println!("[rpc] sender={}", sender);
+
+	// Build PTB using SDK types + builder
+	let mut tb = sui_transaction_builder::TransactionBuilder::new();
+	tb.set_sender(sender);
+	tb.set_gas_budget(10_000_000);
+	let mut price_client = GrpcClient::new(rpc_url.clone())?;
+	tb.set_gas_price(get_reference_gas_price(&mut price_client).await?);
+
+	// Select gas
+	let mut coin_client = GrpcClient::new(rpc_url.clone())?;
+	let gas_ref = pick_gas_object(&mut coin_client, sender).await?;
+	let gas_input = sui_transaction_builder::unresolved::Input::owned(
+		*gas_ref.object_id(),
+		gas_ref.version(),
+		*gas_ref.digest(),
+	);
+	tb.add_gas_objects(vec![gas_input]);
+	println!("[rpc] gas object_ref added: id={} ver={} digest={}", gas_ref.object_id(), gas_ref.version(), gas_ref.digest());
+
+	// Chain multiple calculate_sum calls
+	let mut results = Vec::new();
+	for (i, (a, b)) in pairs.iter().enumerate() {
+		println!("[rpc] adding move call #{}: calculate_sum({}, {})", i, a, b);
+		
+		// First call uses pure arguments
+		if i == 0 {
+			let a_arg = tb.input(sui_transaction_builder::Serialized(a));
+			let b_arg = tb.input(sui_transaction_builder::Serialized(b));
+			let func = sui_transaction_builder::Function::new(
+				package_id,
+				"main".parse().unwrap(),
+				"calculate_sum".parse().unwrap(),
+				vec![],
+			);
+			let result = tb.move_call(func, vec![a_arg, b_arg]);
+			results.push(result);
+		} else {
+			// Subsequent calls use the result from the previous call as the first argument
+			let prev_result = results.last().unwrap().clone();
+			let b_arg = tb.input(sui_transaction_builder::Serialized(b));
+			let func = sui_transaction_builder::Function::new(
+				package_id,
+				"main".parse().unwrap(),
+				"calculate_sum".parse().unwrap(),
+				vec![],
+			);
+			let result = tb.move_call(func, vec![prev_result, b_arg]);
+			results.push(result);
+		}
+	}
+
+	// Finalize
+	let tx = tb.finish()?;
+	let sig = sk.sign_transaction(&tx)?;
+
+	// gRPC execute
+	let mut grpc = GrpcClient::new(rpc_url)?;
+	let mut exec = grpc.execution_client();
+	let req = proto::ExecuteTransactionRequest {
+		transaction: Some(tx.into()),
+		signatures: vec![sig.into()],
+		read_mask: Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
+	};
+	println!("[rpc] sending ExecuteTransaction with {} chained calls...", pairs.len());
+	let resp = exec.execute_transaction(req).await?;
+	let executed = resp
+		.into_inner()
+		.transaction
+		.ok_or_else(|| anyhow::anyhow!("no transaction in response"))?;
+
+	// Extract all SumEvents
+	let mut sums = Vec::new();
+	if let Some(events) = executed.events.as_ref() {
+		for e in &events.events {
+			if e.module.as_deref() == Some("main") && e.event_type.as_deref().map(|t| t.ends_with("::SumEvent")).unwrap_or(false) {
+				if let Some(contents) = &e.contents { 
+					if let Some(value) = &contents.value {
+						// SumEvent has 3 u64 fields: a, b, sum (24 bytes total)
+						// We want the sum which is at bytes 16-24
+						if value.len() >= 24 {
+							let sum = u64::from_le_bytes(value[16..24].try_into().unwrap());
+							sums.push(sum);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if sums.len() != pairs.len() {
+		return Err(anyhow::anyhow!("Expected {} SumEvents but got {}", pairs.len(), sums.len()));
+	}
+
+	Ok(sums)
 }
 
 
