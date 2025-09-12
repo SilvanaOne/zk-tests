@@ -124,6 +124,7 @@ impl LedgerClient {
             include_topology_events: None,
         });
 
+        #[allow(deprecated)]
         let request = GetUpdatesRequest {
             begin_exclusive: begin_offset,
             end_inclusive: actual_end_offset,
@@ -159,6 +160,7 @@ impl LedgerClient {
             verbose: true,
         };
 
+        #[allow(deprecated)]
         let request = GetActiveContractsRequest {
             filter: None,
             verbose: false,

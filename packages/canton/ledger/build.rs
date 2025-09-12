@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(false)
         .build_client(true)
         .out_dir(&out_dir)
-        .compile_with_config(
+        .compile_protos_with_config(
             config,
             &[
                 "proto/com/daml/ledger/api/v2/version_service.proto",
