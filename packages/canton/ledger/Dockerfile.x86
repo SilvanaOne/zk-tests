@@ -1,0 +1,41 @@
+# Dockerfile for building x86_64 Linux binary of the scan tool
+FROM rust:latest AS builder
+
+# Install required dependencies
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy the entire project
+COPY . .
+
+# Build the release binary for x86_64
+RUN cargo build --release --target x86_64-unknown-linux-gnu
+
+# Move the binary to a known location
+RUN cp target/x86_64-unknown-linux-gnu/release/scan /scan
+
+# Optional: Create a minimal runtime image
+FROM debian:bookworm-slim AS runtime
+
+# Install required runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary from builder
+COPY --from=builder /scan /usr/local/bin/scan
+
+# Set the binary as executable
+RUN chmod +x /usr/local/bin/scan
+
+# Create a non-root user
+RUN useradd -m -u 1000 scanner
+
+USER scanner
+WORKDIR /home/scanner
+
+ENTRYPOINT ["/usr/local/bin/scan"]

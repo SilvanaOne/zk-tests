@@ -1,0 +1,64 @@
+# Makefile for running scan on x86 devnet node
+# This file should be placed in ~/scan/ on the devnet server
+
+CONTAINER = splice-validator-participant-1
+SCAN_DIR = /tmp
+
+.PHONY: setup status hour transactions contracts all clean help
+
+help: ## Show this help message
+	@echo "Scan commands for devnet:"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+
+setup: ## Copy scan binary and .env into the container
+	@echo "Setting up scan in container..."
+	docker cp scan $(CONTAINER):$(SCAN_DIR)/scan
+	docker cp .env $(CONTAINER):$(SCAN_DIR)/.env
+	docker exec $(CONTAINER) chmod +x $(SCAN_DIR)/scan
+	@echo "✓ Setup complete"
+
+status: ## Show ledger status
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan status"
+
+hour: ## Show transactions from the last hour
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan hour"
+
+transactions: ## Show recent transactions
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan transactions --limit 10"
+
+contracts: ## Show active contracts
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan contracts"
+
+config: ## Show configuration
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan config"
+
+balance: ## Show wallet balance
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan balance"
+
+all: ## Show all information
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan all"
+
+test-grpc: ## Test gRPC connection
+	@echo "Testing gRPC connection inside container..."
+	docker exec $(CONTAINER) grpcurl -plaintext localhost:5001 list
+	@echo ""
+	@echo "Listing users:"
+	docker exec $(CONTAINER) grpcurl -plaintext localhost:5001 \
+		com.daml.ledger.api.v2.admin.UserManagementService/ListUsers
+
+shell: ## Open shell in container for debugging
+	docker exec -it $(CONTAINER) /bin/bash
+
+logs: ## Show participant container logs (last 50 lines)
+	docker logs --tail 50 $(CONTAINER)
+
+clean: ## Remove scan from container
+	docker exec $(CONTAINER) rm -f $(SCAN_DIR)/scan $(SCAN_DIR)/.env
+	@echo "✓ Cleaned up"
+
+# Convenience commands for quick access
+s: status
+h: hour
+t: transactions
+c: contracts
