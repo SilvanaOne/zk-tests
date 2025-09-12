@@ -21,7 +21,7 @@ import { fetchZekoFee } from "../src/zeko-fee.js";
 //const url = "http://m1.zeko.io/graphql";
 const url = "https://devnet.zeko.io/graphql";
 const MAX_FEE = 1n;
-const COUNT = 100;
+const COUNT = 10000;
 
 const { TestPublicKey } = Mina;
 type TestPublicKey = Mina.TestPublicKey;

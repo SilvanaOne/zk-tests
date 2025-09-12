@@ -1,0 +1,43 @@
+[package]
+name = "scan"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# gRPC and protobuf
+tonic = { version = "0.12", features = ["tls", "tls-roots"] }
+prost = "0.13"
+prost-types = "0.13"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# CLI and configuration
+clap = { version = "4.4", features = ["derive", "env"] }
+dotenv = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# JWT handling
+jsonwebtoken = "9.2"
+chrono = "0.4"
+
+# Error handling and logging
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+colored = "2.1"
+humantime = "2.1"
+reqwest = { version = "0.11", features = ["json"] }
+
+[build-dependencies]
+tonic-build = { version = "0.12", features = ["prost"] }
+prost-build = "0.13"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true

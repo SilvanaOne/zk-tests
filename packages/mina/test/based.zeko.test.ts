@@ -197,7 +197,7 @@ describe("Based rollup", async () => {
       let txSent = await tx.safeSend();
       while (txSent.status !== "pending") {
         console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
-        await sleep(5000);
+        await sleep(1000);
         const fee = await fetchZekoFee({ tx, url });
         if (fee) {
           console.log(
