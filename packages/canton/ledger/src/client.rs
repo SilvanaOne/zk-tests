@@ -35,6 +35,7 @@ pub mod proto {
 }
 
 use proto::com::daml::ledger::api::v2::*;
+use proto::com::daml::ledger::api::v2::admin::*;
 
 pub struct LedgerClient {
     channel: Channel,
@@ -201,22 +202,54 @@ impl LedgerClient {
         }
     }
 
+    pub async fn get_users(&self) -> Result<Vec<serde_json::Value>> {
+        let mut client = user_management_service_client::UserManagementServiceClient::new(self.channel.clone());
+        let request = self.add_auth_header(Request::new(ListUsersRequest {
+            page_token: String::new(),
+            page_size: 100,
+            identity_provider_id: String::new(),
+        }));
+
+        let response = client.list_users(request).await?;
+        let users = response.into_inner().users;
+
+        // Convert to JSON values for easier handling
+        let mut result = Vec::new();
+        for user in users {
+            let mut user_json = serde_json::json!({
+                "id": user.id,
+            });
+
+            if !user.primary_party.is_empty() {
+                user_json["primary_party"] = serde_json::Value::String(user.primary_party);
+            }
+
+            result.push(user_json);
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_balance(&self) -> Result<serde_json::Value> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()?;
+
+        // Use the JWT user from config (should be app-user or app-provider)
         let token = generate_jwt_token(&self.config.jwt_secret, &self.config.jwt_audience, &self.config.jwt_user)?;
-        
+
+        let url = format!("{}/api/validator/v0/wallet/balance", self.config.validator_endpoint());
+
         let response = timeout(Duration::from_secs(15), async {
             client
-                .get(format!("{}/api/validator/v0/wallet/balance", self.config.validator_endpoint()))
+                .get(&url)
                 .header("Authorization", format!("Bearer {}", token))
                 .send()
                 .await?
                 .json::<serde_json::Value>()
                 .await
         }).await??;
-        
+
         Ok(response)
     }
 }
