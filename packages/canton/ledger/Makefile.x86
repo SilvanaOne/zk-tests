@@ -10,6 +10,13 @@ help: ## Show this help message
 	@echo "Scan commands for devnet:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Shortcuts:"
+	@echo "  s                    Status"
+	@echo "  h                    Hour (recent transactions)"
+	@echo "  t                    Transactions"
+	@echo "  c                    Contracts"
+	@echo "  b                    Balance"
 
 setup: ## Copy scan binary and .env into the container
 	@echo "Setting up scan in container..."
@@ -57,6 +64,9 @@ jwt: ## Generate JWT token for authentication
 jwt-admin: ## Generate JWT token for administrator user
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt --user administrator"
 
+help-scan: ## Show scan command help
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan --help"
+
 all: ## Show all information
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan all"
 
@@ -73,6 +83,12 @@ shell: ## Open shell in container for debugging
 
 logs: ## Show participant container logs (last 50 lines)
 	docker logs --tail 50 $(CONTAINER)
+
+list-ports: ## List Docker containers and their ports
+	@echo "Docker containers and exposed ports:"
+	@echo "════════════════════════════════════════════════════════════════════"
+	@docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -E "5001|splice"
+	@echo "════════════════════════════════════════════════════════════════════"
 
 clean: ## Remove scan from container
 	docker exec $(CONTAINER) rm -f $(SCAN_DIR)/scan $(SCAN_DIR)/.env
