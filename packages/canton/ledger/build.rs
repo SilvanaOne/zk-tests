@@ -22,6 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "proto/com/daml/ledger/api/v2/command_completion_service.proto",
                 "proto/com/daml/ledger/api/v2/package_service.proto",
                 "proto/com/daml/ledger/api/v2/admin/user_management_service.proto",
+                "proto/com/daml/ledger/api/v2/admin/party_management_service.proto",
             ],
             &["proto"],
         )?;

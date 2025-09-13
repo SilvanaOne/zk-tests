@@ -71,6 +71,9 @@ enum Commands {
         #[arg(long, default_value = "2901")]
         port: u16,
     },
+
+    /// List all participants and their users
+    Participants,
 }
 
 
@@ -105,6 +108,7 @@ async fn main() -> Result<()> {
         Commands::Jwt { user } => generate_and_show_jwt(&config, user)?,
         Commands::ScanAll => scan_all_participants().await?,
         Commands::Debug { port } => debug_contracts(&config, port).await?,
+        Commands::Participants => show_participants().await?,
     }
     
     Ok(())
@@ -114,44 +118,49 @@ async fn show_balance(config: &Config) -> Result<()> {
     println!("{}", "📊 Wallet Balances for All Participants".bold().blue());
     println!("{}", "═".repeat(70).blue());
 
-    // Define all known participants
-    let participants = vec![
-        ("app-user", 2901, 2903, "http://wallet.localhost:2000"),
-        ("app-provider", 3901, 3903, "http://wallet.localhost:3000"),
+    // Dynamically check known participant ports
+    let participant_ports = vec![
+        ("app-user", 2901, 2903),
+        ("app-provider", 3901, 3903),
+        ("sv (super-validator)", 4901, 4903),
     ];
 
-    for (name, ledger_port, validator_port, web_url) in participants {
-        println!("\n{}", format!("▶ {} (Port {})", name, ledger_port).bright_cyan().bold());
-        println!("  Web UI: {}", web_url.bright_black());
+    let mut total_balances = 0u64;
+    let mut participants_with_balance = 0;
 
+    for (name, ledger_port, validator_port) in &participant_ports {
         // Create config for this participant
         let mut participant_config = config.clone();
-        participant_config.ledger_port = ledger_port;
-        participant_config.validator_port = validator_port;
+        participant_config.ledger_port = *ledger_port;
+        participant_config.validator_port = *validator_port;
 
-        // Try to get users and their parties first
+        // Try to connect to the participant
         match LedgerClient::new(participant_config.clone()).await {
             Ok(client) => {
                 // Get users for this participant
                 match client.get_users().await {
-                    Ok(users) => {
-                        let mut found_any_balance = false;
+                    Ok(users) if !users.is_empty() => {
+                        let non_admin_users: Vec<_> = users.iter()
+                            .filter(|u| {
+                                let user_id = u.get("id").and_then(|id| id.as_str()).unwrap_or("");
+                                user_id != "participant_admin"
+                            })
+                            .collect();
 
-                        for user in users {
+                        if non_admin_users.is_empty() {
+                            continue;
+                        }
+
+                        println!("\n{}", format!("▶ {} Participant (Port {})", name, ledger_port).bright_cyan().bold());
+
+                        let mut participant_has_balance = false;
+
+                        for user in non_admin_users {
                             if let Some(party_id) = user.get("primary_party").and_then(|p| p.as_str()) {
                                 let user_id = user.get("id").and_then(|id| id.as_str()).unwrap_or("unknown");
 
-                                // Skip admin users
-                                if user_id == "participant_admin" {
-                                    continue;
-                                }
-
-                                println!("\n  User: {} ", user_id.green());
-                                println!("  Party: {}", &party_id[..50.min(party_id.len())].bright_black());
-
                                 // Update config with this party ID and use the correct user
                                 participant_config.party_id = party_id.to_string();
-                                // Use the actual user ID (app-user or app-provider) for JWT generation
                                 participant_config.jwt_user = user_id.to_string();
 
                                 // Create a new client with the updated config for balance requests
@@ -160,27 +169,41 @@ async fn show_balance(config: &Config) -> Result<()> {
                                 // Try to get balance from validator API
                                 match balance_client.get_balance().await {
                                     Ok(balance) if !balance.is_null() && balance.get("error").is_none() => {
+                                        println!("\n  {} User: {}", "•".green(), user_id.bold());
+                                        println!("    Party: {}", &party_id[..60.min(party_id.len())].bright_black());
+
                                         if let Some(round) = balance.get("round") {
                                             println!("    Round: {}", round.to_string().green());
-                                            found_any_balance = true;
                                         }
                                         if let Some(unlocked) = balance.get("effective_unlocked_qty") {
-                                            println!("    Unlocked AMT: {}", unlocked.to_string().yellow().bold());
-                                            found_any_balance = true;
+                                            let unlocked_str = unlocked.as_str().unwrap_or("0");
+                                            let unlocked_float = unlocked_str.parse::<f64>().unwrap_or(0.0);
+                                            println!("    Unlocked AMT: {}", format!("{:.6}", unlocked_float).yellow().bold());
+                                            total_balances += unlocked_float as u64;
+                                            participant_has_balance = true;
                                         }
                                         if let Some(locked) = balance.get("effective_locked_qty") {
-                                            println!("    Locked AMT: {}", locked.to_string().yellow());
-                                            found_any_balance = true;
+                                            let locked_str = locked.as_str().unwrap_or("0");
+                                            if locked_str != "0.0000000000" {
+                                                println!("    Locked AMT: {}", locked_str.yellow());
+                                            }
                                         }
                                         if let Some(fees) = balance.get("total_holding_fees") {
-                                            println!("    Holding Fees: {}", fees.to_string().red());
+                                            let fees_str = fees.as_str().unwrap_or("0");
+                                            if fees_str != "0.0000000000" {
+                                                println!("    Holding Fees: {}", fees_str.red());
+                                            }
                                         }
+                                    }
+                                    Ok(balance) if balance.get("error").is_some() => {
+                                        // Only show users with actual balance access, skip those with errors
+                                        continue;
                                     }
                                     _ => {
                                         // Try to find balance in contracts for this party
                                         let client_for_party = LedgerClient::new(participant_config.clone()).await?;
                                         match client_for_party.get_active_contracts().await {
-                                            Ok(contracts) => {
+                                            Ok(contracts) if !contracts.is_empty() => {
                                                 let mut balance_found = false;
 
                                                 for c in &contracts {
@@ -195,9 +218,11 @@ async fn show_balance(config: &Config) -> Result<()> {
                                                            template_name.to_lowercase().contains("amulet") {
 
                                                             if !balance_found {
+                                                                println!("\n  {} User: {}", "•".green(), user_id.bold());
+                                                                println!("    Party: {}", &party_id[..60.min(party_id.len())].bright_black());
                                                                 println!("    Balance from contracts:");
                                                                 balance_found = true;
-                                                                found_any_balance = true;
+                                                                participant_has_balance = true;
                                                             }
 
                                                             if let Some(record) = &event.create_arguments {
@@ -221,13 +246,10 @@ async fn show_balance(config: &Config) -> Result<()> {
                                                         }
                                                     }
                                                 }
-
-                                                if !balance_found {
-                                                    println!("    No balance data available");
-                                                }
                                             }
-                                            Err(_) => {
-                                                println!("    Unable to fetch contracts");
+                                            _ => {
+                                                // No contracts or unable to fetch, skip this user
+                                                continue;
                                             }
                                         }
                                     }
@@ -235,21 +257,30 @@ async fn show_balance(config: &Config) -> Result<()> {
                             }
                         }
 
-                        if !found_any_balance {
-                            println!("\n  No balance data found for any user");
+                        if participant_has_balance {
+                            participants_with_balance += 1;
                         }
                     }
-                    Err(e) => {
-                        println!("  Error fetching users: {}", e);
+                    _ => {
+                        // No users or error fetching users, skip this participant
+                        continue;
                     }
                 }
             }
-            Err(e) => {
-                println!("  Failed to connect: {}", e);
+            Err(_) => {
+                // Unable to connect to this participant, skip it
+                continue;
             }
         }
     }
 
+    println!("\n{}", "─".repeat(70).bright_black());
+    println!("{}", "Summary:".bold());
+    println!("  Total Participants Scanned: {}", participant_ports.len().to_string().green());
+    println!("  Participants with Balances: {}", participants_with_balance.to_string().yellow());
+    if total_balances > 0 {
+        println!("  Total AMT Across Network: {}", format!("~{}", total_balances).cyan().bold());
+    }
     println!("\n{}", "═".repeat(70).blue());
 
     Ok(())
@@ -703,6 +734,108 @@ async fn debug_contracts(config: &Config, port: u16) -> Result<()> {
     }
 
     println!("\n{}", "═".repeat(70).blue());
+    Ok(())
+}
+
+async fn show_participants() -> Result<()> {
+    println!("{}", "👥 Canton Network Participants".bold().blue());
+    println!("{}", "═".repeat(70).blue());
+
+    // Known participant ports in the localnet
+    let participant_ports = vec![
+        ("app-user", 2901, 2903),
+        ("app-provider", 3901, 3903),
+        ("sv (super-validator)", 4901, 4903),
+    ];
+
+    let mut total_users = 0;
+    let mut total_parties = 0;
+
+    for (name, ledger_port, validator_port) in &participant_ports {
+        println!("\n{}", format!("▶ {} Participant", name).bright_cyan().bold());
+        println!("  Ledger API Port: {}", ledger_port.to_string().yellow());
+        println!("  Validator Port: {}", validator_port.to_string().yellow());
+
+        // Create config for this participant
+        let mut config = Config::default();
+        config.ledger_port = *ledger_port;
+        config.validator_port = *validator_port;
+        config.jwt_user = "ledger-api-user".to_string();
+
+        // Try to connect and get users
+        match LedgerClient::new(config.clone()).await {
+            Ok(client) => {
+                // Get ledger info
+                match client.get_ledger_end().await {
+                    Ok(offset) => println!("  Ledger Offset: {}", offset.green()),
+                    Err(_) => println!("  Ledger Offset: {}", "Unable to fetch".red()),
+                }
+
+                // Get users
+                match client.get_users().await {
+                    Ok(users) => {
+                        println!("\n  {} Users:", users.len());
+
+                        for user in &users {
+                            let user_id = user.get("id").and_then(|id| id.as_str()).unwrap_or("unknown");
+                            let party_id = user.get("primary_party").and_then(|p| p.as_str());
+
+                            if let Some(party) = party_id {
+                                println!("    {} {}: {}",
+                                    "•".green(),
+                                    user_id.bold(),
+                                    &party[..60.min(party.len())].bright_black()
+                                );
+                                total_parties += 1;
+                            } else {
+                                println!("    {} {} (no party)",
+                                    "•".yellow(),
+                                    user_id.bold()
+                                );
+                            }
+                            total_users += 1;
+                        }
+
+                        // Get party details
+                        match client.get_parties().await {
+                            Ok(parties) => {
+                                if !parties.is_empty() {
+                                    println!("\n  {} Known Parties:", parties.len());
+                                    for party in &parties {
+                                        if let Some(party_str) = party.as_str() {
+                                            // Show full party ID or truncate very long ones
+                                            if party_str.len() > 80 {
+                                                println!("    {} {}...", "•".cyan(), &party_str[..80]);
+                                            } else {
+                                                println!("    {} {}", "•".cyan(), party_str);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_) => {
+                                // Parties endpoint might not be available
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("  {} Error fetching users: {}", "✗".red(), e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("  {} Unable to connect: {}", "✗".red(), e);
+            }
+        }
+    }
+
+    println!("\n{}", "─".repeat(70).bright_black());
+    println!("{}", "Summary:".bold());
+    println!("  Total Participants: {}", participant_ports.len().to_string().green());
+    println!("  Total Users: {}", total_users.to_string().yellow());
+    println!("  Total Parties: {}", total_parties.to_string().cyan());
+    println!("\n{}", "═".repeat(70).blue());
+
     Ok(())
 }
 

@@ -230,6 +230,30 @@ impl LedgerClient {
         Ok(result)
     }
 
+    pub async fn get_parties(&self) -> Result<Vec<serde_json::Value>> {
+        use proto::com::daml::ledger::api::v2::admin::party_management_service_client::PartyManagementServiceClient;
+        use proto::com::daml::ledger::api::v2::admin::ListKnownPartiesRequest;
+
+        let mut client = PartyManagementServiceClient::new(self.channel.clone());
+        let request = self.add_auth_header(Request::new(ListKnownPartiesRequest {
+            page_token: String::new(),
+            page_size: 100,
+            identity_provider_id: String::new(),
+        }));
+
+        match client.list_known_parties(request).await {
+            Ok(response) => {
+                let parties = response.into_inner().party_details;
+                let mut result = Vec::new();
+                for party in parties {
+                    result.push(serde_json::Value::String(party.party));
+                }
+                Ok(result)
+            }
+            Err(_) => Ok(Vec::new()), // Return empty list if not available
+        }
+    }
+
     pub async fn get_balance(&self) -> Result<serde_json::Value> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
