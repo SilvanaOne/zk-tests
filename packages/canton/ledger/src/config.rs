@@ -72,6 +72,11 @@ impl Config {
     }
 
     pub fn validator_endpoint(&self) -> String {
-        format!("http://{}:{}", self.ledger_host, self.validator_port)
+        // Check if we're using nginx proxy (port 80)
+        if self.validator_port == 80 {
+            format!("http://{}", self.ledger_host)
+        } else {
+            format!("http://{}:{}", self.ledger_host, self.validator_port)
+        }
     }
 }

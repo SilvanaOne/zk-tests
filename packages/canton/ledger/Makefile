@@ -9,20 +9,18 @@ build-x86: ## Build x86_64 Linux binary using Docker buildx
 	@echo "Building $(BINARY_NAME) for x86_64 Linux..."
 	@mkdir -p $(X86_DIR)
 	
-	# Build and extract binary
+	# Build and extract binary directly (no image pull needed)
 	docker buildx build \
 		--platform linux/amd64 \
 		-f Dockerfile.x86 \
-		--target builder \
-		-t scan-x86-builder \
-		--load \
+		--target export \
+		--output type=local,dest=./build-output \
 		.
-	
-	# Extract the binary
-	docker create --name scan-extract scan-x86-builder
-	docker cp scan-extract:/scan $(X86_DIR)/$(BINARY_NAME)
-	docker rm scan-extract
-	docker rmi scan-x86-builder
+
+	# Move the binary to the target directory
+	@mkdir -p $(X86_DIR)
+	@mv ./build-output/scan $(X86_DIR)/$(BINARY_NAME)
+	@rm -rf ./build-output
 	
 	@echo "✓ Binary built at $(X86_DIR)/$(BINARY_NAME)"
 

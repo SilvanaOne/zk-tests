@@ -255,25 +255,127 @@ impl LedgerClient {
     }
 
     pub async fn get_balance(&self) -> Result<serde_json::Value> {
+        // First try validator API if it's available
+        if let Ok(balance) = self.get_balance_from_validator_api().await {
+            if !balance.get("error").is_some() {
+                return Ok(balance);
+            }
+        }
+
+        // Fallback: Try to get balance from contracts
+        self.get_balance_from_contracts().await
+    }
+
+    async fn get_balance_from_validator_api(&self) -> Result<serde_json::Value> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()?;
 
-        // Use the JWT user from config (should be app-user or app-provider)
+        // Use the JWT user from config
         let token = generate_jwt_token(&self.config.jwt_secret, &self.config.jwt_audience, &self.config.jwt_user)?;
 
         let url = format!("{}/api/validator/v0/wallet/balance", self.config.validator_endpoint());
 
-        let response = timeout(Duration::from_secs(15), async {
-            client
-                .get(&url)
-                .header("Authorization", format!("Bearer {}", token))
-                .send()
-                .await?
-                .json::<serde_json::Value>()
-                .await
-        }).await??;
+        // First check if the validator endpoint is accessible
+        match timeout(Duration::from_secs(5), client.get(&url).send()).await {
+            Ok(Ok(_)) => {
+                // Endpoint exists, now try with auth
+                match timeout(Duration::from_secs(15), async {
+                    client
+                        .get(&url)
+                        .header("Authorization", format!("Bearer {}", token))
+                        .send()
+                        .await
+                }).await {
+                    Ok(Ok(resp)) => {
+                        let status = resp.status();
+                        let body = resp.text().await?;
 
-        Ok(response)
+                        // Try to parse as JSON
+                        match serde_json::from_str::<serde_json::Value>(&body) {
+                            Ok(json) => Ok(json),
+                            Err(_) => {
+                                // Not JSON, return error info
+                                Ok(serde_json::json!({
+                                    "error": format!("Non-JSON response (status {}): {}", status, body)
+                                }))
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => Ok(serde_json::json!({
+                        "error": format!("Request failed: {}", e)
+                    })),
+                    Err(_) => Ok(serde_json::json!({
+                        "error": "Request timed out"
+                    }))
+                }
+            }
+            _ => {
+                // Validator endpoint not accessible
+                Ok(serde_json::json!({
+                    "error": format!("Validator API not accessible at {}", url)
+                }))
+            }
+        }
+    }
+
+    async fn get_balance_from_contracts(&self) -> Result<serde_json::Value> {
+        // Get active contracts and look for wallet/balance related contracts
+        let contracts = self.get_active_contracts().await?;
+
+        let mut total_balance: f64 = 0.0;
+        let mut wallet_contracts = Vec::new();
+        let total_contracts = contracts.len();
+
+        for contract in contracts {
+            if let Some(created_event) = &contract.created_event {
+                if let Some(template_id) = &created_event.template_id {
+                    let template_name = format!("{}.{}",
+                        template_id.module_name,
+                        template_id.entity_name
+                    );
+
+                    // Look for wallet, balance, or amulet related contracts
+                    if template_name.to_lowercase().contains("wallet") ||
+                       template_name.to_lowercase().contains("balance") ||
+                       template_name.to_lowercase().contains("amulet") {
+
+                        // Try to extract balance from create_arguments
+                        if let Some(create_args) = &created_event.create_arguments {
+                            for field in &create_args.fields {
+                                if field.label.to_lowercase().contains("balance") ||
+                                   field.label.to_lowercase().contains("amount") {
+
+                                    // Try to parse numeric value
+                                    if let Some(value::Sum::Numeric(num)) = &field.value.as_ref().and_then(|v| v.sum.as_ref()) {
+                                        if let Ok(amount) = num.parse::<f64>() {
+                                            total_balance += amount;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        wallet_contracts.push(serde_json::json!({
+                            "template": template_name,
+                            "contract_id": created_event.contract_id.clone()
+                        }));
+                    }
+                }
+            }
+        }
+
+        if wallet_contracts.is_empty() {
+            Ok(serde_json::json!({
+                "error": "No wallet or balance contracts found",
+                "total_contracts_checked": total_contracts
+            }))
+        } else {
+            Ok(serde_json::json!({
+                "balance_from_contracts": total_balance,
+                "wallet_contracts": wallet_contracts,
+                "total_contracts_checked": total_contracts
+            }))
+        }
     }
 }

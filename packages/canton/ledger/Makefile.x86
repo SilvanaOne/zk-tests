@@ -9,7 +9,7 @@ SCAN_DIR = /tmp
 help: ## Show this help message
 	@echo "Scan commands for devnet:"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
 setup: ## Copy scan binary and .env into the container
 	@echo "Setting up scan in container..."
@@ -33,14 +33,29 @@ contracts: ## Show active contracts
 config: ## Show configuration
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan config"
 
-balance: ## Show wallet balance
-	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan balance"
+balance: ## Show wallet balance (run from host using nginx proxy)
+	@echo "Fetching wallet balance..."
+	@JWT=$$(docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt --user administrator" | grep -A1 "Token:" | tail -1) && \
+	if [ -z "$$JWT" ]; then \
+		echo "Failed to generate JWT token"; \
+		exit 1; \
+	fi && \
+	curl -s -H "Authorization: Bearer $$JWT" http://localhost/api/validator/v0/wallet/balance | \
+	jq -r '"\nWallet Balance\n" + "="*50 + "\nRound: " + (.round|tostring) + "\nTotal Available Balance: " + (.effective_unlocked_qty|tonumber|.*100|round/100|tostring) + " CC\nLocked Balance: " + (.effective_locked_qty|tonumber|.*100|round/100|tostring) + " CC\nHolding Fees: " + (.total_holding_fees|tonumber|.*100000|round/100000|tostring) + " CC\n" + "="*50' 2>/dev/null || \
+	(echo "Error: Could not fetch balance. Make sure jq is installed: apt-get install -y jq" && exit 1)
+
+balance-simple: ## Show wallet balance (simple output without jq)
+	@JWT=$$(docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt --user administrator" | grep -A1 "Token:" | tail -1) && \
+	curl -s -H "Authorization: Bearer $$JWT" http://localhost/api/validator/v0/wallet/balance
 
 participants: ## List all participants and their users
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan participants"
 
 jwt: ## Generate JWT token for authentication
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt"
+
+jwt-admin: ## Generate JWT token for administrator user
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt --user administrator"
 
 all: ## Show all information
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan all"
@@ -68,3 +83,4 @@ s: status
 h: hour
 t: transactions
 c: contracts
+b: balance

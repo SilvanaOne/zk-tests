@@ -9,14 +9,21 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy the entire project
-COPY . .
+# Copy only the necessary source files (not target directory)
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY proto ./proto
+COPY build.rs ./
 
 # Build the release binary for x86_64
 RUN cargo build --release --target x86_64-unknown-linux-gnu
 
 # Move the binary to a known location
 RUN cp target/x86_64-unknown-linux-gnu/release/scan /scan
+
+# Export stage - just the binary in a scratch image
+FROM scratch AS export
+COPY --from=builder /scan /scan
 
 # Optional: Create a minimal runtime image
 FROM debian:bookworm-slim AS runtime
