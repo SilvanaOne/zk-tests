@@ -106,12 +106,20 @@ async fn show_balance(config: &Config) -> Result<()> {
     println!("{}", "📊 Wallet Balances for All Participants".bold().blue());
     println!("{}", "═".repeat(70).blue());
 
-    // Dynamically check known participant ports
-    let participant_ports = vec![
-        ("app-user", 2901, 2903),
-        ("app-provider", 3901, 3903),
-        ("sv (super-validator)", 4901, 4903),
-    ];
+    // Check if we're running in devnet (port 5001) or localnet
+    let participant_ports = if config.ledger_port == 5001 {
+        // Devnet configuration - single validator participant
+        vec![
+            ("validator", 5001, 5003),
+        ]
+    } else {
+        // Localnet configuration - multiple participants
+        vec![
+            ("app-user", 2901, 2903),
+            ("app-provider", 3901, 3903),
+            ("sv (super-validator)", 4901, 4903),
+        ]
+    };
 
     let mut total_balances = 0u64;
     let mut participants_with_balance = 0;
@@ -613,12 +621,21 @@ async fn show_participants() -> Result<()> {
     println!("{}", "👥 Canton Network Participants".bold().blue());
     println!("{}", "═".repeat(70).blue());
 
-    // Known participant ports in the localnet
-    let participant_ports = vec![
-        ("app-user", 2901, 2903),
-        ("app-provider", 3901, 3903),
-        ("sv (super-validator)", 4901, 4903),
-    ];
+    // Check if we're running in devnet or localnet based on default config
+    let default_config = Config::from_env()?;
+    let participant_ports = if default_config.ledger_port == 5001 {
+        // Devnet configuration - single validator participant
+        vec![
+            ("validator", 5001, 5003),
+        ]
+    } else {
+        // Localnet configuration - multiple participants
+        vec![
+            ("app-user", 2901, 2903),
+            ("app-provider", 3901, 3903),
+            ("sv (super-validator)", 4901, 4903),
+        ]
+    };
 
     let mut total_users = 0;
     let mut total_parties = 0;

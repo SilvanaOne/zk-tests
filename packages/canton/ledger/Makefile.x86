@@ -36,6 +36,12 @@ config: ## Show configuration
 balance: ## Show wallet balance
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan balance"
 
+participants: ## List all participants and their users
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan participants"
+
+jwt: ## Generate JWT token for authentication
+	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan jwt"
+
 all: ## Show all information
 	docker exec $(CONTAINER) sh -c "cd $(SCAN_DIR) && ./scan all"
 
