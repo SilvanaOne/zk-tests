@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::env;
 use std::str::FromStr;
-use sui_crypto::SuiSigner;
+use sui_crypto::{SuiSigner, Signer};
 use sui_rpc::Client as GrpcClient;
 use sui_rpc::field::FieldMask;
 use sui_rpc::proto::sui::rpc::v2beta2 as proto;
@@ -437,6 +437,24 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         .ok_or_else(|| anyhow::anyhow!("failed to get current epoch"))?;
     println!("[rpc] current epoch={}", epoch);
 
+    // Create signature for epoch || state_address
+    let mut message = Vec::new();
+    // Append epoch as 8 bytes (little-endian) using BCS encoding
+    message.extend_from_slice(&bcs::to_bytes(&epoch)?);
+    // Append state address as 32 bytes using BCS encoding
+    message.extend_from_slice(&bcs::to_bytes(&state_id)?);
+
+    // Sign the message with Ed25519 private key
+    let signature: sui::Ed25519Signature = sk.try_sign(&message)?;
+    let signature_bytes = signature.inner().to_vec();
+    let public_key_bytes = sk.public_key().inner().to_vec();
+
+    // Combine signature and public key: 64 bytes signature + 32 bytes public key
+    let mut signature_with_pk = Vec::with_capacity(96);
+    signature_with_pk.extend_from_slice(&signature_bytes);
+    signature_with_pk.extend_from_slice(&public_key_bytes);
+    println!("[rpc] signature with public key generated, len={}", signature_with_pk.len());
+
     let initial_shared_version = fetch_initial_shared_version(&rpc_url, state_id).await?;
     println!(
         "[rpc] state_id={} initial_shared_version={}",
@@ -471,16 +489,16 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         sui_transaction_builder::unresolved::Input::shared(state_id, initial_shared_version, true);
     let state_arg = tb.input(state_arg);
     let value_arg = tb.input(sui_transaction_builder::Serialized(&value));
-    let epoch_arg = tb.input(sui_transaction_builder::Serialized(&epoch));
+    let signature_arg = tb.input(sui_transaction_builder::Serialized(&signature_with_pk));
 
-    // Function call: package::main::add_to_state(&mut State, u64, u64)
+    // Function call: package::main::add_to_state(&mut State, u64, vector<u8>)
     let func = sui_transaction_builder::Function::new(
         package_id,
         "main".parse().unwrap(),
         "add_to_state".parse().unwrap(),
         vec![],
     );
-    tb.move_call(func, vec![state_arg, value_arg, epoch_arg]);
+    tb.move_call(func, vec![state_arg, value_arg, signature_arg]);
 
     // Finalize
     let tx = tb.finish()?;
@@ -569,6 +587,24 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
         .ok_or_else(|| anyhow::anyhow!("failed to get current epoch"))?;
     println!("[rpc] current epoch={}", epoch);
 
+    // Create signature for epoch || state_address
+    let mut message = Vec::new();
+    // Append epoch as 8 bytes (little-endian) using BCS encoding
+    message.extend_from_slice(&bcs::to_bytes(&epoch)?);
+    // Append state address as 32 bytes using BCS encoding
+    message.extend_from_slice(&bcs::to_bytes(&state_id)?);
+
+    // Sign the message with Ed25519 private key
+    let signature: sui::Ed25519Signature = sk.try_sign(&message)?;
+    let signature_bytes = signature.inner().to_vec();
+    let public_key_bytes = sk.public_key().inner().to_vec();
+
+    // Combine signature and public key: 64 bytes signature + 32 bytes public key
+    let mut signature_with_pk = Vec::with_capacity(96);
+    signature_with_pk.extend_from_slice(&signature_bytes);
+    signature_with_pk.extend_from_slice(&public_key_bytes);
+    println!("[rpc] signature with public key generated, len={}", signature_with_pk.len());
+
     let initial_shared_version = fetch_initial_shared_version(&rpc_url, state_id).await?;
     println!(
         "[rpc] state_id={} initial_shared_version={}",
@@ -606,12 +642,12 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     // Each call modifies the shared state and returns the new sum
     let mut results = Vec::new();
     for (i, value) in values.iter().enumerate() {
-        println!("[rpc] adding move call #{}: add_to_state(&mut State, {}, epoch={})", i, value, epoch);
+        println!("[rpc] adding move call #{}: add_to_state(&mut State, {})", i, value);
 
         let value_arg = tb.input(sui_transaction_builder::Serialized(value));
-        let epoch_arg = tb.input(sui_transaction_builder::Serialized(&epoch));
+        let signature_arg = tb.input(sui_transaction_builder::Serialized(&signature_with_pk));
 
-        // Function call: package::main::add_to_state(&mut State, u64, u64)
+        // Function call: package::main::add_to_state(&mut State, u64, vector<u8>)
         let func = sui_transaction_builder::Function::new(
             package_id,
             "main".parse().unwrap(),
@@ -620,8 +656,8 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
         );
 
         // add_to_state takes the shared state (which is automatically passed by reference),
-        // the value to add, and the epoch
-        let result = tb.move_call(func, vec![state_arg.clone(), value_arg, epoch_arg]);
+        // the value to add, and signature with embedded public key
+        let result = tb.move_call(func, vec![state_arg.clone(), value_arg, signature_arg]);
         results.push(result);
     }
 
