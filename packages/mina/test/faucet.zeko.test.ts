@@ -17,7 +17,7 @@ import { faucet } from "../src/faucet.js";
 //config({ path: ".env.zeko" });
 
 const chain = process.env.CHAIN;
-const MINIMUM_AMOUNT = 300;
+const MINIMUM_AMOUNT = 1000;
 const keysToTopup: string[] = [];
 
 // Load keys from environment variables

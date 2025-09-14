@@ -130,12 +130,18 @@ async fn show_balance(config: &Config) -> Result<()> {
         participant_config.ledger_port = *ledger_port;
         participant_config.validator_port = *validator_port;
 
+        // For devnet, use administrator user to access wallet
+        if *ledger_port == 5001 {
+            participant_config.jwt_user = "administrator".to_string();
+        }
+
         // Try to connect to the participant
         match LedgerClient::new(participant_config.clone()).await {
             Ok(client) => {
                 // Get users for this participant
                 match client.get_users().await {
                     Ok(users) if !users.is_empty() => {
+                        // Try all users except participant_admin
                         let non_admin_users: Vec<_> = users.iter()
                             .filter(|u| {
                                 let user_id = u.get("id").and_then(|id| id.as_str()).unwrap_or("");
@@ -165,31 +171,31 @@ async fn show_balance(config: &Config) -> Result<()> {
                                 // Try to get balance from validator API
                                 match balance_client.get_balance().await {
                                     Ok(balance) if !balance.is_null() && balance.get("error").is_none() => {
-                                        println!("\n  {} User: {}", "•".green(), user_id.bold());
-                                        println!("    Party: {}", &party_id[..60.min(party_id.len())].bright_black());
+                                            println!("\n  {} User: {}", "•".green(), user_id.bold());
+                                            println!("    Party: {}", &party_id[..60.min(party_id.len())].bright_black());
 
-                                        if let Some(round) = balance.get("round") {
-                                            println!("    Round: {}", round.to_string().green());
-                                        }
-                                        if let Some(unlocked) = balance.get("effective_unlocked_qty") {
-                                            let unlocked_str = unlocked.as_str().unwrap_or("0");
-                                            let unlocked_float = unlocked_str.parse::<f64>().unwrap_or(0.0);
-                                            println!("    Unlocked AMT: {}", format!("{:.6}", unlocked_float).yellow().bold());
-                                            total_balances += unlocked_float as u64;
-                                            participant_has_balance = true;
-                                        }
-                                        if let Some(locked) = balance.get("effective_locked_qty") {
-                                            let locked_str = locked.as_str().unwrap_or("0");
-                                            if locked_str != "0.0000000000" {
-                                                println!("    Locked AMT: {}", locked_str.yellow());
+                                            if let Some(round) = balance.get("round") {
+                                                println!("    Round: {}", round.to_string().green());
                                             }
-                                        }
-                                        if let Some(fees) = balance.get("total_holding_fees") {
-                                            let fees_str = fees.as_str().unwrap_or("0");
-                                            if fees_str != "0.0000000000" {
-                                                println!("    Holding Fees: {}", fees_str.red());
+                                            if let Some(unlocked) = balance.get("effective_unlocked_qty") {
+                                                let unlocked_str = unlocked.as_str().unwrap_or("0");
+                                                let unlocked_float = unlocked_str.parse::<f64>().unwrap_or(0.0);
+                                                println!("    Unlocked AMT: {}", format!("{:.6}", unlocked_float).yellow().bold());
+                                                total_balances += unlocked_float as u64;
+                                                participant_has_balance = true;
                                             }
-                                        }
+                                            if let Some(locked) = balance.get("effective_locked_qty") {
+                                                let locked_str = locked.as_str().unwrap_or("0");
+                                                if locked_str != "0.0000000000" {
+                                                    println!("    Locked AMT: {}", locked_str.yellow());
+                                                }
+                                            }
+                                            if let Some(fees) = balance.get("total_holding_fees") {
+                                                let fees_str = fees.as_str().unwrap_or("0");
+                                                if fees_str != "0.0000000000" {
+                                                    println!("    Holding Fees: {}", fees_str.red());
+                                                }
+                                            }
                                     }
                                     Ok(balance) if balance.get("error").is_some() => {
                                         // Only show users with actual balance access, skip those with errors

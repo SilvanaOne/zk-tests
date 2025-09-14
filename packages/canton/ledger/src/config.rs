@@ -72,8 +72,26 @@ impl Config {
     }
 
     pub fn validator_endpoint(&self) -> String {
-        // Check if we're using nginx proxy (port 80)
-        if self.validator_port == 80 {
+        // Check if we're running inside a Docker container
+        if Path::new("/.dockerenv").exists() || Path::new("/run/.containerenv").exists() {
+            // Inside container, try to use host.docker.internal or the Docker bridge
+            // For devnet, the validator API is exposed via nginx on the host
+            if self.validator_port == 5003 {
+                // Use the host's nginx proxy which forwards to the validator API
+                // The host is typically accessible at 172.17.0.1 (Docker bridge) or host.docker.internal
+                if let Ok(host) = env::var("VALIDATOR_HOST") {
+                    format!("http://{}", host)
+                } else {
+                    // Try common Docker host addresses
+                    // First try host.docker.internal (works on Docker Desktop)
+                    // Otherwise use Docker bridge gateway
+                    "http://172.17.0.1".to_string()
+                }
+            } else {
+                format!("http://{}:{}", self.ledger_host, self.validator_port)
+            }
+        } else if self.validator_port == 80 {
+            // Using nginx proxy
             format!("http://{}", self.ledger_host)
         } else {
             format!("http://{}:{}", self.ledger_host, self.validator_port)
