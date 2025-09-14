@@ -14,12 +14,14 @@ public struct SumEvent has copy, drop {
 public struct State has key, store {
     id: sui::object::UID,
     sum: u64,
+    owner: address,
 }
 
 public struct StateCreatedEvent has copy, drop {
     id: address,
     sum: u64,
     epoch: u64,
+    owner: address,
 }
 
 public struct StateChangeEvent has copy, drop {
@@ -62,13 +64,14 @@ public fun calculate_sum(a: u64, b: u64): u64 {
 public fun create_state(ctx: &mut TxContext) {
     let id = object::new(ctx);
     let state_address = id.to_address();
-    let state = State { id, sum: 0 };
+    let state = State { id, sum: 0, owner: ctx.sender() };
     transfer::share_object(state);
     let epoch = epoch(ctx);
     let event = StateCreatedEvent {
         id: state_address,
         sum: 0,
         epoch,
+        owner: ctx.sender(),
     };
     event::emit(event);
 }
@@ -100,7 +103,7 @@ public fun get_state(state: &State): u64 {
 public fun create_state_return_id_for_test(ctx: &mut TxContext): address {
     let id = object::new(ctx);
     let state_address = id.to_address();
-    let state = State { id, sum: 0 };
+    let state = State { id, sum: 0, owner: ctx.sender() };
     transfer::share_object(state);
     state_address
 }
