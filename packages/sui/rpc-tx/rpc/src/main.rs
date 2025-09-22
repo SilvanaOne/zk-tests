@@ -40,18 +40,18 @@ async fn main() -> anyhow::Result<()> {
     println!("create_state (v2) duration: {elapsed_ms} ms");
 
     let add_value: u64 = 7;
-    println!("Adding {add_value} to State {state_id}...");
+    println!("Adding {add_value} to State {state_id} using v2 API...");
     let started = Instant::now();
-    let new_sum = state::add_to_state(state_id, add_value).await?;
+    let new_sum = v2::add_to_state(state_id, add_value).await?;
     let elapsed_ms = started.elapsed().as_millis();
     println!("State updated. New sum: {new_sum}");
-    println!("add_to_state duration: {elapsed_ms} ms");
+    println!("add_to_state (v2) duration: {elapsed_ms} ms");
 
     // Test multiple adds in one transaction
     let add_values = vec![3, 5, 2];
-    println!("\nAdding multiple values {:?} to State {state_id} in one transaction...", add_values);
+    println!("\nAdding multiple values {:?} to State {state_id} in one transaction using v2 API...", add_values);
     let started = Instant::now();
-    let new_sums = state::multiple_add_to_state(state_id, add_values.clone()).await?;
+    let new_sums = v2::multiple_add_to_state(state_id, add_values.clone()).await?;
     let elapsed_ms = started.elapsed().as_millis();
     println!("State updated through multiple operations. Results:");
     for (i, sum) in new_sums.iter().enumerate() {
@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
             println!("  {} + {} = {}", new_sums[i-1], add_values[i], sum);
         }
     }
-    println!("multiple_add_to_state duration: {elapsed_ms} ms");
+    println!("multiple_add_to_state (v2) duration: {elapsed_ms} ms");
 
     Ok(())
 }
