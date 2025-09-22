@@ -108,10 +108,7 @@ async fn pick_gas_object(
         ],
     });
     req.object_type = None;
-    let resp = state
-        .list_owned_objects(req)
-        .await?
-        .into_inner();
+    let resp = state.list_owned_objects(req).await?.into_inner();
     println!("[rpc-v2] owned objects returned={}", resp.objects.len());
     let mut obj = resp
         .objects
@@ -138,10 +135,7 @@ async fn pick_gas_object(
         get_req.object_id = Some(object_id_str.clone());
         get_req.version = None;
         get_req.read_mask = None;
-        let got = ledger
-            .get_object(get_req)
-            .await?
-            .into_inner();
+        let got = ledger.get_object(get_req).await?.into_inner();
         if let Some(full) = got.object {
             println!(
                 "[rpc-v2] GetObject: id={:?} ver={:?} digest={:?}",
@@ -237,7 +231,7 @@ pub async fn create_state() -> Result<sui::Address> {
     // Request specific fields we need
     req.read_mask = Some(FieldMask {
         paths: vec![
-            "*".into(),  // Get all fields to see what's available
+            "*".into(), // Get all fields to see what's available
         ],
     });
     println!("[rpc-v2] sending ExecuteTransaction (create_state)...");
@@ -245,7 +239,10 @@ pub async fn create_state() -> Result<sui::Address> {
     let resp_inner = resp.into_inner();
 
     // Debug: print what we got
-    println!("[rpc-v2] Response received, has transaction: {}", resp_inner.transaction.is_some());
+    println!(
+        "[rpc-v2] Response received, has transaction: {}",
+        resp_inner.transaction.is_some()
+    );
 
     let executed = resp_inner
         .transaction
@@ -320,7 +317,9 @@ pub async fn create_state() -> Result<sui::Address> {
         }
     }
 
-    Err(anyhow::anyhow!("StateCreatedEvent not found in transaction events"))
+    Err(anyhow::anyhow!(
+        "StateCreatedEvent not found in transaction events"
+    ))
 }
 
 async fn fetch_initial_shared_version(rpc_url: &str, state_id: sui::Address) -> Result<u64> {
@@ -333,10 +332,7 @@ async fn fetch_initial_shared_version(rpc_url: &str, state_id: sui::Address) -> 
         get_req.read_mask = Some(prost_types::FieldMask {
             paths: vec!["owner".into(), "object_id".into(), "version".into()],
         });
-        let resp = match ledger
-            .get_object(get_req)
-            .await
-        {
+        let resp = match ledger.get_object(get_req).await {
             Ok(r) => r.into_inner(),
             Err(status) => {
                 println!(
@@ -377,7 +373,9 @@ async fn fetch_initial_shared_version(rpc_url: &str, state_id: sui::Address) -> 
         }
         tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
     }
-    Err(anyhow::anyhow!("Failed to fetch initial shared version after 60 attempts"))
+    Err(anyhow::anyhow!(
+        "Failed to fetch initial shared version after 60 attempts"
+    ))
 }
 
 fn extract_change_sums_from_bcs(value: &[u8]) -> Option<(u64, u64)> {
@@ -404,7 +402,8 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         .get_service_info(proto::GetServiceInfoRequest::default())
         .await?
         .into_inner();
-    let epoch = service_info.epoch
+    let epoch = service_info
+        .epoch
         .ok_or_else(|| anyhow::anyhow!("failed to get current epoch"))?;
     println!("[rpc-v2] current epoch={}", epoch);
 
@@ -423,7 +422,10 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
     let mut signature_with_pk = Vec::with_capacity(96);
     signature_with_pk.extend_from_slice(&signature_bytes);
     signature_with_pk.extend_from_slice(&public_key_bytes);
-    println!("[rpc-v2] signature with public key generated, len={}", signature_with_pk.len());
+    println!(
+        "[rpc-v2] signature with public key generated, len={}",
+        signature_with_pk.len()
+    );
 
     let initial_shared_version = fetch_initial_shared_version(&rpc_url, state_id).await?;
     println!(
@@ -455,9 +457,11 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
     );
 
     // Shared object input: State object
-    let state_arg = tb.input(
-        sui_transaction_builder::unresolved::Input::shared(state_id, initial_shared_version, true)
-    );
+    let state_arg = tb.input(sui_transaction_builder::unresolved::Input::shared(
+        state_id,
+        initial_shared_version,
+        true,
+    ));
 
     // Pure input: value to add
     let value_arg = tb.input(sui_transaction_builder::Serialized(&value));
@@ -503,9 +507,7 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         for (idx, e) in events.events.iter().enumerate() {
             println!(
                 "[rpc-v2] event[{}]: type={:?} module={:?}",
-                idx,
-                e.event_type,
-                e.module
+                idx, e.event_type, e.module
             );
             if e.event_type
                 .as_deref()
@@ -524,7 +526,9 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
         }
     }
 
-    Err(anyhow::anyhow!("StateChangeEvent not found in transaction events"))
+    Err(anyhow::anyhow!(
+        "StateChangeEvent not found in transaction events"
+    ))
 }
 
 pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> Result<Vec<u64>> {
@@ -545,7 +549,8 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
         .get_service_info(proto::GetServiceInfoRequest::default())
         .await?
         .into_inner();
-    let epoch = service_info.epoch
+    let epoch = service_info
+        .epoch
         .ok_or_else(|| anyhow::anyhow!("failed to get current epoch"))?;
     println!("[rpc-v2] current epoch={}", epoch);
 
@@ -564,7 +569,10 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     let mut signature_with_pk = Vec::with_capacity(96);
     signature_with_pk.extend_from_slice(&signature_bytes);
     signature_with_pk.extend_from_slice(&public_key_bytes);
-    println!("[rpc-v2] signature with public key generated, len={}", signature_with_pk.len());
+    println!(
+        "[rpc-v2] signature with public key generated, len={}",
+        signature_with_pk.len()
+    );
 
     let initial_shared_version = fetch_initial_shared_version(&rpc_url, state_id).await?;
     println!(
@@ -575,7 +583,7 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     // Build PTB
     let mut tb = sui_transaction_builder::TransactionBuilder::new();
     tb.set_sender(sender);
-    tb.set_gas_budget(10_000_000);
+    tb.set_gas_budget(100_000_000);
     let mut price_client = GrpcClient::new(rpc_url.clone())?;
     tb.set_gas_price(get_reference_gas_price(&mut price_client).await?);
 
@@ -590,9 +598,11 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     tb.add_gas_objects(vec![gas_input]);
 
     // Shared object input: State object
-    let state_arg = tb.input(
-        sui_transaction_builder::unresolved::Input::shared(state_id, initial_shared_version, true)
-    );
+    let state_arg = tb.input(sui_transaction_builder::unresolved::Input::shared(
+        state_id,
+        initial_shared_version,
+        true,
+    ));
 
     // Pure input: signature with public key (same for all calls)
     let signature_arg = tb.input(sui_transaction_builder::Serialized(&signature_with_pk));
@@ -607,7 +617,10 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
             "add_to_state".parse().unwrap(),
             vec![],
         );
-        println!("[rpc-v2] adding move call #{}: add_to_state(&mut State, {})", idx, value);
+        println!(
+            "[rpc-v2] adding move call #{}: add_to_state(&mut State, {})",
+            idx, value
+        );
         tb.move_call(func, vec![state_arg, value_arg, signature_arg]);
     }
 
@@ -624,7 +637,10 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     req.read_mask = Some(FieldMask {
         paths: vec!["*".into()],
     });
-    println!("[rpc-v2] sending ExecuteTransaction with {} chained add_to_state calls...", values.len());
+    println!(
+        "[rpc-v2] sending ExecuteTransaction with {} chained add_to_state calls...",
+        values.len()
+    );
     let resp = exec.execute_transaction(req).await?;
     let executed = resp
         .into_inner()
@@ -652,7 +668,11 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     }
 
     if sums.len() != values.len() {
-        return Err(anyhow::anyhow!("Expected {} StateChangeEvents but got {}", values.len(), sums.len()));
+        return Err(anyhow::anyhow!(
+            "Expected {} StateChangeEvents but got {}",
+            values.len(),
+            sums.len()
+        ));
     }
 
     Ok(sums)

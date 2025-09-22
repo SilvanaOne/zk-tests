@@ -6,6 +6,7 @@ use sui::bcs;
 use sui::ed25519;
 use sui::event;
 use sui::hash;
+use sui::object_table::{Self, ObjectTable};
 use sui::package::{claim, published_package, published_module};
 use sui::tx_context::epoch;
 
@@ -15,10 +16,17 @@ public struct SumEvent has copy, drop {
     sum: u64,
 }
 
+public struct Add has key, store {
+    id: sui::object::UID,
+    value: u64,
+}
+
 public struct State has key, store {
     id: sui::object::UID,
     sum: u64,
     owner: address,
+    counter: u64,
+    values: ObjectTable<u64, Add>,
 }
 
 public struct StateCreatedEvent has copy, drop {
@@ -68,7 +76,13 @@ public fun calculate_sum(a: u64, b: u64): u64 {
 public fun create_state(ctx: &mut TxContext) {
     let id = object::new(ctx);
     let state_address = id.to_address();
-    let state = State { id, sum: 0, owner: ctx.sender() };
+    let state = State {
+        id,
+        sum: 0,
+        owner: ctx.sender(),
+        counter: 0,
+        values: object_table::new<u64, Add>(ctx),
+    };
     transfer::share_object(state);
     let epoch = epoch(ctx);
     let event = StateCreatedEvent {
@@ -155,6 +169,12 @@ public fun add_to_state(
     // Update the state
     let old_sum = state.sum;
     state.sum = state.sum + value;
+    state.counter = state.counter + 1;
+    object_table::add(
+        &mut state.values,
+        state.counter,
+        Add { id: object::new(ctx), value },
+    );
     let event = StateChangeEvent {
         old_sum,
         new_sum: state.sum,
@@ -171,7 +191,13 @@ public fun get_state(state: &State): u64 {
 public fun create_state_return_id_for_test(ctx: &mut TxContext): address {
     let id = object::new(ctx);
     let state_address = id.to_address();
-    let state = State { id, sum: 0, owner: ctx.sender() };
+    let state = State {
+        id,
+        sum: 0,
+        owner: ctx.sender(),
+        counter: 0,
+        values: object_table::new<u64, Add>(ctx),
+    };
     transfer::share_object(state);
     state_address
 }

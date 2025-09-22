@@ -3,6 +3,14 @@ name = "rpc"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "rpc"
+path = "src/main.rs"
+
+[[bin]]
+name = "get"
+path = "src/get.rs"
+
 [dependencies]
 sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", branch = "master"  }
 sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", branch = "master"  }
