@@ -15,7 +15,7 @@ import { faucet, faucetDevnet } from "../src/faucet.js";
 
 let keys: { privateKey: string; publicKey: string }[] = [];
 const chain = process.env.CHAIN;
-const MINIMUM_AMOUNT = 1000;
+const MINIMUM_AMOUNT = 3000;
 const keysToTopup: string[] = [];
 const writeEnv = false;
 

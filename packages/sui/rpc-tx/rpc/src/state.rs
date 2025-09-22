@@ -81,7 +81,7 @@ fn load_sender_from_env() -> Result<(sui::Address, sui_crypto::ed25519::Ed25519P
 async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
     let mut ledger = client.ledger_client();
     let _resp = ledger
-        .get_service_info(proto::GetServiceInfoRequest {})
+        .get_service_info(proto::GetServiceInfoRequest::default())
         .await?
         .into_inner();
     // ServiceInfo does not expose gas price yet; default to 1000
@@ -96,21 +96,21 @@ async fn pick_gas_object(
 ) -> Result<sui::ObjectReference> {
     let mut live = client.live_data_client();
     println!("[rpc] listing owned objects for sender={}", sender);
+    let mut req = proto::ListOwnedObjectsRequest::default();
+    req.owner = Some(sender.to_string());
+    req.page_size = Some(100);
+    req.page_token = None;
+    req.read_mask = Some(prost_types::FieldMask {
+        paths: vec![
+            "object_id".into(),
+            "version".into(),
+            "digest".into(),
+            "object_type".into(),
+        ],
+    });
+    req.object_type = None;
     let resp = live
-        .list_owned_objects(proto::ListOwnedObjectsRequest {
-            owner: Some(sender.to_string()),
-            page_size: Some(100),
-            page_token: None,
-            read_mask: Some(prost_types::FieldMask {
-                paths: vec![
-                    "object_id".into(),
-                    "version".into(),
-                    "digest".into(),
-                    "object_type".into(),
-                ],
-            }),
-            object_type: None,
-        })
+        .list_owned_objects(req)
         .await?
         .into_inner();
     println!("[rpc] owned objects returned={}", resp.objects.len());
@@ -135,12 +135,12 @@ async fn pick_gas_object(
             .object_id
             .clone()
             .ok_or_else(|| anyhow::anyhow!("missing object id"))?;
+        let mut get_req = proto::GetObjectRequest::default();
+        get_req.object_id = Some(object_id_str.clone());
+        get_req.version = None;
+        get_req.read_mask = None;
         let got = ledger
-            .get_object(proto::GetObjectRequest {
-                object_id: Some(object_id_str.clone()),
-                version: None,
-                read_mask: None,
-            })
+            .get_object(get_req)
             .await?
             .into_inner();
         if let Some(full) = got.object {
@@ -299,13 +299,12 @@ pub async fn create_state() -> Result<sui::Address> {
     // gRPC execute
     let mut grpc = GrpcClient::new(rpc_url)?;
     let mut exec = grpc.execution_client();
-    let req = proto::ExecuteTransactionRequest {
-        transaction: Some(tx.into()),
-        signatures: vec![sig.into()],
-        read_mask: Some(FieldMask {
-            paths: vec!["finality".into(), "transaction".into()],
-        }),
-    };
+    let mut req = proto::ExecuteTransactionRequest::default();
+    req.transaction = Some(tx.into());
+    req.signatures = vec![sig.into()];
+    req.read_mask = Some(FieldMask {
+        paths: vec!["finality".into(), "transaction".into()],
+    });
     println!("[rpc] sending ExecuteTransaction (create_state)...");
     let resp = exec.execute_transaction(req).await?;
     let executed = resp
@@ -361,14 +360,14 @@ async fn fetch_initial_shared_version(rpc_url: &str, state_id: sui::Address) -> 
     let mut client = GrpcClient::new(rpc_url.to_string())?;
     let mut ledger = client.ledger_client();
     for attempt in 1..=60 {
+        let mut get_req = proto::GetObjectRequest::default();
+        get_req.object_id = Some(state_id.to_string());
+        get_req.version = None;
+        get_req.read_mask = Some(prost_types::FieldMask {
+            paths: vec!["owner".into(), "object_id".into(), "version".into()],
+        });
         let resp = match ledger
-            .get_object(proto::GetObjectRequest {
-                object_id: Some(state_id.to_string()),
-                version: None,
-                read_mask: Some(prost_types::FieldMask {
-                    paths: vec!["owner".into(), "object_id".into(), "version".into()],
-                }),
-            })
+            .get_object(get_req)
             .await
         {
             Ok(r) => r.into_inner(),
@@ -430,7 +429,7 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
     let mut grpc_epoch = GrpcClient::new(rpc_url.clone())?;
     let mut ledger = grpc_epoch.ledger_client();
     let service_info = ledger
-        .get_service_info(proto::GetServiceInfoRequest {})
+        .get_service_info(proto::GetServiceInfoRequest::default())
         .await?
         .into_inner();
     let epoch = service_info.epoch
@@ -507,13 +506,12 @@ pub async fn add_to_state(state_id: sui::Address, value: u64) -> Result<u64> {
     // gRPC execute
     let mut grpc = GrpcClient::new(rpc_url)?;
     let mut exec = grpc.execution_client();
-    let req = proto::ExecuteTransactionRequest {
-        transaction: Some(tx.into()),
-        signatures: vec![sig.into()],
-        read_mask: Some(FieldMask {
-            paths: vec!["finality".into(), "transaction".into()],
-        }),
-    };
+    let mut req = proto::ExecuteTransactionRequest::default();
+    req.transaction = Some(tx.into());
+    req.signatures = vec![sig.into()];
+    req.read_mask = Some(FieldMask {
+        paths: vec!["finality".into(), "transaction".into()],
+    });
     println!("[rpc] sending ExecuteTransaction (add_to_state)...");
     let resp = exec.execute_transaction(req).await?;
     let executed = resp
@@ -580,7 +578,7 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     let mut grpc_epoch = GrpcClient::new(rpc_url.clone())?;
     let mut ledger = grpc_epoch.ledger_client();
     let service_info = ledger
-        .get_service_info(proto::GetServiceInfoRequest {})
+        .get_service_info(proto::GetServiceInfoRequest::default())
         .await?
         .into_inner();
     let epoch = service_info.epoch
@@ -668,19 +666,18 @@ pub async fn multiple_add_to_state(state_id: sui::Address, values: Vec<u64>) -> 
     // gRPC execute
     let mut grpc = GrpcClient::new(rpc_url)?;
     let mut exec = grpc.execution_client();
-    let req = proto::ExecuteTransactionRequest {
-        transaction: Some(tx.into()),
-        signatures: vec![sig.into()],
-        read_mask: Some(FieldMask {
-            paths: vec![
-                "finality".into(), 
-                "transaction".into(), 
-                "transaction.events".into(),
-                "transaction.events.events".into(),
-                "transaction.events.events.contents".into(),
-            ],
-        }),
-    };
+    let mut req = proto::ExecuteTransactionRequest::default();
+    req.transaction = Some(tx.into());
+    req.signatures = vec![sig.into()];
+    req.read_mask = Some(FieldMask {
+        paths: vec![
+            "finality".into(),
+            "transaction".into(),
+            "transaction.events".into(),
+            "transaction.events.events".into(),
+            "transaction.events.events.contents".into(),
+        ],
+    });
     println!("[rpc] sending ExecuteTransaction with {} chained add_to_state calls...", values.len());
     let resp = exec.execute_transaction(req).await?;
     let executed = resp

@@ -59,7 +59,7 @@ fn load_sender_from_env() -> Result<(sui::Address, sui_crypto::ed25519::Ed25519P
 async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
 	let mut ledger = client.ledger_client();
 	let _resp = ledger
-		.get_service_info(proto::GetServiceInfoRequest {})
+		.get_service_info(proto::GetServiceInfoRequest::default())
 		.await?
 		.into_inner();
 	// ServiceInfo does not expose gas price yet; default to 1000
@@ -71,16 +71,16 @@ async fn get_reference_gas_price(client: &mut GrpcClient) -> Result<u64> {
 async fn pick_gas_object(client: &mut GrpcClient, sender: sui::Address) -> Result<sui::ObjectReference> {
 	let mut live = client.live_data_client();
 	println!("[rpc] listing owned objects for sender={}", sender);
+	let mut req = proto::ListOwnedObjectsRequest::default();
+	req.owner = Some(sender.to_string());
+	req.page_size = Some(100);
+	req.page_token = None;
+	req.read_mask = Some(prost_types::FieldMask { paths: vec![
+		"object_id".into(), "version".into(), "digest".into(), "object_type".into(),
+	]});
+	req.object_type = None;
 	let resp = live
-		.list_owned_objects(proto::ListOwnedObjectsRequest {
-			owner: Some(sender.to_string()),
-			page_size: Some(100),
-			page_token: None,
-			read_mask: Some(prost_types::FieldMask { paths: vec![
-				"object_id".into(), "version".into(), "digest".into(), "object_type".into(),
-			]}),
-			object_type: None,
-		})
+		.list_owned_objects(req)
 		.await?
 		.into_inner();
 	println!("[rpc] owned objects returned={}", resp.objects.len());
@@ -94,8 +94,12 @@ async fn pick_gas_object(client: &mut GrpcClient, sender: sui::Address) -> Resul
 		println!("[rpc] digest/version missing; fetching object details via GetObject...");
 		let mut ledger = client.ledger_client();
 		let object_id_str = obj.object_id.clone().ok_or_else(|| anyhow::anyhow!("missing object id"))?;
+		let mut get_req = proto::GetObjectRequest::default();
+		get_req.object_id = Some(object_id_str.clone());
+		get_req.version = None;
+		get_req.read_mask = None;
 		let got = ledger
-			.get_object(proto::GetObjectRequest { object_id: Some(object_id_str.clone()), version: None, read_mask: None })
+			.get_object(get_req)
 			.await?
 			.into_inner();
 		if let Some(full) = got.object {
@@ -165,11 +169,10 @@ pub async fn calculate_sum(a: u64, b: u64) -> Result<u64> {
 	// gRPC execute
 	let mut grpc = GrpcClient::new(rpc_url)?;
 	let mut exec = grpc.execution_client();
-	let req = proto::ExecuteTransactionRequest {
-		transaction: Some(tx.into()),
-		signatures: vec![sig.into()],
-		read_mask: Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
-	};
+	let mut req = proto::ExecuteTransactionRequest::default();
+	req.transaction = Some(tx.into());
+	req.signatures = vec![sig.into()];
+	req.read_mask = Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] });
 	println!("[rpc] sending ExecuteTransaction...");
 	let resp = exec.execute_transaction(req).await?;
 	let executed = resp
@@ -202,11 +205,11 @@ pub async fn get_sum_from_tx_digest(digest_hex: &str) -> Result<u64> {
 	let rpc_url = rpc_url_from_env();
 	let mut client = GrpcClient::new(rpc_url)?;
 	let mut ledger = client.ledger_client();
+	let mut get_req = proto::GetTransactionRequest::default();
+	get_req.digest = Some(digest_hex.to_string());
+	get_req.read_mask = Some(FieldMask { paths: vec!["transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] });
 	let resp = ledger
-		.get_transaction(proto::GetTransactionRequest {
-			digest: Some(digest_hex.to_string()),
-			read_mask: Some(FieldMask { paths: vec!["transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
-		})
+		.get_transaction(get_req)
 		.await?
 		.into_inner();
 	if let Some(txn) = resp.transaction {
@@ -296,11 +299,10 @@ pub async fn calculate_sums(pairs: Vec<(u64, u64)>) -> Result<Vec<u64>> {
 	// gRPC execute
 	let mut grpc = GrpcClient::new(rpc_url)?;
 	let mut exec = grpc.execution_client();
-	let req = proto::ExecuteTransactionRequest {
-		transaction: Some(tx.into()),
-		signatures: vec![sig.into()],
-		read_mask: Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] }),
-	};
+	let mut req = proto::ExecuteTransactionRequest::default();
+	req.transaction = Some(tx.into());
+	req.signatures = vec![sig.into()];
+	req.read_mask = Some(FieldMask { paths: vec!["finality".into(), "transaction".into(), "transaction.events".into(), "transaction.events.events".into(), "transaction.events.events.contents".into()] });
 	println!("[rpc] sending ExecuteTransaction with {} chained calls...", pairs.len());
 	let resp = exec.execute_transaction(req).await?;
 	let executed = resp
