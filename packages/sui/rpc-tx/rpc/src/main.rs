@@ -1,5 +1,6 @@
 mod state;
 mod tx;
+mod v2;
 use std::time::Instant;
 
 #[tokio::main]
@@ -31,12 +32,12 @@ async fn main() -> anyhow::Result<()> {
     // }
     // println!("calculate_sums duration: {elapsed_ms} ms");
 
-    println!("Creating shared State...");
+    println!("Creating shared State using v2 API...");
     let started = Instant::now();
-    let state_id = state::create_state().await?;
+    let state_id = v2::create_state().await?;
     let elapsed_ms = started.elapsed().as_millis();
     println!("State created with id: {state_id}");
-    println!("create_state duration: {elapsed_ms} ms");
+    println!("create_state (v2) duration: {elapsed_ms} ms");
 
     let add_value: u64 = 7;
     println!("Adding {add_value} to State {state_id}...");
