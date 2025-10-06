@@ -83,7 +83,7 @@ describe("Based rollup", async () => {
     } else {
       console.log("faucet success:", response.result);
     }
-    const url = "https://devnet.zeko.io/graphql"; // "http://m1.zeko.io/graphql";
+    const url = "http://65.21.130.178:3000/graphql"; //"https://devnet.zeko.io/graphql"; // "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
       mina: url,
@@ -94,7 +94,7 @@ describe("Based rollup", async () => {
     const balance = await accountBalanceMina(sender);
     console.log(`${sender.toBase58()}: ${balance} MINA`);
   });
-  it("should init zeko alphanet", async () => {
+  it("should init blockchain", async () => {
     console.log({ chain });
     if (chain !== "zeko") {
       throw new Error("Invalid chain, should be zeko");
@@ -102,8 +102,8 @@ describe("Based rollup", async () => {
     if (!PRIVATE_KEY) {
       throw new Error("PRIVATE_KEY is not set");
     }
-
-    const url = "https://devnet.zeko.io/graphql";
+    //"https://api.minascan.io/node/devnet/v1/graphql"; //
+    const url = "http://65.21.130.178:3000/graphql"; //"https://devnet.zeko.io/graphql";
     //const url = "http://m1.zeko.io/graphql";
 
     const networkInstance = Mina.Network({
@@ -178,6 +178,8 @@ describe("Based rollup", async () => {
       console.time("signed");
       tx.sign([sender.key]);
       console.timeEnd("signed");
+      const txJson = tx.toJSON();
+      await writeFile("./tx.json", txJson);
 
       console.time("send");
       let txSent = await tx.safeSend();

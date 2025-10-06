@@ -1,0 +1,49 @@
+-- Copyright (c) 2025 All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+module Main where
+
+template SimpleSumContract
+  with
+    prover: Party
+    sum: Int
+    observers: [Party]
+  where
+    signatory prover
+    observer observers
+
+    ensure sum >= 0
+
+    choice AddValue : ContractId SimpleSumContract
+      with
+        value: Int
+      controller prover
+      do
+        let newSum = sum + value
+        create this with
+          sum = newSum
+
+    choice AddObserver : ContractId SimpleSumContract
+      with
+        newObserver: Party
+      controller prover
+      do
+        create this with
+          observers = newObserver :: observers
+
+    choice RemoveObserver : ContractId SimpleSumContract
+      with
+        observerToRemove: Party
+      controller prover
+      do
+        create this with
+          observers = filter (/= observerToRemove) observers
+
+    nonconsuming choice GetSum : Int
+      with
+        requester: Party
+      controller requester
+      do
+        assertMsg "Requester must be prover or observer"
+          (requester == prover || requester `elem` observers)
+        return sum

@@ -1,0 +1,43 @@
+# Variables
+LOCALNET_DIR := env_var_or_default("LOCALNET_DIR", justfile_directory() + "/splice-node/docker-compose/localnet")
+IMAGE_TAG := env_var_or_default("IMAGE_TAG", "0.4.19")
+
+# Export shell variables
+export:
+  export LOCALNET_DIR="{{LOCALNET_DIR}}" && \
+  export IMAGE_TAG="{{IMAGE_TAG}}" && \
+  echo "LOCALNET_DIR: $LOCALNET_DIR" && \
+  echo "IMAGE_TAG: $IMAGE_TAG"
+
+start:
+  export LOCALNET_DIR="{{LOCALNET_DIR}}" && \
+  export IMAGE_TAG="{{IMAGE_TAG}}" && \
+  docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               --profile sv \
+               --profile app-provider \
+               --profile app-user \
+               --profile swagger-ui up -d
+
+stop:
+  export LOCALNET_DIR="{{LOCALNET_DIR}}" && \
+  export IMAGE_TAG="{{IMAGE_TAG}}" && \
+  docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               --profile sv \
+               --profile app-provider \
+               --profile app-user \
+               --profile swagger-ui down -v
+
+admin:
+  export LOCALNET_DIR="{{LOCALNET_DIR}}" && \
+  export IMAGE_TAG="{{IMAGE_TAG}}" && \
+  docker compose --env-file $LOCALNET_DIR/compose.env \
+               --env-file $LOCALNET_DIR/env/common.env \
+               -f $LOCALNET_DIR/compose.yaml \
+               -f $LOCALNET_DIR/resource-constraints.yaml \
+               run --rm console
