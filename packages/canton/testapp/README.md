@@ -201,9 +201,74 @@ make observer CONTRACT_ID=<your-contract-id>
 ```
 
 This adds the app-provider party as an observer, creating a new version of the contract. Once added as an observer, app-provider can:
+
 - View the contract state
 - Query the sum using the GetSum choice
 - See updates related to the contract
+
+```
+testapp % make observer CONTRACT_ID=00e09438c4e707497b836b6a01857fdf187721c27c8fcdd0e8cfec9a3d0bbdae61ca111220af0e66e7b9ebd528655fdfe75584f1d8472c3a618e72829acc04f01790325301
+Adding app-provider as observer to contract 00e09438c4e707497b836b6a01857fdf187721c27c8fcdd0e8cfec9a3d0bbdae61ca111220af0e66e7b9ebd528655fdfe75584f1d8472c3a618e72829acc04f01790325301...
+{
+  "transaction": {
+    "updateId": "1220a2cc65b010439919b768261e5e291dd97311c08f28c2706019d12295c8561c7f",
+    "commandId": "add-observer-1759765943",
+    "workflowId": "",
+    "effectiveAt": "2025-10-06T15:52:23.565063Z",
+    "events": [
+      {
+        "ArchivedEvent": {
+          "offset": 132,
+          "nodeId": 0,
+          "contractId": "00e09438c4e707497b836b6a01857fdf187721c27c8fcdd0e8cfec9a3d0bbdae61ca111220af0e66e7b9ebd528655fdfe75584f1d8472c3a618e72829acc04f01790325301",
+          "templateId": "889528a2d89a92f68c42a267abe105fbf770f8c772661f68ac87b55429e8cbe5:Main:SimpleSumContract",
+          "witnessParties": [
+            "app_user_localnet-localparty-1::1220cb222d9c97c8f3dba110cb745698957a3488b456a81067cbd68304e4c7118710"
+          ],
+          "packageName": "testapp",
+          "implementedInterfaces": []
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 132,
+          "nodeId": 1,
+          "contractId": "00ee44f332e37e5c8163295288dcdb7cb0eae49a9dc046ef091ac458497c2d35f1ca111220665dd0837fae82629a37b252fc3367f26cc18f5f950c00d629d3ff6014d64ae6",
+          "templateId": "889528a2d89a92f68c42a267abe105fbf770f8c772661f68ac87b55429e8cbe5:Main:SimpleSumContract",
+          "contractKey": null,
+          "createArgument": {
+            "prover": "app_user_localnet-localparty-1::1220cb222d9c97c8f3dba110cb745698957a3488b456a81067cbd68304e4c7118710",
+            "sum": "100",
+            "observers": [
+              "app_provider_localnet-localparty-1::12203c933671e4c0f69dc4c136e374c47689c2b65d70e4e64c7f3897c636353ae4fd"
+            ]
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "app_user_localnet-localparty-1::1220cb222d9c97c8f3dba110cb745698957a3488b456a81067cbd68304e4c7118710"
+          ],
+          "signatories": [
+            "app_user_localnet-localparty-1::1220cb222d9c97c8f3dba110cb745698957a3488b456a81067cbd68304e4c7118710"
+          ],
+          "observers": [
+            "app_provider_localnet-localparty-1::12203c933671e4c0f69dc4c136e374c47689c2b65d70e4e64c7f3897c636353ae4fd"
+          ],
+          "createdAt": "2025-10-06T15:52:23.565063Z",
+          "packageName": "testapp"
+        }
+      }
+    ],
+    "offset": 132,
+    "synchronizerId": "global-domain::1220fb2f7c5c34f176231083a00dd6fd953eead685261e5d792d9bf94df44e88463a",
+    "traceContext": {
+      "traceparent": "00-6b2ec42b6001f4ec348b4e0e5abf197e-8b01a6d010618d1b-01",
+      "tracestate": null
+    },
+    "recordTime": "2025-10-06T15:52:23.606546Z"
+  }
+}
+```
 
 ### Step 7: View Ledger Updates
 
@@ -221,6 +286,7 @@ make updates OFFSET=0
 ```
 
 The updates show all transactions, contract creations, and exercises visible to app-user, including:
+
 - Contract creation events
 - Exercise events (AddValue, AddObserver, etc.)
 - Offset checkpoints
