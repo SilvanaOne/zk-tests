@@ -1,27 +1,39 @@
 mod context;
 mod url;
 mod pay;
+mod subscriptions;
+mod users;
+mod cli;
+
+use clap::Parser;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file
     dotenvy::dotenv().ok();
 
-    // Get command line arguments
-    let args: Vec<String> = std::env::args().collect();
+    // Parse CLI arguments
+    let cli = cli::Cli::parse();
 
-    // Fetch contract blobs context
-    let ctx = context::ContractBlobsContext::fetch().await?;
+    // Initialize tracing based on log level
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(&cli.log_level))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    if args.len() > 1 && args[1] == "pay" {
-        // Execute a payment
-        println!("Executing payment from subscriber to PARTY_APP using preapproval...");
-        let payment_args = pay::PaymentArgs::from_context(ctx).await?;
-        payment_args.execute_payment().await?;
-    } else {
-        // Default behavior: print the context
-        println!("{:#?}", ctx);
-        println!("\nTo execute a payment, run: cargo run -- pay");
-    }
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            fmt::layer()
+                .with_target(true)           // Show module path
+                .with_thread_ids(false)
+                .with_thread_names(false)
+                .with_file(false)
+                .with_line_number(false)
+                .with_ansi(true)
+        )
+        .init();
 
-    Ok(())
+    // Execute CLI commands
+    cli::execute_cli(cli).await
 }

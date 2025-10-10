@@ -1,9 +1,10 @@
 //! Payment execution functionality mirroring make pay-app
 
-use serde_json::json;
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 use chrono::Utc;
+use serde_json::json;
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct PaymentArgs {
@@ -20,24 +21,43 @@ pub struct PaymentArgs {
     pub featured_blob: String,
     pub sync_id: String,
     pub amount: String,
+    pub description: String,
 }
 
 impl PaymentArgs {
-    /// Create PaymentArgs from ContractBlobsContext and environment variables
-    pub async fn from_context(ctx: ContractBlobsContext) -> anyhow::Result<Self> {
-        // Load environment variables
+    /// Create PaymentArgs from a specific request with custom amount, sender, and description
+    pub async fn from_request(
+        ctx: ContractBlobsContext,
+        amount: f64,
+        sender: String,
+        description: String,
+    ) -> anyhow::Result<Self> {
+        // Load environment variables for preapproval and receiver
         let preapproval_cid = std::env::var("APP_TRANSFER_PREAPPROVAL_CID")
             .map_err(|_| anyhow::anyhow!("APP_TRANSFER_PREAPPROVAL_CID not set in environment"))?;
-        let sender = std::env::var("SUBSCRIBER_PARTY")
-            .map_err(|_| anyhow::anyhow!("SUBSCRIBER_PARTY not set in environment"))?;
         let receiver = std::env::var("PARTY_APP")
             .map_err(|_| anyhow::anyhow!("PARTY_APP not set in environment"))?;
 
-        // Find an amulet contract for the subscriber
+        // Find an amulet contract for the specified sender
         let amulet_cid = Self::find_amulet(&sender).await?;
 
-        // Generate unique command ID
-        let cmdid = format!("pay-app-{}", Utc::now().timestamp());
+        // Extract user party prefix (before ::) for command ID
+        let user_party_prefix = sender.split("::").next().unwrap_or("unknown");
+
+        // Extract subscription name from description (format: "{subscription} subscription payment for {user}")
+        let subscription_name = description
+            .split_whitespace()
+            .next()
+            .unwrap_or("payment")
+            .to_lowercase();
+
+        // Generate unique command ID: pay-{subscription}-{user_party_prefix}-{timestamp}
+        let cmdid = format!(
+            "pay-{}-{}-{}",
+            subscription_name,
+            user_party_prefix,
+            Utc::now().timestamp()
+        );
 
         Ok(PaymentArgs {
             preapproval_cid,
@@ -52,12 +72,13 @@ impl PaymentArgs {
             mining_blob: ctx.open_mining_round_blob,
             featured_blob: ctx.featured_app_right_blob,
             sync_id: ctx.synchronizer_id,
-            amount: "1.0".to_string(),
+            amount: amount.to_string(),
+            description,
         })
     }
 
     /// Find an available Amulet contract for the given party
-    async fn find_amulet(party: &str) -> anyhow::Result<String> {
+    pub async fn find_amulet(party: &str) -> anyhow::Result<String> {
         let api_url = std::env::var("APP_PROVIDER_API_URL")
             .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set in environment"))?;
         let jwt = std::env::var("APP_PROVIDER_JWT")
@@ -65,7 +86,7 @@ impl PaymentArgs {
 
         let client = create_client_with_localhost_resolution()?;
 
-        println!("Finding Amulet contracts for party {}...", party);
+        debug!(party = %party, "Finding Amulet contracts");
 
         // Get ledger end offset
         let ledger_end_url = format!("{}v2/state/ledger-end", api_url);
@@ -78,7 +99,8 @@ impl PaymentArgs {
             .json()
             .await?;
 
-        let offset = ledger_end["offset"].as_u64()
+        let offset = ledger_end["offset"]
+            .as_u64()
             .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
 
         // Query active contracts
@@ -109,22 +131,20 @@ impl PaymentArgs {
                 if let Some(js_contract) = entry.get("JsActiveContract") {
                     if let Some(created) = js_contract.get("createdEvent") {
                         if let Some(template_id) = created.get("templateId") {
-                            if template_id.as_str()
+                            if template_id
+                                .as_str()
                                 .map(|s| s.contains("Splice.Amulet:Amulet"))
                                 .unwrap_or(false)
                             {
                                 if let Some(contract_id) = created.get("contractId") {
-                                    let cid = contract_id.as_str()
-                                        .unwrap_or_default()
-                                        .to_string();
+                                    let cid = contract_id.as_str().unwrap_or_default().to_string();
 
                                     // Log the amount if available
                                     if let Some(amount) = created
                                         .pointer("/createArgument/amount/initialAmount")
                                         .and_then(|v| v.as_str())
                                     {
-                                        println!("  Found Amulet: {}", cid);
-                                        println!("  Amount: {} AMT", amount);
+                                        info!(cid = %cid, amount = %amount, "Found Amulet contract");
                                     }
 
                                     return Ok(cid);
@@ -136,7 +156,10 @@ impl PaymentArgs {
             }
         }
 
-        Err(anyhow::anyhow!("No Amulet contracts found for party {}", party))
+        Err(anyhow::anyhow!(
+            "No Amulet contracts found for party {}",
+            party
+        ))
     }
 
     /// Execute the payment using TransferPreapproval_Send
@@ -146,10 +169,13 @@ impl PaymentArgs {
         let jwt = std::env::var("APP_PROVIDER_JWT")
             .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set in environment"))?;
 
-        println!("\nExecuting TransferPreapproval_Send...");
-        println!("  From: {}", self.sender);
-        println!("  To: {}", self.receiver);
-        println!("  Amount: {} CC", self.amount);
+        info!(
+            from = %self.sender,
+            to = %self.receiver,
+            amount = %self.amount,
+            description = %self.description,
+            "Executing TransferPreapproval_Send"
+        );
 
         let payload = json!({
             "commands": [{
@@ -173,7 +199,7 @@ impl PaymentArgs {
                         }],
                         "amount": self.amount,
                         "sender": self.sender,
-                        "description": "Payment to app"
+                        "description": self.description
                     }
                 }
             }],
@@ -223,11 +249,13 @@ impl PaymentArgs {
 
         if status.is_success() {
             if let Some(update_id) = response_body.get("updateId").and_then(|v| v.as_str()) {
-                println!("\n✅ Payment successful!");
-                println!("  Amount: {} CC", self.amount);
-                println!("  From: {}", self.sender);
-                println!("  To: {}", self.receiver);
-                println!("  Update ID: {}", update_id);
+                info!(
+                    amount = %self.amount,
+                    from = %self.sender,
+                    to = %self.receiver,
+                    update_id = %update_id,
+                    "Payment successful"
+                );
                 return Ok(update_id.to_string());
             }
         }
@@ -246,8 +274,7 @@ impl PaymentArgs {
             })
             .unwrap_or_else(|| format!("Unknown error: {:?}", response_body));
 
-        println!("\n❌ Payment failed");
-        println!("  Error: {}", error);
+        error!(error = %error, status = ?status, "Payment failed");
         Err(anyhow::anyhow!("Payment failed: {}", error))
     }
 }

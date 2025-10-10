@@ -6,15 +6,15 @@
       "description": "Prover subscription",
       "price": 2,
       "currency": "CC",
-      "interval_min": "5"
+      "interval_sec": "300"
     },
     {
       "id": "2",
       "name": "verifier",
-      "subscription_description": "Verifier subscription",
+      "description": "Verifier subscription",
       "price": 1,
       "currency": "CC",
-      "interval_min": "10"
+      "interval_sec": "600"
     }
   ]
 }
