@@ -19,6 +19,9 @@ pub struct PaymentArgs {
     pub amulet_blob: String,
     pub mining_blob: String,
     pub featured_blob: String,
+    pub amulet_rules_template_id: String,
+    pub open_mining_round_template_id: String,
+    pub featured_app_right_template_id: String,
     pub sync_id: String,
     pub amount: String,
     pub description: String,
@@ -71,6 +74,9 @@ impl PaymentArgs {
             amulet_blob: ctx.amulet_rules_blob,
             mining_blob: ctx.open_mining_round_blob,
             featured_blob: ctx.featured_app_right_blob,
+            amulet_rules_template_id: ctx.amulet_rules_template_id,
+            open_mining_round_template_id: ctx.open_mining_round_template_id,
+            featured_app_right_template_id: ctx.featured_app_right_template_id,
             sync_id: ctx.synchronizer_id,
             amount: amount.to_string(),
             description,
@@ -210,7 +216,7 @@ impl PaymentArgs {
                     "blob": self.amulet_blob,
                     "createdEventBlob": self.amulet_blob,
                     "synchronizerId": self.sync_id,
-                    "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.AmuletRules:AmuletRules"
+                    "templateId": self.amulet_rules_template_id
                 },
                 {
                     "contractId": self.open_round,
@@ -218,7 +224,7 @@ impl PaymentArgs {
                     "blob": self.mining_blob,
                     "createdEventBlob": self.mining_blob,
                     "synchronizerId": self.sync_id,
-                    "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.Round:OpenMiningRound"
+                    "templateId": self.open_mining_round_template_id
                 },
                 {
                     "contractId": self.featured_right,
@@ -226,7 +232,7 @@ impl PaymentArgs {
                     "blob": self.featured_blob,
                     "createdEventBlob": self.featured_blob,
                     "synchronizerId": self.sync_id,
-                    "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.Amulet:FeaturedAppRight"
+                    "templateId": self.featured_app_right_template_id
                 }
             ],
             "commandId": self.cmdid,

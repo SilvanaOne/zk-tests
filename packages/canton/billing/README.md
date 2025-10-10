@@ -131,46 +131,231 @@ Each metric includes attributes for:
 - `subscription` - Subscription plan identifier
 - `window` - Time window identifier
 
-## Usage Examples
+## CLI Commands
 
-### Initial Setup
+The Canton Billing CLI provides comprehensive commands for managing subscriptions, payments, users, and monitoring on the Canton blockchain.
 
+### Command Overview
+
+```bash
+cargo run -- [COMMAND] [OPTIONS]
+
+# Or after building:
+./target/release/billing [COMMAND] [OPTIONS]
+```
+
+### Available Commands
+
+#### `subscriptions` - List Available Subscriptions
+Lists all configured subscription plans with pricing and features.
+
+```bash
+cargo run -- subscriptions
+```
+
+Output shows subscription names, IDs, prices, billing intervals, and features.
+
+#### `users` - User Management
+Manage and query user information.
+
+**Subcommands:**
+- `list` - List all users with their subscriptions
+- `with-subscription <name>` - List users with a specific subscription
+
+```bash
+# List all users
+cargo run -- users list
+
+# Find users with "premium" subscription
+cargo run -- users with-subscription premium
+```
+
+#### `user` - Find Specific User
+Search for a user by email, name, or party ID substring.
+
+```bash
+# Find user by email
+cargo run -- user alice@example.com
+
+# Find user by name
+cargo run -- user alice
+
+# Find user by party ID substring
+cargo run -- user "1220aca50"
+```
+
+#### `balance` - Check Canton Credit Balance
+Display Canton Credit (CC) balance for a party.
+
+```bash
+# Check balance for PARTY_APP (default)
+cargo run -- balance
+
+# Check balance for specific party
+cargo run -- balance --party "userparty1::1220aca50c19712a4247e9b74ab680b358962ae97f50c01577b92d03b2ae7dc83b10"
+```
+
+Output shows:
+- Individual Amulet contracts with amounts
+- Round numbers
+- Total balance summary
+
+#### `pay` - Execute Single Payment
+Process a payment for a specific user and subscription.
+
+```bash
+# Process payment for user "alice" with "premium" subscription
+cargo run -- pay --user alice --subscription premium
+
+# Dry run mode (simulate without executing)
+cargo run -- pay --user alice --subscription premium --dry-run
+```
+
+#### `start` - Automated Payment Processing
+Start automated payment processing for all active subscriptions.
+
+```bash
+# Run continuous payment scheduler (default: 60 second intervals)
+cargo run -- start
+
+# Run once only
+cargo run -- start --once
+
+# Custom interval (300 seconds)
+cargo run -- start --interval 300
+
+# Dry run mode
+cargo run -- start --dry-run
+```
+
+#### `setup` - Initialize TransferPreapproval
+Setup TransferPreapproval contract for automated payments.
+
+```bash
+# Setup with 1 year expiration (default)
+cargo run -- setup
+
+# Setup with custom expiration (30 days = 43200 minutes)
+cargo run -- setup --expires-in-min 43200
+```
+
+#### `restart` - Recovery and Restart
+Restart payment processing and recover missed payments during downtime.
+
+```bash
+# Full restart (process pending and recover missed)
+cargo run -- restart
+
+# Process only pending payments
+cargo run -- restart --process-pending --no-recover-missed
+
+# Limit number of payments to process
+cargo run -- restart --limit 50
+
+# Dry run mode
+cargo run -- restart --dry-run
+```
+
+#### `metrics` - Payment Analytics
+Display payment metrics for various time windows.
+
+```bash
+# Overall metrics for last hour
+cargo run -- metrics --window 1h
+
+# Metrics for last 24 hours
+cargo run -- metrics --window 24h
+
+# User-specific metrics
+cargo run -- metrics --window 1h --user alice
+
+# Subscription-specific metrics
+cargo run -- metrics --window 7d --subscription premium
+
+# Combined user and subscription metrics
+cargo run -- metrics --window 30d --user alice --subscription premium
+```
+
+Time windows: `10m`, `1h`, `6h`, `12h`, `24h`, `7d`, `30d`
+
+#### `update` - Transaction Details
+Get detailed information about a specific transaction update.
+
+```bash
+# Get update details by ID
+cargo run -- update "update-id-12345"
+```
+
+### Global Options
+
+#### `--log-level` - Logging Verbosity
+Control the logging output level.
+
+```bash
+# Set debug logging
+cargo run -- --log-level debug balance
+
+# Set error-only logging
+cargo run -- --log-level error start
+
+# Levels: trace, debug, info (default), warn, error
+```
+
+### Usage Examples
+
+#### Initial Setup
 ```bash
 # Set up environment
 cp .env.example .env
 # Edit .env with your configuration
 
-# Initialize TransferPreapproval
-cargo run -- setup --expires-in-min 525600  # 1 year expiration
+# Initialize TransferPreapproval for 1 year
+cargo run -- setup --expires-in-min 525600
 
-# Verify configuration
-cargo run -- info
+# Verify balances
+cargo run -- balance
 ```
 
-### Process Payments
-
+#### Daily Operations
 ```bash
+# Check user balances
+cargo run -- balance --party "userparty1::..."
+
 # Process single payment
 cargo run -- pay --user alice --subscription premium
 
-# Process all active subscriptions
-cargo run -- pay-all
+# Start automated processing
+cargo run -- start
 
-# Restart failed payments
-cargo run -- restart --limit 10
+# Check metrics
+cargo run -- metrics --window 24h
 ```
 
-### Monitor System
-
+#### Monitoring and Debugging
 ```bash
-# Start monitoring with OpenTelemetry export
-cargo run -- monitor
+# Enable debug logging for troubleshooting
+cargo run -- --log-level debug start --dry-run
 
-# View metrics for last hour
+# Check specific user status
+cargo run -- user alice
+
+# View payment metrics for specific subscription
+cargo run -- metrics --window 1h --subscription premium
+
+# Get transaction details
+cargo run -- update "txn-update-id"
+```
+
+#### Recovery After Downtime
+```bash
+# Check pending payments
+cargo run -- restart --dry-run
+
+# Process all pending and missed payments
+cargo run -- restart --limit 100
+
+# Verify recovery with metrics
 cargo run -- metrics --window 1h
-
-# List active users
-cargo run -- users
 ```
 
 ### Testing

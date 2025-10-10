@@ -23,6 +23,13 @@ pub struct ContractBlobsContext {
     /// Base64-encoded blob for FeaturedAppRight disclosure
     pub featured_app_right_blob: String,
 
+    /// Template ID for AmuletRules (e.g., {package_id}:Splice.AmuletRules:AmuletRules)
+    pub amulet_rules_template_id: String,
+    /// Template ID for OpenMiningRound (e.g., {package_id}:Splice.Round:OpenMiningRound)
+    pub open_mining_round_template_id: String,
+    /// Template ID for FeaturedAppRight (e.g., {package_id}:Splice.Amulet:FeaturedAppRight)
+    pub featured_app_right_template_id: String,
+
     /// Synchronizer identifier, e.g. `global-domain::...`
     pub synchronizer_id: String,
 }
@@ -59,6 +66,11 @@ impl ContractBlobsContext {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        let amulet_rules_template_id = dso
+            .pointer("/amulet_rules/contract/template_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let latest_mining_blob = dso
             .pointer("/latest_mining_round/contract/created_event_blob")
             .and_then(|v| v.as_str())
@@ -66,6 +78,11 @@ impl ContractBlobsContext {
             .to_string();
         let latest_mining_cid = dso
             .pointer("/latest_mining_round/contract/contract_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let latest_mining_template_id = dso
+            .pointer("/latest_mining_round/contract/template_id")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -87,7 +104,7 @@ impl ContractBlobsContext {
             .unwrap_or_else(|_| serde_json::json!({}));
 
         // Determine current open round CID by sorting open_mining_rounds by payload.opensAt and taking the first
-        let (open_round_cid, open_round_blob) = if let Some(obj) = rounds_resp
+        let (open_round_cid, open_round_blob, open_round_template_id) = if let Some(obj) = rounds_resp
             .get("open_mining_rounds")
             .and_then(|v| v.as_object())
         {
@@ -129,6 +146,11 @@ impl ContractBlobsContext {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
+                let template_id = first
+                    .pointer("/contract/template_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
 
                 // Log selected round
                 let opens_at = first.pointer("/contract/payload/opensAt")
@@ -137,16 +159,17 @@ impl ContractBlobsContext {
                 debug!(
                     opens_at = %opens_at,
                     cid = %cid,
+                    template_id = %template_id,
                     "Selected mining round (earliest opensAt)"
                 );
 
-                (cid, blob)
+                (cid, blob, template_id)
             } else {
-                (String::new(), String::new())
+                (String::new(), String::new(), String::new())
             }
         } else {
             debug!("No open_mining_rounds found in response");
-            (String::new(), String::new())
+            (String::new(), String::new(), String::new())
         };
 
         let open_mining_round_cid = if !open_round_cid.is_empty() {
@@ -160,6 +183,11 @@ impl ContractBlobsContext {
             open_round_blob
         } else {
             latest_mining_blob
+        };
+        let open_mining_round_template_id = if !open_round_template_id.is_empty() {
+            open_round_template_id
+        } else {
+            latest_mining_template_id
         };
 
         // Step 3: GET /v0/featured-apps -> FeaturedAppRight (filter by PARTY_APP if provided)
@@ -176,10 +204,11 @@ impl ContractBlobsContext {
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
-        let (featured_app_right_blob, featured_app_right_cid) =
+        let (featured_app_right_blob, featured_app_right_cid, featured_app_right_template_id) =
             if let Some(app_hint) = provider_hint.as_deref() {
                 let mut found_blob = String::new();
                 let mut found_cid = String::new();
+                let mut found_template_id = String::new();
                 for entry in featured_apps.iter() {
                     let provider = entry
                         .pointer("/payload/provider")
@@ -193,6 +222,11 @@ impl ContractBlobsContext {
                             .to_string();
                         found_cid = entry
                             .pointer("/contract_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        found_template_id = entry
+                            .pointer("/template_id")
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
@@ -212,9 +246,14 @@ impl ContractBlobsContext {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string(),
+                        first
+                            .pointer("/template_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     )
                 } else {
-                    (found_blob, found_cid)
+                    (found_blob, found_cid, found_template_id)
                 }
             } else {
                 if let Some(first) = featured_apps.get(0) {
@@ -229,9 +268,14 @@ impl ContractBlobsContext {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string(),
+                        first
+                            .pointer("/template_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     )
                 } else {
-                    (String::new(), String::new())
+                    (String::new(), String::new(), String::new())
                 }
             };
 
@@ -258,6 +302,9 @@ impl ContractBlobsContext {
             amulet_rules_blob,
             open_mining_round_blob,
             featured_app_right_blob,
+            amulet_rules_template_id,
+            open_mining_round_template_id,
+            featured_app_right_template_id,
             synchronizer_id,
         })
     }

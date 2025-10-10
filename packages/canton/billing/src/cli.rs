@@ -116,6 +116,13 @@ pub enum Commands {
         #[arg(long)]
         subscription: Option<String>,
     },
+
+    /// Show Canton Credit balance for a party
+    Balance {
+        /// Party ID to check balance for (defaults to PARTY_APP if not specified)
+        #[arg(long)]
+        party: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -905,7 +912,7 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
                 "blob": ctx.amulet_rules_blob.clone(),
                 "createdEventBlob": ctx.amulet_rules_blob.clone(),
                 "synchronizerId": ctx.synchronizer_id.clone(),
-                "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.AmuletRules:AmuletRules"
+                "templateId": ctx.amulet_rules_template_id.clone()
             },
             {
                 "contractId": ctx.open_mining_round_cid.clone(),
@@ -913,7 +920,7 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
                 "blob": ctx.open_mining_round_blob.clone(),
                 "createdEventBlob": ctx.open_mining_round_blob.clone(),
                 "synchronizerId": ctx.synchronizer_id.clone(),
-                "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.Round:OpenMiningRound"
+                "templateId": ctx.open_mining_round_template_id.clone()
             }
         ],
         "commandId": cmdid,
@@ -1033,9 +1040,147 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Handle balance command
+pub async fn handle_balance(party: Option<&str>) -> anyhow::Result<()> {
+    use crate::url::create_client_with_localhost_resolution;
+    use serde_json::json;
+
+    // Use PARTY_APP as default if no party specified
+    let target_party = match party {
+        Some(p) => p.to_string(),
+        None => std::env::var("PARTY_APP")
+            .map_err(|_| anyhow::anyhow!("PARTY_APP not set in environment and no party specified"))?
+    };
+
+    println!("Getting balance for party {}...", target_party);
+    println!();
+
+    // Load environment variables
+    let api_url = std::env::var("APP_PROVIDER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set in environment"))?;
+    let jwt = std::env::var("APP_PROVIDER_JWT")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set in environment"))?;
+
+    // Create HTTP client
+    let client = create_client_with_localhost_resolution()?;
+
+    // Get ledger end offset
+    let ledger_end_url = format!("{}v2/state/ledger-end", api_url);
+    let ledger_end_resp = client
+        .get(&ledger_end_url)
+        .bearer_auth(&jwt)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let ledger_end_json: serde_json::Value = ledger_end_resp.json().await?;
+
+    // Try to get offset as string first, then as number
+    let ledger_offset = if let Some(offset_str) = ledger_end_json.get("offset").and_then(|v| v.as_str()) {
+        offset_str.to_string()
+    } else if let Some(offset_num) = ledger_end_json.get("offset").and_then(|v| v.as_u64()) {
+        offset_num.to_string()
+    } else {
+        return Err(anyhow::anyhow!("Unable to get ledger end offset from response: {:?}", ledger_end_json));
+    };
+
+    // Convert string offset to number for the API
+    let offset_num: u64 = ledger_offset.parse()
+        .map_err(|_| anyhow::anyhow!("Invalid ledger offset format"))?;
+
+    // Query active contracts for the party
+    let active_contracts_url = format!("{}v2/state/active-contracts?limit=1000", api_url);
+    let payload = json!({
+        "activeAtOffset": offset_num,
+        "filter": {
+            "filtersByParty": {
+                &target_party: {}
+            }
+        },
+        "verbose": true
+    });
+
+    let contracts_resp = client
+        .post(&active_contracts_url)
+        .bearer_auth(&jwt)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let contracts: Vec<serde_json::Value> = contracts_resp.json().await?;
+
+    // Filter for Amulet contracts
+    let mut amulet_contracts = Vec::new();
+    let mut total_balance = 0.0;
+
+    for contract in contracts {
+        if let Some(contract_entry) = contract.get("contractEntry") {
+            if let Some(active_contract) = contract_entry.get("JsActiveContract") {
+                if let Some(created_event) = active_contract.get("createdEvent") {
+                    if let Some(template_id) = created_event.get("templateId") {
+                        if template_id.as_str()
+                            .map(|s| s.contains("Splice.Amulet:Amulet"))
+                            .unwrap_or(false)
+                        {
+                            // Extract amount and round information
+                            let amount = created_event
+                                .pointer("/createArgument/amount/initialAmount")
+                                .and_then(|v| v.as_str())
+                                .and_then(|s| s.parse::<f64>().ok())
+                                .unwrap_or(0.0);
+
+                            let round = created_event
+                                .pointer("/createArgument/amount/createdAt/number")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("N/A");
+
+                            let contract_id = created_event
+                                .get("contractId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+
+                            amulet_contracts.push((contract_id.to_string(), amount, round.to_string()));
+                            total_balance += amount;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Display results
+    if !amulet_contracts.is_empty() {
+        println!("Found Amulet contracts:");
+        println!("----------------------------------------");
+
+        for (contract_id, amount, round) in &amulet_contracts {
+            println!("Contract ID: {}", contract_id);
+            println!("Amount:      {:.10} CC", amount);
+            println!("Round:       {}", round);
+            println!();
+        }
+
+        println!("----------------------------------------");
+        println!("Summary:");
+        println!("  Total Amulets: {}", amulet_contracts.len());
+        println!("  Total Balance: {:.10} CC", total_balance);
+    } else {
+        println!("No Amulet contracts found for party {}", target_party);
+        println!("Balance: 0.0 CC");
+    }
+
+    Ok(())
+}
+
 /// Execute the CLI commands
 #[allow(dead_code)]
 pub async fn execute_cli(cli: Cli) -> anyhow::Result<()> {
+    // For balance command, we don't need database
+    if let Commands::Balance { party } = &cli.command {
+        return handle_balance(party.as_deref()).await;
+    }
+
     // Create temporary database and metrics for backward compatibility
     let db_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./billing_db".to_string());
     let database = Arc::new(PaymentDatabase::open(&db_path)?);
@@ -1073,5 +1218,6 @@ pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result
             user,
             subscription,
         } => handle_metrics(&window, user.as_deref(), subscription.as_deref(), &state).await,
+        Commands::Balance { party } => handle_balance(party.as_deref()).await,
     }
 }
