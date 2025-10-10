@@ -180,7 +180,7 @@ impl PaymentArgs {
         let payload = json!({
             "commands": [{
                 "ExerciseCommand": {
-                    "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.AmuletRules:TransferPreapproval",
+                    "templateId": "#splice-amulet:Splice.AmuletRules:TransferPreapproval",
                     "contractId": self.preapproval_cid,
                     "choice": "TransferPreapproval_Send",
                     "choiceArgument": {

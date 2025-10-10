@@ -1,13 +1,8 @@
 //! CLI module for the billing application
 
 use crate::{
-    context::ContractBlobsContext,
-    db::PaymentDatabase,
-    metrics::PaymentMetrics,
-    pay::PaymentArgs,
-    recovery::PaymentRecovery,
-    subscriptions,
-    users
+    context::ContractBlobsContext, db::PaymentDatabase, metrics::PaymentMetrics, pay::PaymentArgs,
+    recovery::PaymentRecovery, subscriptions, users,
 };
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
@@ -224,7 +219,12 @@ fn handle_user_search(query: &str) -> anyhow::Result<()> {
 }
 
 /// Handle the payment command
-async fn handle_payment(subscription: &str, user_query: &str, dry_run: bool, state: &AppState) -> anyhow::Result<()> {
+async fn handle_payment(
+    subscription: &str,
+    user_query: &str,
+    dry_run: bool,
+    state: &AppState,
+) -> anyhow::Result<()> {
     // Find user
     let user = find_user_by_query(user_query)?;
 
@@ -472,7 +472,8 @@ impl<'a> PaymentScheduler<'a> {
 
         // Use from_request with specific user's party and subscription details
         let payment_args =
-            PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description.clone()).await?;
+            PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description.clone())
+                .await?;
 
         match payment_args.execute_payment().await {
             Ok((command_id, update_id)) => {
@@ -524,7 +525,12 @@ impl<'a> PaymentScheduler<'a> {
 }
 
 /// Handle the start command
-async fn handle_start(once: bool, interval_secs: u64, dry_run: bool, state: &AppState) -> anyhow::Result<()> {
+async fn handle_start(
+    once: bool,
+    interval_secs: u64,
+    dry_run: bool,
+    state: &AppState,
+) -> anyhow::Result<()> {
     let mut scheduler = PaymentScheduler::new(dry_run, state);
 
     if once {
@@ -736,7 +742,8 @@ async fn handle_metrics(
     if let Some(user) = user {
         if let Some(subscription) = subscription {
             // User-subscription metrics
-            let metrics = state.metrics
+            let metrics = state
+                .metrics
                 .get_user_subscription_metrics(user, subscription, window)
                 .await?;
             info!(
@@ -764,7 +771,10 @@ async fn handle_metrics(
         }
     } else if let Some(subscription) = subscription {
         // Subscription metrics
-        let metrics = state.metrics.get_subscription_metrics(subscription, window).await?;
+        let metrics = state
+            .metrics
+            .get_subscription_metrics(subscription, window)
+            .await?;
         info!(
             subscription = %subscription,
             window = %window_str,
@@ -777,16 +787,24 @@ async fn handle_metrics(
     } else {
         // Overall metrics
         let metrics = state.metrics.get_metrics(window).await?;
-        let total_payments: u64 = metrics.by_user_subscription.values()
+        let total_payments: u64 = metrics
+            .by_user_subscription
+            .values()
             .map(|m| m.payment_count)
             .sum();
-        let total_amount: f64 = metrics.by_user_subscription.values()
+        let total_amount: f64 = metrics
+            .by_user_subscription
+            .values()
             .map(|m| m.total_amount)
             .sum();
-        let total_success: u64 = metrics.by_user_subscription.values()
+        let total_success: u64 = metrics
+            .by_user_subscription
+            .values()
             .map(|m| m.success_count)
             .sum();
-        let total_failure: u64 = metrics.by_user_subscription.values()
+        let total_failure: u64 = metrics
+            .by_user_subscription
+            .values()
             .map(|m| m.failure_count)
             .sum();
 
@@ -830,7 +848,10 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set in environment"))?;
 
     // Calculate DSO party from synchronizer ID
-    let dso_party = format!("DSO::{}", ctx.synchronizer_id.replace("global-domain::", ""));
+    let dso_party = format!(
+        "DSO::{}",
+        ctx.synchronizer_id.replace("global-domain::", "")
+    );
 
     info!("Finding PARTY_APP Amulet contracts for preapproval fee");
 
@@ -856,7 +877,7 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
     let payload = json!({
         "commands": [{
             "ExerciseCommand": {
-                "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.AmuletRules:AmuletRules",
+                "templateId": "#splice-amulet:Splice.AmuletRules:AmuletRules",
                 "contractId": ctx.amulet_rules_cid,
                 "choice": "AmuletRules_CreateTransferPreapproval",
                 "choiceArgument": {
@@ -917,12 +938,16 @@ async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
 
     if !status.is_success() {
         error!(status = %status, response = %response_text, "Failed to create TransferPreapproval");
-        return Err(anyhow::anyhow!("Failed to create TransferPreapproval: {}", response_text));
+        return Err(anyhow::anyhow!(
+            "Failed to create TransferPreapproval: {}",
+            response_text
+        ));
     }
 
     // Parse response to get update ID
     let response_json: serde_json::Value = serde_json::from_str(&response_text)?;
-    let update_id = response_json.get("updateId")
+    let update_id = response_json
+        .get("updateId")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
 
@@ -1036,9 +1061,7 @@ pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result
             dry_run,
         } => handle_start(once, interval, dry_run, &state).await,
         Commands::Update { update_id } => handle_get_update(&update_id).await,
-        Commands::Setup {
-            expires_in_min,
-        } => handle_setup_preapproval(expires_in_min).await,
+        Commands::Setup { expires_in_min } => handle_setup_preapproval(expires_in_min).await,
         Commands::Restart {
             process_pending,
             recover_missed,
