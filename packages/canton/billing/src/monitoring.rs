@@ -397,7 +397,59 @@ pub async fn export_metrics_to_opentelemetry(
                 0.0
             };
             success_gauge.record(success_rate, &attributes);
+
+            // Add failure count metric
+            let failure_gauge = meter
+                .u64_gauge(format!("canton.billing.window.{}.failure_count", window_str))
+                .with_description(format!("Number of failed payments for {} window", window_str))
+                .build();
+            failure_gauge.record(combined.failure_count, &attributes);
         }
+
+        // Calculate overall metrics
+        let total_payment_count: u64 = window_metrics
+            .by_user_subscription
+            .values()
+            .map(|m| m.payment_count)
+            .sum();
+
+        let total_amount: f64 = window_metrics
+            .by_user_subscription
+            .values()
+            .map(|m| m.total_amount)
+            .sum();
+
+        let total_success: u64 = window_metrics
+            .by_user_subscription
+            .values()
+            .map(|m| m.success_count)
+            .sum();
+
+        let total_failure: u64 = window_metrics
+            .by_user_subscription
+            .values()
+            .map(|m| m.failure_count)
+            .sum();
+
+        // Export overall metrics (without user/subscription attributes)
+        let overall_attributes = vec![KeyValue::new("window", window_str.to_string())];
+
+        count_gauge.record(total_payment_count, &overall_attributes);
+        amount_gauge.record(total_amount, &overall_attributes);
+
+        let overall_success_rate = if total_payment_count > 0 {
+            (total_success as f64 / total_payment_count as f64) * 100.0
+        } else {
+            0.0
+        };
+        success_gauge.record(overall_success_rate, &overall_attributes);
+
+        // Add overall failure count
+        let failure_gauge = meter
+            .u64_gauge(format!("canton.billing.window.{}.failure_count", window_str))
+            .with_description(format!("Number of failed payments for {} window", window_str))
+            .build();
+        failure_gauge.record(total_failure, &overall_attributes);
 
         // Active users metric
         let active_users_gauge = meter
@@ -407,7 +459,7 @@ pub async fn export_metrics_to_opentelemetry(
 
         active_users_gauge.record(
             window_metrics.by_user.len() as u64,
-            &[KeyValue::new("window", window_str.to_string())],
+            &overall_attributes,
         );
 
         // Active subscriptions metric
@@ -418,12 +470,50 @@ pub async fn export_metrics_to_opentelemetry(
 
         active_subs_gauge.record(
             window_metrics.by_subscription.len() as u64,
-            &[KeyValue::new("window", window_str.to_string())],
+            &overall_attributes,
         );
     }
 
     debug!("Metrics exported to OpenTelemetry");
     Ok(())
+}
+
+/// Export a failed payment event to OpenTelemetry
+pub async fn export_failed_payment_event(
+    user: &str,
+    subscription: &str,
+    amount: f64,
+    error: &str,
+) {
+    if !OpenTelemetryConfig::is_configured() {
+        return;
+    }
+
+    let meter = global::meter("canton-billing");
+
+    // Create a gauge for failed payment events - this allows BetterStack to capture the error details
+    let failed_payment_gauge = meter
+        .f64_gauge("canton.billing.payment.failed")
+        .with_description("Failed payment event")
+        .build();
+
+    failed_payment_gauge.record(
+        amount,
+        &[
+            KeyValue::new("user", user.to_string()),
+            KeyValue::new("subscription", subscription.to_string()),
+            KeyValue::new("error", error.to_string()),
+            KeyValue::new("timestamp", chrono::Utc::now().to_rfc3339()),
+        ],
+    );
+
+    debug!(
+        user = %user,
+        subscription = %subscription,
+        amount = amount,
+        error = %error,
+        "Failed payment event exported to OpenTelemetry"
+    );
 }
 
 /// Test OpenTelemetry integration

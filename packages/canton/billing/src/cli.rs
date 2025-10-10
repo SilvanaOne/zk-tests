@@ -104,9 +104,9 @@ pub enum Commands {
 
     /// Display payment metrics
     Metrics {
-        /// Time window (10m, 1h, 6h, 12h, 24h, 7d, 30d)
-        #[arg(long, default_value = "1h")]
-        window: String,
+        /// Time window (10m, 1h, 6h, 12h, 24h, 7d, 30d). If not specified, shows all windows
+        #[arg(long)]
+        window: Option<String>,
 
         /// Show metrics for specific user
         #[arg(long)]
@@ -318,6 +318,15 @@ async fn handle_payment(
                 Some(e.to_string()),
             );
             state.metrics.record_payment(event).await?;
+
+            // Export failed payment event to OpenTelemetry for monitoring
+            crate::monitoring::export_failed_payment_event(
+                &user.name,
+                subscription,
+                sub.price,
+                &e.to_string(),
+            ).await;
+
             return Err(e);
         }
     }
@@ -518,6 +527,15 @@ impl<'a> PaymentScheduler<'a> {
                     Some(e.to_string()),
                 );
                 self.state.metrics.record_payment(event).await?;
+
+                // Export failed payment event to OpenTelemetry for monitoring
+                crate::monitoring::export_failed_payment_event(
+                    &user.name,
+                    &sub.name,
+                    sub.price,
+                    &e.to_string(),
+                ).await;
+
                 error!(
                     user = %user.name,
                     subscription = %sub.name,
@@ -736,95 +754,105 @@ async fn handle_restart(
 
 /// Handle metrics command
 async fn handle_metrics(
-    window_str: &str,
+    window_str: Option<&str>,
     user: Option<&str>,
     subscription: Option<&str>,
     state: &AppState,
 ) -> anyhow::Result<()> {
     use crate::metrics::TimeWindow;
 
-    let window = TimeWindow::from_str(window_str)
-        .ok_or_else(|| anyhow::anyhow!("Invalid time window: {}", window_str))?;
+    // If no window specified, show all windows
+    let windows = if let Some(ws) = window_str {
+        let window = TimeWindow::from_str(ws)
+            .ok_or_else(|| anyhow::anyhow!("Invalid time window: {}", ws))?;
+        vec![window]
+    } else {
+        TimeWindow::all()
+    };
 
-    if let Some(user) = user {
-        if let Some(subscription) = subscription {
-            // User-subscription metrics
+    for window in windows {
+        let window_str = window.as_str();
+
+        if let Some(user) = user {
+            if let Some(subscription) = subscription {
+                // User-subscription metrics
+                let metrics = state
+                    .metrics
+                    .get_user_subscription_metrics(user, subscription, window)
+                    .await?;
+                info!(
+                    user = %user,
+                    subscription = %subscription,
+                    window = %window_str,
+                    payment_count = metrics.payment_count,
+                    total_amount = metrics.total_amount,
+                    success_count = metrics.success_count,
+                    failure_count = metrics.failure_count,
+                    "User-subscription metrics"
+                );
+            } else {
+                // User metrics
+                let metrics = state.metrics.get_user_metrics(user, window).await?;
+                info!(
+                    user = %user,
+                    window = %window_str,
+                    payment_count = metrics.payment_count,
+                    total_amount = metrics.total_amount,
+                    success_count = metrics.success_count,
+                    failure_count = metrics.failure_count,
+                    "User metrics"
+                );
+            }
+        } else if let Some(subscription) = subscription {
+            // Subscription metrics
             let metrics = state
                 .metrics
-                .get_user_subscription_metrics(user, subscription, window)
+                .get_subscription_metrics(subscription, window)
                 .await?;
             info!(
-                user = %user,
                 subscription = %subscription,
                 window = %window_str,
                 payment_count = metrics.payment_count,
                 total_amount = metrics.total_amount,
                 success_count = metrics.success_count,
                 failure_count = metrics.failure_count,
-                "User-subscription metrics"
+                "Subscription metrics"
             );
         } else {
-            // User metrics
-            let metrics = state.metrics.get_user_metrics(user, window).await?;
+            // Overall metrics
+            let metrics = state.metrics.get_metrics(window).await?;
+            let total_payments: u64 = metrics
+                .by_user_subscription
+                .values()
+                .map(|m| m.payment_count)
+                .sum();
+            let total_amount: f64 = metrics
+                .by_user_subscription
+                .values()
+                .map(|m| m.total_amount)
+                .sum();
+            let total_success: u64 = metrics
+                .by_user_subscription
+                .values()
+                .map(|m| m.success_count)
+                .sum();
+            let total_failure: u64 = metrics
+                .by_user_subscription
+                .values()
+                .map(|m| m.failure_count)
+                .sum();
+
             info!(
-                user = %user,
                 window = %window_str,
-                payment_count = metrics.payment_count,
-                total_amount = metrics.total_amount,
-                success_count = metrics.success_count,
-                failure_count = metrics.failure_count,
-                "User metrics"
+                total_payments = total_payments,
+                total_amount = total_amount,
+                success_count = total_success,
+                failure_count = total_failure,
+                active_users = metrics.by_user.len(),
+                active_subscriptions = metrics.by_subscription.len(),
+                "Overall metrics"
             );
         }
-    } else if let Some(subscription) = subscription {
-        // Subscription metrics
-        let metrics = state
-            .metrics
-            .get_subscription_metrics(subscription, window)
-            .await?;
-        info!(
-            subscription = %subscription,
-            window = %window_str,
-            payment_count = metrics.payment_count,
-            total_amount = metrics.total_amount,
-            success_count = metrics.success_count,
-            failure_count = metrics.failure_count,
-            "Subscription metrics"
-        );
-    } else {
-        // Overall metrics
-        let metrics = state.metrics.get_metrics(window).await?;
-        let total_payments: u64 = metrics
-            .by_user_subscription
-            .values()
-            .map(|m| m.payment_count)
-            .sum();
-        let total_amount: f64 = metrics
-            .by_user_subscription
-            .values()
-            .map(|m| m.total_amount)
-            .sum();
-        let total_success: u64 = metrics
-            .by_user_subscription
-            .values()
-            .map(|m| m.success_count)
-            .sum();
-        let total_failure: u64 = metrics
-            .by_user_subscription
-            .values()
-            .map(|m| m.failure_count)
-            .sum();
-
-        info!(
-            window = %window_str,
-            total_payments = total_payments,
-            total_amount = total_amount,
-            success_count = total_success,
-            failure_count = total_failure,
-            active_users = metrics.by_user.len(),
-            active_subscriptions = metrics.by_subscription.len(),
-            "Overall metrics"
-        );
     }
 
     Ok(())
@@ -1217,7 +1245,7 @@ pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result
             window,
             user,
             subscription,
-        } => handle_metrics(&window, user.as_deref(), subscription.as_deref(), &state).await,
+        } => handle_metrics(window.as_deref(), user.as_deref(), subscription.as_deref(), &state).await,
         Commands::Balance { party } => handle_balance(party.as_deref()).await,
     }
 }
