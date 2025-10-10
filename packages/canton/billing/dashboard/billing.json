@@ -1,0 +1,551 @@
+{
+  "refresh_interval": 15,
+  "date_range_from": "now-3h",
+  "date_range_to": "now",
+  "preset": {
+    "id": 907375,
+    "name": null,
+    "preset_type": "implicit",
+    "preset_variables": [
+      {
+        "name": "source",
+        "variable_type": "source",
+        "values": [
+          "1369463"
+        ]
+      },
+      {
+        "name": "end_time",
+        "variable_type": "datetime",
+        "values": [
+          "now"
+        ]
+      },
+      {
+        "name": "start_time",
+        "variable_type": "datetime",
+        "values": [
+          "now-3h"
+        ]
+      }
+    ]
+  },
+  "charts": [
+    {
+      "chart_type": "line_chart",
+      "name": "Payment Count (All Windows)",
+      "description": null,
+      "x": 0,
+      "y": 0,
+      "w": 6,
+      "h": 8,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "label": "shown_below",
+        "legend": "shown_below",
+        "stacking": "dont_stack",
+        "ttl_cache": "auto",
+        "lat_column": "lat",
+        "lng_column": "lng",
+        "time_column": "time",
+        "x_axis_type": "time",
+        "y_axis_scale": "linear",
+        "series_colors": {
+          "10 minutes": "#009fe3",
+          "1 hour": "#00af79",
+          "6 hours": "#55bfc1",
+          "12 hours": "#d57b16",
+          "24 hours": "#e56b81",
+          "7 days": "#9b59b6",
+          "30 days": "#34495e"
+        },
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": "size",
+        "aggregation_period": 60,
+        "treat_missing_values": "connected",
+        "guessed_series_colors": {},
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "WITH payment_counts AS (\n  SELECT\n    {{time}} AS time,\n    CASE\n      WHEN name LIKE 'canton.billing.window.10m.payment_count' THEN '10 minutes'\n      WHEN name LIKE 'canton.billing.window.1h.payment_count' THEN '1 hour'\n      WHEN name LIKE 'canton.billing.window.6h.payment_count' THEN '6 hours'\n      WHEN name LIKE 'canton.billing.window.12h.payment_count' THEN '12 hours'\n      WHEN name LIKE 'canton.billing.window.24h.payment_count' THEN '24 hours'\n      WHEN name LIKE 'canton.billing.window.7d.payment_count' THEN '7 days'\n      WHEN name LIKE 'canton.billing.window.30d.payment_count' THEN '30 days'\n    END AS series,\n    avgMerge(value_avg) AS value\n  FROM {{source}}\n  WHERE name LIKE 'canton.billing.window.%.payment_count'\n    AND dt BETWEEN {{start_time}} AND {{end_time}}\n  GROUP BY time, series\n)\nSELECT time, series, value\nFROM payment_counts\nWHERE series IS NOT NULL",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "line_chart",
+      "name": "Total Payment Amount (All Windows)",
+      "description": null,
+      "x": 6,
+      "y": 0,
+      "w": 6,
+      "h": 8,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "label": "shown_below",
+        "legend": "shown_below",
+        "stacking": "dont_stack",
+        "ttl_cache": "auto",
+        "lat_column": "lat",
+        "lng_column": "lng",
+        "time_column": "time",
+        "x_axis_type": "time",
+        "y_axis_scale": "linear",
+        "series_colors": {
+          "10 minutes": "#009fe3",
+          "1 hour": "#00af79",
+          "6 hours": "#55bfc1",
+          "12 hours": "#d57b16",
+          "24 hours": "#e56b81",
+          "7 days": "#9b59b6",
+          "30 days": "#34495e"
+        },
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 2,
+        "point_size_column": "size",
+        "aggregation_period": 60,
+        "treat_missing_values": "connected",
+        "guessed_series_colors": {},
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "WITH payment_amounts AS (\n  SELECT\n    {{time}} AS time,\n    CASE\n      WHEN name LIKE 'canton.billing.window.10m.total_amount' THEN '10 minutes'\n      WHEN name LIKE 'canton.billing.window.1h.total_amount' THEN '1 hour'\n      WHEN name LIKE 'canton.billing.window.6h.total_amount' THEN '6 hours'\n      WHEN name LIKE 'canton.billing.window.12h.total_amount' THEN '12 hours'\n      WHEN name LIKE 'canton.billing.window.24h.total_amount' THEN '24 hours'\n      WHEN name LIKE 'canton.billing.window.7d.total_amount' THEN '7 days'\n      WHEN name LIKE 'canton.billing.window.30d.total_amount' THEN '30 days'\n    END AS series,\n    avgMerge(value_avg) AS value\n  FROM {{source}}\n  WHERE name LIKE 'canton.billing.window.%.total_amount'\n    AND dt BETWEEN {{start_time}} AND {{end_time}}\n  GROUP BY time, series\n)\nSELECT time, series, value\nFROM payment_amounts\nWHERE series IS NOT NULL",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "line_chart",
+      "name": "Payment Success Rate (All Windows)",
+      "description": null,
+      "x": 0,
+      "y": 8,
+      "w": 6,
+      "h": 8,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "percent",
+        "label": "shown_below",
+        "legend": "shown_below",
+        "stacking": "dont_stack",
+        "ttl_cache": "auto",
+        "lat_column": "lat",
+        "lng_column": "lng",
+        "time_column": "time",
+        "x_axis_type": "time",
+        "y_axis_scale": "linear",
+        "series_colors": {
+          "10 minutes": "#009fe3",
+          "1 hour": "#00af79",
+          "6 hours": "#55bfc1",
+          "12 hours": "#d57b16",
+          "24 hours": "#e56b81",
+          "7 days": "#9b59b6",
+          "30 days": "#34495e"
+        },
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 2,
+        "point_size_column": "size",
+        "aggregation_period": 60,
+        "treat_missing_values": "connected",
+        "guessed_series_colors": {},
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "WITH success_rates AS (\n  SELECT\n    {{time}} AS time,\n    CASE\n      WHEN name LIKE 'canton.billing.window.10m.success_rate' THEN '10 minutes'\n      WHEN name LIKE 'canton.billing.window.1h.success_rate' THEN '1 hour'\n      WHEN name LIKE 'canton.billing.window.6h.success_rate' THEN '6 hours'\n      WHEN name LIKE 'canton.billing.window.12h.success_rate' THEN '12 hours'\n      WHEN name LIKE 'canton.billing.window.24h.success_rate' THEN '24 hours'\n      WHEN name LIKE 'canton.billing.window.7d.success_rate' THEN '7 days'\n      WHEN name LIKE 'canton.billing.window.30d.success_rate' THEN '30 days'\n    END AS series,\n    avgMerge(value_avg) AS value\n  FROM {{source}}\n  WHERE name LIKE 'canton.billing.window.%.success_rate'\n    AND dt BETWEEN {{start_time}} AND {{end_time}}\n  GROUP BY time, series\n)\nSELECT time, series, value\nFROM success_rates\nWHERE series IS NOT NULL",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "line_chart",
+      "name": "Active Users (All Windows)",
+      "description": null,
+      "x": 6,
+      "y": 8,
+      "w": 3,
+      "h": 8,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "label": "shown_below",
+        "legend": "shown_below",
+        "stacking": "dont_stack",
+        "ttl_cache": "auto",
+        "lat_column": null,
+        "lng_column": null,
+        "time_column": "time",
+        "x_axis_type": "time",
+        "y_axis_scale": "linear",
+        "series_colors": {
+          "10 minutes": "#009fe3",
+          "1 hour": "#00af79",
+          "6 hours": "#55bfc1",
+          "12 hours": "#d57b16",
+          "24 hours": "#e56b81",
+          "7 days": "#9b59b6",
+          "30 days": "#34495e"
+        },
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": null,
+        "aggregation_period": 60,
+        "treat_missing_values": "connected",
+        "guessed_series_colors": {},
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "WITH active_users AS (\n  SELECT\n    {{time}} AS time,\n    CASE\n      WHEN name LIKE 'canton.billing.window.10m.active_users' THEN '10 minutes'\n      WHEN name LIKE 'canton.billing.window.1h.active_users' THEN '1 hour'\n      WHEN name LIKE 'canton.billing.window.6h.active_users' THEN '6 hours'\n      WHEN name LIKE 'canton.billing.window.12h.active_users' THEN '12 hours'\n      WHEN name LIKE 'canton.billing.window.24h.active_users' THEN '24 hours'\n      WHEN name LIKE 'canton.billing.window.7d.active_users' THEN '7 days'\n      WHEN name LIKE 'canton.billing.window.30d.active_users' THEN '30 days'\n    END AS series,\n    avgMerge(value_avg) AS value\n  FROM {{source}}\n  WHERE name LIKE 'canton.billing.window.%.active_users'\n    AND dt BETWEEN {{start_time}} AND {{end_time}}\n  GROUP BY time, series\n)\nSELECT time, series, value\nFROM active_users\nWHERE series IS NOT NULL",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "line_chart",
+      "name": "Active Subscriptions (All Windows)",
+      "description": null,
+      "x": 9,
+      "y": 8,
+      "w": 3,
+      "h": 8,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "label": "shown_below",
+        "legend": "shown_below",
+        "stacking": "dont_stack",
+        "ttl_cache": "auto",
+        "lat_column": null,
+        "lng_column": null,
+        "time_column": "time",
+        "x_axis_type": "time",
+        "y_axis_scale": "linear",
+        "series_colors": {
+          "10 minutes": "#009fe3",
+          "1 hour": "#00af79",
+          "6 hours": "#55bfc1",
+          "12 hours": "#d57b16",
+          "24 hours": "#e56b81",
+          "7 days": "#9b59b6",
+          "30 days": "#34495e"
+        },
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": null,
+        "aggregation_period": 60,
+        "treat_missing_values": "connected",
+        "guessed_series_colors": {},
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "WITH active_subs AS (\n  SELECT\n    {{time}} AS time,\n    CASE\n      WHEN name LIKE 'canton.billing.window.10m.active_subscriptions' THEN '10 minutes'\n      WHEN name LIKE 'canton.billing.window.1h.active_subscriptions' THEN '1 hour'\n      WHEN name LIKE 'canton.billing.window.6h.active_subscriptions' THEN '6 hours'\n      WHEN name LIKE 'canton.billing.window.12h.active_subscriptions' THEN '12 hours'\n      WHEN name LIKE 'canton.billing.window.24h.active_subscriptions' THEN '24 hours'\n      WHEN name LIKE 'canton.billing.window.7d.active_subscriptions' THEN '7 days'\n      WHEN name LIKE 'canton.billing.window.30d.active_subscriptions' THEN '30 days'\n    END AS series,\n    avgMerge(value_avg) AS value\n  FROM {{source}}\n  WHERE name LIKE 'canton.billing.window.%.active_subscriptions'\n    AND dt BETWEEN {{start_time}} AND {{end_time}}\n  GROUP BY time, series\n)\nSELECT time, series, value\nFROM active_subs\nWHERE series IS NOT NULL",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Total Payments (24h)",
+      "description": null,
+      "x": 0,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.payment_count'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Total Amount (24h)",
+      "description": null,
+      "x": 2,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 2,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.total_amount'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Success Rate (24h)",
+      "description": null,
+      "x": 4,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "percent",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 2,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.success_rate'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Active Users (24h)",
+      "description": null,
+      "x": 6,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_users'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Active Subscriptions (24h)",
+      "description": null,
+      "x": 8,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 0,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_subscriptions'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    },
+    {
+      "chart_type": "number_chart",
+      "name": "Integration Test Metric",
+      "description": null,
+      "x": 10,
+      "y": 16,
+      "w": 2,
+      "h": 4,
+      "transform_with": "// Transform chart data before rendering.\n// Following function is called when new data arrives, and again with `completed = true` after all data arrives.\n// You can transform the data here arbitrarily.\n// Most chart types expect columns 'time', 'value' and optionally 'series' by default.\nasync (existingDataByQuery, newDataByQuery, completed) => {\n  return Object.keys(newDataByQuery).reduce((result, queryIndex) => {\n    result[queryIndex] = result[queryIndex].concat(newDataByQuery[queryIndex]);\n    return result;\n  }, existingDataByQuery);\n}\n",
+      "finalize_with": null,
+      "fake_with": null,
+      "settings": {
+        "unit": "auto",
+        "legend": "shown_below",
+        "ttl_cache": "auto",
+        "time_column": "time",
+        "y_axis_scale": "linear",
+        "series_column": "series",
+        "value_columns": [
+          "value"
+        ],
+        "decimal_places": 1,
+        "point_size_column": "size",
+        "aggregation_period": 0,
+        "treat_missing_values": "connected",
+        "manual_aggregation_period": false
+      },
+      "chart_queries": [
+        {
+          "query_type": "sql_expression",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.test.metric'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "where_condition": null,
+          "static_text": null,
+          "y_axis": null,
+          "filters": null,
+          "group_by": null
+        }
+      ],
+      "chart_alerts": []
+    }
+  ],
+  "sections": []
+}
