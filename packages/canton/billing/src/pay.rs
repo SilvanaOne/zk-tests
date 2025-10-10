@@ -4,7 +4,7 @@ use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 use chrono::Utc;
 use serde_json::json;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone)]
 pub struct PaymentArgs {
@@ -163,7 +163,7 @@ impl PaymentArgs {
     }
 
     /// Execute the payment using TransferPreapproval_Send
-    pub async fn execute_payment(&self) -> anyhow::Result<String> {
+    pub async fn execute_payment(&self) -> anyhow::Result<(String, String)> {
         let api_url = std::env::var("APP_PROVIDER_API_URL")
             .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set in environment"))?;
         let jwt = std::env::var("APP_PROVIDER_JWT")
@@ -256,7 +256,7 @@ impl PaymentArgs {
                     update_id = %update_id,
                     "Payment successful"
                 );
-                return Ok(update_id.to_string());
+                return Ok((self.cmdid.clone(), update_id.to_string()));
             }
         }
 

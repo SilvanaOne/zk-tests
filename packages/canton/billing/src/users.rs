@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use std::fs;
 use chrono::NaiveDate;
-use tracing::{debug, info, error, warn};
+use tracing::{info, error, warn};
 
 /// Global user list loaded once on first access
 static USERS: OnceLock<Vec<User>> = OnceLock::new();
@@ -211,11 +211,13 @@ pub fn get_users() -> &'static Vec<User> {
 }
 
 /// Find a user by ID
+#[allow(dead_code)]
 pub fn find_user_by_id(id: &str) -> Option<&'static User> {
     get_users().iter().find(|u| u.id == id)
 }
 
 /// Find a user by party identifier
+#[allow(dead_code)]
 pub fn find_user_by_party(party: &str) -> Option<&'static User> {
     get_users().iter().find(|u| u.party == party)
 }

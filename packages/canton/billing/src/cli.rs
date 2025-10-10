@@ -1,8 +1,17 @@
 //! CLI module for the billing application
 
-use crate::{context::ContractBlobsContext, pay::PaymentArgs, subscriptions, users};
+use crate::{
+    context::ContractBlobsContext,
+    db::PaymentDatabase,
+    metrics::PaymentMetrics,
+    pay::PaymentArgs,
+    recovery::PaymentRecovery,
+    subscriptions,
+    users
+};
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
@@ -77,10 +86,40 @@ pub enum Commands {
         /// Expiration time in minutes (default: 525600 = 1 year)
         #[arg(long, default_value = "525600")]
         expires_in_min: u64,
+    },
 
-        /// Subscriber party (sender of funds)
-        #[arg(long, env = "SUBSCRIBER_PARTY")]
-        subscriber_party: String,
+    /// Restart payment processing and recover missed payments
+    Restart {
+        /// Process pending payments queue
+        #[arg(long, default_value = "true")]
+        process_pending: bool,
+
+        /// Recover missed payments during downtime
+        #[arg(long, default_value = "true")]
+        recover_missed: bool,
+
+        /// Dry run - simulate without executing
+        #[arg(long, default_value = "false")]
+        dry_run: bool,
+
+        /// Maximum number of payments to process
+        #[arg(long, default_value = "100")]
+        limit: usize,
+    },
+
+    /// Display payment metrics
+    Metrics {
+        /// Time window (10m, 1h, 6h, 12h, 24h, 7d, 30d)
+        #[arg(long, default_value = "1h")]
+        window: String,
+
+        /// Show metrics for specific user
+        #[arg(long)]
+        user: Option<String>,
+
+        /// Show metrics for specific subscription
+        #[arg(long)]
+        subscription: Option<String>,
     },
 }
 
@@ -94,6 +133,12 @@ pub enum UserCommands {
         /// Subscription name
         name: String,
     },
+}
+
+/// Application state for CLI commands
+pub struct AppState {
+    pub database: Arc<PaymentDatabase>,
+    pub metrics: Arc<PaymentMetrics>,
 }
 
 /// Find a user by a flexible query (email, name, or party substring)
@@ -179,7 +224,7 @@ fn handle_user_search(query: &str) -> anyhow::Result<()> {
 }
 
 /// Handle the payment command
-async fn handle_payment(subscription: &str, user_query: &str, dry_run: bool) -> anyhow::Result<()> {
+async fn handle_payment(subscription: &str, user_query: &str, dry_run: bool, state: &AppState) -> anyhow::Result<()> {
     // Find user
     let user = find_user_by_query(user_query)?;
 
@@ -235,25 +280,58 @@ async fn handle_payment(subscription: &str, user_query: &str, dry_run: bool) -> 
 
     // Use from_request with specific user's party and subscription details
     let payment_args =
-        PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description).await?;
+        PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description.clone()).await?;
 
-    payment_args.execute_payment().await?;
+    match payment_args.execute_payment().await {
+        Ok((command_id, update_id)) => {
+            // Record successful payment event
+            let event = crate::metrics::create_payment_event(
+                user.party.clone(),
+                user.name.clone(),
+                subscription.to_string(),
+                sub.price,
+                true,
+                command_id.clone(),
+                Some(update_id.clone()),
+                None,
+            );
+            state.metrics.record_payment(event).await?;
+            info!(command_id = %command_id, update_id = %update_id, "Payment completed successfully");
+        }
+        Err(e) => {
+            // Record failed payment event
+            let event = crate::metrics::create_payment_event(
+                user.party.clone(),
+                user.name.clone(),
+                subscription.to_string(),
+                sub.price,
+                false,
+                format!("failed-{}", chrono::Utc::now().timestamp()),
+                None, // No update_id for failed payments
+                Some(e.to_string()),
+            );
+            state.metrics.record_payment(event).await?;
+            return Err(e);
+        }
+    }
 
     Ok(())
 }
 
 /// Payment scheduler for automated payments
-pub struct PaymentScheduler {
+pub struct PaymentScheduler<'a> {
     /// Track last payment time for each user+subscription combination
     last_payments: HashMap<String, Instant>,
     dry_run: bool,
+    state: &'a AppState,
 }
 
-impl PaymentScheduler {
-    pub fn new(dry_run: bool) -> Self {
+impl<'a> PaymentScheduler<'a> {
+    pub fn new(dry_run: bool, state: &'a AppState) -> Self {
         Self {
             last_payments: HashMap::new(),
             dry_run,
+            state,
         }
     }
 
@@ -394,16 +472,60 @@ impl PaymentScheduler {
 
         // Use from_request with specific user's party and subscription details
         let payment_args =
-            PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description).await?;
+            PaymentArgs::from_request(ctx, sub.price, user.party.clone(), description.clone()).await?;
 
-        payment_args.execute_payment().await?;
+        match payment_args.execute_payment().await {
+            Ok((command_id, update_id)) => {
+                // Record successful payment event
+                let event = crate::metrics::create_payment_event(
+                    user.party.clone(),
+                    user.name.clone(),
+                    sub.name.clone(),
+                    sub.price,
+                    true,
+                    command_id.clone(),
+                    Some(update_id.clone()),
+                    None,
+                );
+                self.state.metrics.record_payment(event).await?;
+                info!(
+                    user = %user.name,
+                    subscription = %sub.name,
+                    amount = sub.price,
+                    command_id = %command_id,
+                    update_id = %update_id,
+                    "Payment executed successfully"
+                );
+            }
+            Err(e) => {
+                // Record failed payment event
+                let event = crate::metrics::create_payment_event(
+                    user.party.clone(),
+                    user.name.clone(),
+                    sub.name.clone(),
+                    sub.price,
+                    false,
+                    format!("failed-{}", chrono::Utc::now().timestamp()),
+                    None, // No update_id for failed payments
+                    Some(e.to_string()),
+                );
+                self.state.metrics.record_payment(event).await?;
+                error!(
+                    user = %user.name,
+                    subscription = %sub.name,
+                    error = %e,
+                    "Payment failed"
+                );
+                return Err(e);
+            }
+        }
         Ok(())
     }
 }
 
 /// Handle the start command
-async fn handle_start(once: bool, interval_secs: u64, dry_run: bool) -> anyhow::Result<()> {
-    let mut scheduler = PaymentScheduler::new(dry_run);
+async fn handle_start(once: bool, interval_secs: u64, dry_run: bool, state: &AppState) -> anyhow::Result<()> {
+    let mut scheduler = PaymentScheduler::new(dry_run, state);
 
     if once {
         info!(dry_run = dry_run, "Running payment scheduler once");
@@ -561,15 +683,141 @@ async fn handle_get_update(update_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Handle restart command
+async fn handle_restart(
+    process_pending: bool,
+    recover_missed: bool,
+    dry_run: bool,
+    _limit: usize,
+    state: &AppState,
+) -> anyhow::Result<()> {
+    info!("Starting payment recovery and restart");
+
+    let recovery = PaymentRecovery::new(state.database.clone(), state.metrics.clone());
+
+    if recover_missed {
+        info!("Recovering missed payments during downtime");
+        let report = recovery.recover_missed_payments(dry_run).await?;
+        info!(
+            scheduled = report.payments_scheduled,
+            processed = report.payments_processed,
+            failed = report.payments_failed,
+            total_amount = report.total_amount,
+            "Missed payment recovery completed"
+        );
+    }
+
+    if process_pending {
+        info!("Processing pending payments queue");
+        let report = recovery.process_pending_queue(dry_run).await?;
+        info!(
+            processed = report.payments_processed,
+            failed = report.payments_failed,
+            total_amount = report.total_amount,
+            "Pending queue processing completed"
+        );
+    }
+
+    Ok(())
+}
+
+/// Handle metrics command
+async fn handle_metrics(
+    window_str: &str,
+    user: Option<&str>,
+    subscription: Option<&str>,
+    state: &AppState,
+) -> anyhow::Result<()> {
+    use crate::metrics::TimeWindow;
+
+    let window = TimeWindow::from_str(window_str)
+        .ok_or_else(|| anyhow::anyhow!("Invalid time window: {}", window_str))?;
+
+    if let Some(user) = user {
+        if let Some(subscription) = subscription {
+            // User-subscription metrics
+            let metrics = state.metrics
+                .get_user_subscription_metrics(user, subscription, window)
+                .await?;
+            info!(
+                user = %user,
+                subscription = %subscription,
+                window = %window_str,
+                payment_count = metrics.payment_count,
+                total_amount = metrics.total_amount,
+                success_count = metrics.success_count,
+                failure_count = metrics.failure_count,
+                "User-subscription metrics"
+            );
+        } else {
+            // User metrics
+            let metrics = state.metrics.get_user_metrics(user, window).await?;
+            info!(
+                user = %user,
+                window = %window_str,
+                payment_count = metrics.payment_count,
+                total_amount = metrics.total_amount,
+                success_count = metrics.success_count,
+                failure_count = metrics.failure_count,
+                "User metrics"
+            );
+        }
+    } else if let Some(subscription) = subscription {
+        // Subscription metrics
+        let metrics = state.metrics.get_subscription_metrics(subscription, window).await?;
+        info!(
+            subscription = %subscription,
+            window = %window_str,
+            payment_count = metrics.payment_count,
+            total_amount = metrics.total_amount,
+            success_count = metrics.success_count,
+            failure_count = metrics.failure_count,
+            "Subscription metrics"
+        );
+    } else {
+        // Overall metrics
+        let metrics = state.metrics.get_metrics(window).await?;
+        let total_payments: u64 = metrics.by_user_subscription.values()
+            .map(|m| m.payment_count)
+            .sum();
+        let total_amount: f64 = metrics.by_user_subscription.values()
+            .map(|m| m.total_amount)
+            .sum();
+        let total_success: u64 = metrics.by_user_subscription.values()
+            .map(|m| m.success_count)
+            .sum();
+        let total_failure: u64 = metrics.by_user_subscription.values()
+            .map(|m| m.failure_count)
+            .sum();
+
+        info!(
+            window = %window_str,
+            total_payments = total_payments,
+            total_amount = total_amount,
+            success_count = total_success,
+            failure_count = total_failure,
+            active_users = metrics.by_user.len(),
+            active_subscriptions = metrics.by_subscription.len(),
+            "Overall metrics"
+        );
+    }
+
+    Ok(())
+}
+
 /// Handle setup preapproval command
-async fn handle_setup_preapproval(expires_in_min: u64, subscriber_party: &str) -> anyhow::Result<()> {
+async fn handle_setup_preapproval(expires_in_min: u64) -> anyhow::Result<()> {
     use crate::context::ContractBlobsContext;
     use crate::pay::PaymentArgs;
     use crate::url::create_client_with_localhost_resolution;
     use chrono::{Duration, Utc};
     use serde_json::json;
 
-    info!("Setting up TransferPreapproval for the app");
+    // Get PARTY_APP from environment (the app party that holds amulets for payments)
+    let party_app = std::env::var("PARTY_APP")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP not set in environment. This should be the party that holds amulets for transaction payments."))?;
+
+    info!(party_app = %party_app, "Setting up TransferPreapproval for the app");
 
     // Load contract blobs
     let ctx = ContractBlobsContext::fetch().await?;
@@ -580,8 +828,6 @@ async fn handle_setup_preapproval(expires_in_min: u64, subscriber_party: &str) -
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set in environment"))?;
     let jwt = std::env::var("APP_PROVIDER_JWT")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set in environment"))?;
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set in environment"))?;
 
     // Calculate DSO party from synchronizer ID
     let dso_party = format!("DSO::{}", ctx.synchronizer_id.replace("global-domain::", ""));
@@ -650,7 +896,7 @@ async fn handle_setup_preapproval(expires_in_min: u64, subscriber_party: &str) -
             }
         ],
         "commandId": cmdid,
-        "actAs": [subscriber_party, &party_app],
+        "actAs": [&party_app],
         "readAs": []
     });
 
@@ -763,7 +1009,18 @@ async fn handle_setup_preapproval(expires_in_min: u64, subscriber_party: &str) -
 }
 
 /// Execute the CLI commands
+#[allow(dead_code)]
 pub async fn execute_cli(cli: Cli) -> anyhow::Result<()> {
+    // Create temporary database and metrics for backward compatibility
+    let db_path = std::env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./billing_db".to_string());
+    let database = Arc::new(PaymentDatabase::open(&db_path)?);
+    let metrics = Arc::new(PaymentMetrics::new(database.clone()).await?);
+    let app_state = AppState { database, metrics };
+
+    execute_cli_with_state(cli, app_state).await
+}
+
+pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result<()> {
     match cli.command {
         Commands::Subscriptions => handle_subscriptions(),
         Commands::Users { subcommand } => handle_users(subcommand),
@@ -772,16 +1029,26 @@ pub async fn execute_cli(cli: Cli) -> anyhow::Result<()> {
             subscription,
             user,
             dry_run,
-        } => handle_payment(&subscription, &user, dry_run).await,
+        } => handle_payment(&subscription, &user, dry_run, &state).await,
         Commands::Start {
             once,
             interval,
             dry_run,
-        } => handle_start(once, interval, dry_run).await,
+        } => handle_start(once, interval, dry_run, &state).await,
         Commands::Update { update_id } => handle_get_update(&update_id).await,
         Commands::Setup {
             expires_in_min,
-            subscriber_party,
-        } => handle_setup_preapproval(expires_in_min, &subscriber_party).await,
+        } => handle_setup_preapproval(expires_in_min).await,
+        Commands::Restart {
+            process_pending,
+            recover_missed,
+            dry_run,
+            limit,
+        } => handle_restart(process_pending, recover_missed, dry_run, limit, &state).await,
+        Commands::Metrics {
+            window,
+            user,
+            subscription,
+        } => handle_metrics(&window, user.as_deref(), subscription.as_deref(), &state).await,
     }
 }

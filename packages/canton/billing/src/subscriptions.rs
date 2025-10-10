@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::OnceLock;
-use tracing::{debug, info, error, warn};
+use tracing::{info, error, warn};
 
 /// Global subscription list loaded once on first access
 static SUBSCRIPTIONS: OnceLock<Vec<Subscription>> = OnceLock::new();
@@ -116,6 +116,7 @@ pub fn get_subscriptions() -> &'static Vec<Subscription> {
 }
 
 /// Find a subscription by ID
+#[allow(dead_code)]
 pub fn find_subscription_by_id(id: &str) -> Option<&'static Subscription> {
     get_subscriptions().iter().find(|s| s.id == id)
 }
