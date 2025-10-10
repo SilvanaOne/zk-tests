@@ -1,7 +1,9 @@
 ## Localnet installation
 
 https://docs.dev.sync.global/validator_operator/validator_compose.html
+https://docs.dev.sync.global/app_dev/testing/localnet.html
 https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.4.19/0.4.19_splice-node.tar.gz
+https://docs.sync.global/app_dev/scan_api/scan_openapi.html
 
 ```sh
 tar xzvf 0.4.19_splice-node.tar.gz
