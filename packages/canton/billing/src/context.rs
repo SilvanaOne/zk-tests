@@ -4,6 +4,7 @@
 use base64::Engine; // bring trait for decode into scope
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD_ENGINE;
 use regex::Regex;
+use crate::url::create_client_with_localhost_resolution;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractBlobsContext {
@@ -36,26 +37,7 @@ impl ContractBlobsContext {
             .map(|s| s.split("::").next().unwrap_or(s).to_string());
 
         // Build client with localhost resolution
-        // Map .localhost domains to 127.0.0.1
-        let client = reqwest::Client::builder()
-            .user_agent("billing-fetch/0.1")
-            .resolve(
-                "scan.localhost",
-                std::net::SocketAddr::from(([127, 0, 0, 1], 4000)),
-            )
-            .resolve(
-                "canton.localhost",
-                std::net::SocketAddr::from(([127, 0, 0, 1], 2000)),
-            )
-            .resolve(
-                "canton.localhost",
-                std::net::SocketAddr::from(([127, 0, 0, 1], 3000)),
-            )
-            .resolve(
-                "canton.localhost",
-                std::net::SocketAddr::from(([127, 0, 0, 1], 4000)),
-            )
-            .build()?;
+        let client = create_client_with_localhost_resolution()?;
 
         // Step 1: GET /v0/dso -> AmuletRules and latest mining round
         let dso_url = format!("{}v0/dso", scan_api_url);

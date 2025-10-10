@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "party": "userparty1::1220aca50c19712a4247e9b74ab680b358962ae97f50c01577b92d03b2ae7dc83b10",
+      "name": "User 1",
+      "email": "user1@example.com",
+      "subscriptions": [
+        {
+          "name": "prover",
+          "expires_at": "2026-01-01"
+        },
+        {
+          "name": "verifier",
+          "expires_at": "2026-01-01"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "party": "userparty2::1220aca50c19712a4247e9b74ab680b358962ae97f50c01577b92d03b2ae7dc83b10",
+      "name": "User 2",
+      "email": "user2@example.com",
+      "subscriptions": [
+        {
+          "name": "verifier",
+          "expires_at": "2026-01-01"
+        }
+      ]
+    }
+  ]
+}

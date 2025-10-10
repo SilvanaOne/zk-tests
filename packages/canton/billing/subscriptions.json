@@ -1,0 +1,20 @@
+{
+  "subscriptions": [
+    {
+      "id": "1",
+      "name": "prover",
+      "description": "Prover subscription",
+      "price": 2,
+      "currency": "CC",
+      "interval_min": "5"
+    },
+    {
+      "id": "2",
+      "name": "verifier",
+      "subscription_description": "Verifier subscription",
+      "price": 1,
+      "currency": "CC",
+      "interval_min": "10"
+    }
+  ]
+}
