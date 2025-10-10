@@ -131,22 +131,22 @@ pub fn list_subscriptions() {
     let subs = get_subscriptions();
 
     if subs.is_empty() {
-        warn!("No subscriptions available");
+        println!("No subscriptions available");
         return;
     }
 
-    info!(count = subs.len(), "Available subscriptions");
+    println!("\n📋 Available Subscriptions ({} total):", subs.len());
+    println!("{:-<60}", "");
 
     for sub in subs {
-        info!(
-            id = %sub.id,
-            name = %sub.name,
-            description = ?sub.description,
-            price = %sub.formatted_price(),
-            interval_sec = sub.interval_sec,
-            "Subscription details"
-        );
+        println!("\n🔸 {} ({})", sub.name, sub.id);
+        if let Some(desc) = &sub.description {
+            println!("   Description: {}", desc);
+        }
+        println!("   Price: {}", sub.formatted_price());
+        println!("   Billing Interval: {} seconds", sub.interval_sec);
     }
+    println!();
 }
 
 #[cfg(test)]

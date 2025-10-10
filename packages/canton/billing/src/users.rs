@@ -240,22 +240,29 @@ pub fn list_users() {
     let users = get_users();
 
     if users.is_empty() {
-        warn!("No users available");
+        println!("No users available");
         return;
     }
 
-    info!(count = users.len(), "Registered users");
+    println!("\n👥 Registered Users ({} total):", users.len());
+    println!("{:-<60}", "");
 
     for user in users {
-        info!(
-            id = %user.id,
-            name = %user.name,
-            email = %user.email,
-            party = %user.party,
-            subscriptions = %user.subscriptions_summary(),
-            "User details"
-        );
+        println!("\n👤 {} ({})", user.name, user.id);
+        println!("   Email: {}", user.email);
+        println!("   Party: {}", user.party);
+
+        let active_subs = user.active_subscriptions();
+        if !active_subs.is_empty() {
+            println!("   Active Subscriptions:");
+            for sub in active_subs {
+                println!("     ✓ {} (expires: {})", sub.name, sub.expires_at);
+            }
+        } else {
+            println!("   No active subscriptions");
+        }
     }
+    println!();
 }
 
 /// List users with a specific subscription
@@ -263,15 +270,12 @@ pub fn list_users_with_subscription(subscription_name: &str) {
     let users = find_users_with_subscription(subscription_name);
 
     if users.is_empty() {
-        warn!(subscription = %subscription_name, "No users have this subscription");
+        println!("No users have the '{}' subscription", subscription_name);
         return;
     }
 
-    info!(
-        subscription = %subscription_name,
-        count = users.len(),
-        "Users with subscription"
-    );
+    println!("\n📊 Users with '{}' subscription ({} total):", subscription_name, users.len());
+    println!("{:-<60}", "");
 
     for user in users {
         // Find the specific subscription details
@@ -280,13 +284,11 @@ pub fn list_users_with_subscription(subscription_name: &str) {
             .map(|sub| sub.expires_at.as_str())
             .unwrap_or("N/A");
 
-        info!(
-            name = %user.name,
-            email = %user.email,
-            expires = %expires,
-            "User with subscription"
-        );
+        println!("\n👤 {} ({})", user.name, user.id);
+        println!("   Email: {}", user.email);
+        println!("   Subscription expires: {}", expires);
     }
+    println!();
 }
 
 #[cfg(test)]

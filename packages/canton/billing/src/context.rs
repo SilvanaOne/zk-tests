@@ -5,6 +5,7 @@ use base64::Engine; // bring trait for decode into scope
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD_ENGINE;
 use regex::Regex;
 use crate::url::create_client_with_localhost_resolution;
+use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractBlobsContext {
@@ -92,12 +93,31 @@ impl ContractBlobsContext {
         {
             // Collect entries with opensAt timestamp
             let mut entries: Vec<(&String, &serde_json::Value)> = obj.iter().collect();
+
+            // Log all rounds before sorting for debugging
+            debug!(count = entries.len(), "Found open mining rounds");
+            for (key, v) in &entries {
+                let opens_at = v.pointer("/contract/payload/opensAt")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("unknown");
+                let cid = v.pointer("/contract/contract_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                debug!(
+                    round_key = %key,
+                    opens_at = %opens_at,
+                    cid = %cid,
+                    "Mining round details"
+                );
+            }
+
             entries.sort_by_key(|(_, v)| {
-                v.pointer("/payload/opensAt")
+                v.pointer("/contract/payload/opensAt")
                     .and_then(|x| x.as_str())
                     .map(|s| s.to_string())
                     .unwrap_or_default()
             });
+
             if let Some((_, first)) = entries.first() {
                 let cid = first
                     .pointer("/contract/contract_id")
@@ -109,17 +129,31 @@ impl ContractBlobsContext {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
+
+                // Log selected round
+                let opens_at = first.pointer("/contract/payload/opensAt")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("unknown");
+                debug!(
+                    opens_at = %opens_at,
+                    cid = %cid,
+                    "Selected mining round (earliest opensAt)"
+                );
+
                 (cid, blob)
             } else {
                 (String::new(), String::new())
             }
         } else {
+            debug!("No open_mining_rounds found in response");
             (String::new(), String::new())
         };
 
         let open_mining_round_cid = if !open_round_cid.is_empty() {
+            debug!(cid = %open_round_cid, "Using selected open round CID");
             open_round_cid
         } else {
+            debug!(cid = %latest_mining_cid, "Falling back to latest mining round CID from DSO response");
             latest_mining_cid
         };
         let open_mining_round_blob = if !open_round_blob.is_empty() {
