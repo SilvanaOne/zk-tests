@@ -123,6 +123,9 @@ pub enum Commands {
         #[arg(long)]
         party: Option<String>,
     },
+
+    /// Get and display contract blobs context from Canton network
+    Config,
 }
 
 #[derive(Subcommand)]
@@ -1204,9 +1207,12 @@ pub async fn handle_balance(party: Option<&str>) -> anyhow::Result<()> {
 /// Execute the CLI commands
 #[allow(dead_code)]
 pub async fn execute_cli(cli: Cli) -> anyhow::Result<()> {
-    // For balance command, we don't need database
+    // For balance and config commands, we don't need database
     if let Commands::Balance { party } = &cli.command {
         return handle_balance(party.as_deref()).await;
+    }
+    if let Commands::Config = &cli.command {
+        return handle_config().await;
     }
 
     // Create temporary database and metrics for backward compatibility
@@ -1216,6 +1222,59 @@ pub async fn execute_cli(cli: Cli) -> anyhow::Result<()> {
     let app_state = AppState { database, metrics };
 
     execute_cli_with_state(cli, app_state).await
+}
+
+/// Handle the config command - fetch and display ContractBlobsContext
+pub async fn handle_config() -> anyhow::Result<()> {
+    println!("Fetching contract blobs context from Canton network...");
+    println!();
+
+    let context = ContractBlobsContext::fetch().await?;
+
+    println!("📋 Contract Blobs Context");
+    println!("═══════════════════════════════════════════════════════════════");
+    println!();
+
+    println!("🔐 Synchronizer ID:");
+    println!("   {}", context.synchronizer_id);
+    println!();
+
+    println!("💰 AmuletRules:");
+    println!("   Contract ID:  {}", context.amulet_rules_cid);
+    println!("   Template ID:  {}", context.amulet_rules_template_id);
+    println!("   Blob (first 80 chars): {}...",
+        if context.amulet_rules_blob.len() > 80 {
+            &context.amulet_rules_blob[..80]
+        } else {
+            &context.amulet_rules_blob
+        });
+    println!();
+
+    println!("⛏️  OpenMiningRound:");
+    println!("   Contract ID:  {}", context.open_mining_round_cid);
+    println!("   Template ID:  {}", context.open_mining_round_template_id);
+    println!("   Blob (first 80 chars): {}...",
+        if context.open_mining_round_blob.len() > 80 {
+            &context.open_mining_round_blob[..80]
+        } else {
+            &context.open_mining_round_blob
+        });
+    println!();
+
+    println!("⭐ FeaturedAppRight:");
+    println!("   Contract ID:  {}", context.featured_app_right_cid);
+    println!("   Template ID:  {}", context.featured_app_right_template_id);
+    println!("   Blob (first 80 chars): {}...",
+        if context.featured_app_right_blob.len() > 80 {
+            &context.featured_app_right_blob[..80]
+        } else {
+            &context.featured_app_right_blob
+        });
+    println!();
+
+    println!("✅ Context fetched successfully!");
+
+    Ok(())
 }
 
 pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result<()> {
@@ -1247,5 +1306,6 @@ pub async fn execute_cli_with_state(cli: Cli, state: AppState) -> anyhow::Result
             subscription,
         } => handle_metrics(window.as_deref(), user.as_deref(), subscription.as_deref(), &state).await,
         Commands::Balance { party } => handle_balance(party.as_deref()).await,
+        Commands::Config => handle_config().await,
     }
 }

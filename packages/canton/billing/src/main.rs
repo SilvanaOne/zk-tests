@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     // Parse CLI arguments
     let cli = cli::Cli::parse();
 
-    // For balance command, we only need minimal initialization
+    // For balance and config commands, we only need minimal initialization
     if let cli::Commands::Balance { ref party } = cli.command {
         // Initialize minimal logging
         use tracing_subscriber::filter::LevelFilter;
@@ -31,6 +31,17 @@ async fn main() -> anyhow::Result<()> {
             .init();
 
         return cli::handle_balance(party.as_deref()).await;
+    }
+
+    if let cli::Commands::Config = cli.command {
+        // Initialize minimal logging
+        use tracing_subscriber::filter::LevelFilter;
+        let level = cli.log_level.parse::<LevelFilter>().unwrap_or(LevelFilter::INFO);
+        tracing_subscriber::fmt()
+            .with_max_level(level)
+            .init();
+
+        return cli::handle_config().await;
     }
 
     // Initialize logging with potential BetterStack integration

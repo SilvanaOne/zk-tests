@@ -200,6 +200,22 @@ Output shows:
 - Round numbers
 - Total balance summary
 
+#### `config` - Get Contract Blobs Context
+Fetch and display the contract blobs context from the Canton network, including AmuletRules, OpenMiningRound, and FeaturedAppRight contracts.
+
+```bash
+# Fetch and display contract context
+cargo run -- config
+```
+
+Output shows:
+- Synchronizer ID
+- AmuletRules contract ID, template ID, and blob preview
+- OpenMiningRound contract ID, template ID, and blob preview
+- FeaturedAppRight contract ID, template ID, and blob preview
+
+This is useful for debugging and verifying Canton network configuration.
+
 #### `pay` - Execute Single Payment
 Process a payment for a specific user and subscription.
 
