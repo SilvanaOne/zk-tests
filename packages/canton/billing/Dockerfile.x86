@@ -1,0 +1,50 @@
+# Dockerfile for building x86_64 Linux binary of the billing tool
+FROM rust:latest AS builder
+
+# Install required dependencies for rocksdb and other native builds
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    clang \
+    libclang-dev \
+    build-essential \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy only the necessary source files (not target directory)
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+# Build the release binary for x86_64
+RUN cargo build --release --target x86_64-unknown-linux-gnu
+
+# Move the binary to a known location
+RUN cp target/x86_64-unknown-linux-gnu/release/billing /billing
+
+# Export stage - just the binary in a scratch image
+FROM scratch AS export
+COPY --from=builder /billing /billing
+
+# Optional: Create a minimal runtime image
+FROM debian:bookworm-slim AS runtime
+
+# Install required runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary from builder
+COPY --from=builder /billing /usr/local/bin/billing
+
+# Set the binary as executable
+RUN chmod +x /usr/local/bin/billing
+
+# Create a non-root user
+RUN useradd -m -u 1000 billing
+
+USER billing
+WORKDIR /home/billing
+
+ENTRYPOINT ["/usr/local/bin/billing"]
