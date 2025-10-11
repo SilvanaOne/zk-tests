@@ -147,6 +147,7 @@ cargo run -- [COMMAND] [OPTIONS]
 ### Available Commands
 
 #### `subscriptions` - List Available Subscriptions
+
 Lists all configured subscription plans with pricing and features.
 
 ```bash
@@ -156,9 +157,11 @@ cargo run -- subscriptions
 Output shows subscription names, IDs, prices, billing intervals, and features.
 
 #### `users` - User Management
+
 Manage and query user information.
 
 **Subcommands:**
+
 - `list` - List all users with their subscriptions
 - `with-subscription <name>` - List users with a specific subscription
 
@@ -171,6 +174,7 @@ cargo run -- users with-subscription premium
 ```
 
 #### `user` - Find Specific User
+
 Search for a user by email, name, or party ID substring.
 
 ```bash
@@ -185,6 +189,7 @@ cargo run -- user "1220aca50"
 ```
 
 #### `balance` - Check Canton Credit Balance
+
 Display Canton Credit (CC) balance for a party.
 
 ```bash
@@ -196,11 +201,13 @@ cargo run -- balance --party "userparty1::1220aca50c19712a4247e9b74ab680b358962a
 ```
 
 Output shows:
+
 - Individual Amulet contracts with amounts
 - Round numbers
 - Total balance summary
 
 #### `config` - Get Contract Blobs Context
+
 Fetch and display the contract blobs context from the Canton network, including AmuletRules, OpenMiningRound, and FeaturedAppRight contracts.
 
 ```bash
@@ -209,6 +216,7 @@ cargo run -- config
 ```
 
 Output shows:
+
 - Synchronizer ID
 - AmuletRules contract ID, template ID, and blob preview
 - OpenMiningRound contract ID, template ID, and blob preview
@@ -217,6 +225,7 @@ Output shows:
 This is useful for debugging and verifying Canton network configuration.
 
 #### `pay` - Execute Single Payment
+
 Process a payment for a specific user and subscription.
 
 ```bash
@@ -228,6 +237,7 @@ cargo run -- pay --user alice --subscription premium --dry-run
 ```
 
 #### `start` - Automated Payment Processing
+
 Start automated payment processing for all active subscriptions.
 
 ```bash
@@ -245,6 +255,7 @@ cargo run -- start --dry-run
 ```
 
 #### `setup` - Initialize TransferPreapproval
+
 Setup TransferPreapproval contract for automated payments.
 
 ```bash
@@ -256,6 +267,7 @@ cargo run -- setup --expires-in-min 43200
 ```
 
 #### `restart` - Recovery and Restart
+
 Restart payment processing and recover missed payments during downtime.
 
 ```bash
@@ -273,6 +285,7 @@ cargo run -- restart --dry-run
 ```
 
 #### `metrics` - Payment Analytics
+
 Display payment metrics for various time windows.
 
 ```bash
@@ -295,6 +308,7 @@ cargo run -- metrics --window 30d --user alice --subscription premium
 Time windows: `10m`, `1h`, `6h`, `12h`, `24h`, `7d`, `30d`
 
 #### `update` - Transaction Details
+
 Get detailed information about a specific transaction update.
 
 ```bash
@@ -305,6 +319,7 @@ cargo run -- update "update-id-12345"
 ### Global Options
 
 #### `--log-level` - Logging Verbosity
+
 Control the logging output level.
 
 ```bash
@@ -320,6 +335,7 @@ cargo run -- --log-level error start
 ### Usage Examples
 
 #### Initial Setup
+
 ```bash
 # Set up environment
 cp .env.example .env
@@ -333,6 +349,7 @@ cargo run -- balance
 ```
 
 #### Daily Operations
+
 ```bash
 # Check user balances
 cargo run -- balance --party "userparty1::..."
@@ -348,6 +365,7 @@ cargo run -- metrics --window 24h
 ```
 
 #### Monitoring and Debugging
+
 ```bash
 # Enable debug logging for troubleshooting
 cargo run -- --log-level debug start --dry-run
@@ -363,6 +381,7 @@ cargo run -- update "txn-update-id"
 ```
 
 #### Recovery After Downtime
+
 ```bash
 # Check pending payments
 cargo run -- restart --dry-run
@@ -409,10 +428,6 @@ cargo run -- test-otel
 - Monitor failed payment attempts for suspicious activity
 - Regularly audit TransferPreapproval configurations
 
-## License
+## Links
 
-[Your License Here]
-
-## Contributing
-
-[Contribution Guidelines]
+https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md#overview
