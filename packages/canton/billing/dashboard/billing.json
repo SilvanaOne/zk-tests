@@ -336,7 +336,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.payment_count'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.payment_count'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -376,7 +376,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.total_amount'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.total_amount'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -416,7 +416,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.success_rate'\n  AND dt BETWEEN now() - INTERVAL 5 MINUTE AND now()",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.success_rate'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -456,7 +456,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_users'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_users'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -496,7 +496,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_subscriptions'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "sql_query": "SELECT\n  maxMerge(value_max) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.active_subscriptions'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -536,7 +536,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.test.metric'\n  AND dt BETWEEN {{start_time}} AND {{end_time}}",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.test.metric'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -576,7 +576,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.failure_count'\n  AND dt BETWEEN now() - INTERVAL 5 MINUTE AND now()",
+          "sql_query": "SELECT\n  avgMerge(value_avg) AS value\nFROM {{source}}\nWHERE name = 'canton.billing.window.24h.failure_count'\n  AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
@@ -616,7 +616,7 @@
       "chart_queries": [
         {
           "query_type": "sql_expression",
-          "sql_query": "WITH rates AS (\n  SELECT avgMerge(value_avg) AS success_rate\n  FROM {{source}}\n  WHERE name = 'canton.billing.window.24h.success_rate'\n    AND dt BETWEEN now() - INTERVAL 5 MINUTE AND now()\n)\nSELECT\n  CASE\n    WHEN success_rate IS NULL THEN 0\n    WHEN success_rate = 0 THEN 100\n    ELSE 100.0 - success_rate\n  END AS value\nFROM rates",
+          "sql_query": "WITH rates AS (\n  SELECT avgMerge(value_avg) AS success_rate\n  FROM {{source}}\n  WHERE name = 'canton.billing.window.24h.success_rate'\n    AND dt BETWEEN now() - INTERVAL 1 MINUTE AND now()\n)\nSELECT\n  CASE\n    WHEN success_rate IS NULL THEN 0\n    WHEN success_rate = 0 THEN 100\n    ELSE 100.0 - success_rate\n  END AS value\nFROM rates",
           "where_condition": null,
           "static_text": null,
           "y_axis": null,
