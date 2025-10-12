@@ -37,19 +37,36 @@ data InsertWitness = InsertWitness with
 
 -- Helper functions for SHA256 verification
 
+-- Convert a single digit to hex character
+toHexDigit : Int -> Text
+toHexDigit d =
+    if d < 10 then show d
+    else if d == 10 then "a"
+    else if d == 11 then "b"
+    else if d == 12 then "c"
+    else if d == 13 then "d"
+    else if d == 14 then "e"
+    else "f"
+
+-- Recursively convert integer to hex string
+toHexRec : Int -> Text -> Text
+toHexRec 0 acc = if T.length acc == 0 then "0" else acc
+toHexRec num acc =
+    let remainder = num % 16
+        quotient = num / 16
+    in toHexRec quotient (toHexDigit remainder <> acc)
+
 -- Convert Int to 8-byte big-endian hex string (16 hex chars)
 -- Pads with zeros on the left to ensure 16 hex chars (8 bytes)
 intToHex8Bytes : Int -> Text
 intToHex8Bytes n =
-    let numText = show n
-        len = T.length numText
-        -- Simple approach: just pad enough zeros. For u64 max value (18446744073709551615)
-        -- we need at most 16 hex chars. Add padding as needed.
-        padding = "0000000000000000"
-        combined = padding <> numText
-        combinedLen = T.length combined
-        -- Take last 16 chars using drop
-    in T.drop (combinedLen - 16) combined
+    let hexText = toHexRec n ""
+        hexLen = T.length hexText
+        -- Pad with zeros to get exactly 16 characters (8 bytes)
+        zerosNeeded = 16 - hexLen
+        padding = if zerosNeeded <= 0 then ""
+                  else T.take zerosNeeded "0000000000000000"
+    in padding <> hexText
 
 -- Hash a leaf: sha256(key || value || next_key)
 hashLeaf : Leaf -> Text
@@ -98,6 +115,20 @@ compareFields a b = compare a b
 isZeroField : Text -> Bool
 isZeroField field = field == "0000000000000000000000000000000000000000000000000000000000000000"
 
+-- Helper function to check all characters in a hex string are valid
+checkAllHexChars : Text -> Int -> Int -> Bool
+checkAllHexChars hexStr i len =
+    if i >= len then True
+    else
+        let char = T.take 1 (T.drop i hexStr)
+        in (char >= "0" && char <= "9" || char >= "a" && char <= "f") && checkAllHexChars hexStr (i + 1) len
+
+-- Validate hex string is exactly 64 lowercase hex characters (32 bytes)
+isValidHex32 : Text -> Bool
+isValidHex32 hexStr =
+    let len = T.length hexStr
+    in len == 64 && checkAllHexChars hexStr 0 len
+
 -- Helper function for iterative hashing (for Sha256n choice)
 -- Recursively hashes: hash_i+1 = sha256(hash_i <> args)
 hashNTimes : Int -> Text -> Text -> Text
@@ -109,12 +140,55 @@ hashNTimes n currentHash args =
 -- Verify insert witness (implements all 8 constraints from ProvableIndexedMerkleMap::insert)
 verifyInsertWitness : InsertWitness -> Bool
 verifyInsertWitness witness =
-    -- CONSTRAINT 1: Verify append-only (new leaf index must equal tree length)
-    let appendOnlyCheck = witness.newLeafIndex == witness.treeLength
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 witness.oldRoot &&
+            isValidHex32 witness.newRoot &&
+            isValidHex32 witness.key &&
+            isValidHex32 witness.value &&
+            isValidHex32 witness.lowLeaf.key &&
+            isValidHex32 witness.lowLeaf.value &&
+            isValidHex32 witness.lowLeaf.nextKey &&
+            isValidHex32 witness.updatedLowLeaf.key &&
+            isValidHex32 witness.updatedLowLeaf.value &&
+            isValidHex32 witness.updatedLowLeaf.nextKey &&
+            isValidHex32 witness.newLeaf.key &&
+            isValidHex32 witness.newLeaf.value &&
+            isValidHex32 witness.newLeaf.nextKey &&
+            all isValidHex32 witness.lowLeafProof.siblings &&
+            all isValidHex32 witness.newLeafProofAfter.siblings
 
-    -- CONSTRAINT 2: Verify path-index consistency
+    -- SANITY CHECKS: Validate proof structure
+        lowProofSiblingsLen = length witness.lowLeafProof.siblings
+        lowProofIndicesLen = length witness.lowLeafProof.pathIndices
+        newProofSiblingsLen = length witness.newLeafProofAfter.siblings
+        newProofIndicesLen = length witness.newLeafProofAfter.pathIndices
+
+        -- Check proof lengths match
+        proofLengthCheck =
+            lowProofSiblingsLen == lowProofIndicesLen &&
+            newProofSiblingsLen == newProofIndicesLen
+
+        -- Check proofs are non-empty and within bounds (1-32 for tree height)
+        proofBoundsCheck =
+            lowProofSiblingsLen >= 1 && lowProofSiblingsLen <= 32 &&
+            newProofSiblingsLen >= 1 && newProofSiblingsLen <= 32
+
+        -- Compute indices once for reuse
         lowIdx = pathIndicesToIndex witness.lowLeafProof.pathIndices
         newIdx = pathIndicesToIndex witness.newLeafProofAfter.pathIndices
+
+        -- Index bounds checks
+        indexBoundsCheck =
+            witness.treeLength >= 1 &&  -- Tree must have at least sentinel leaf
+            lowIdx >= 0 && lowIdx < witness.treeLength &&  -- Low leaf must be within tree
+            witness.newLeafIndex >= 0 &&  -- New leaf index must be non-negative
+            witness.newLeafIndex == witness.treeLength  -- Must be append-only
+
+    -- CONSTRAINT 1: Verify append-only (new leaf index must equal tree length)
+        appendOnlyCheck = witness.newLeafIndex == witness.treeLength
+
+    -- CONSTRAINT 2: Verify path-index consistency
         pathConsistencyCheck = lowIdx == witness.lowLeaf.index && newIdx == witness.newLeafIndex
 
     -- CONSTRAINT 3: Verify non-membership (key doesn't exist in old tree)
@@ -148,7 +222,8 @@ verifyInsertWitness witness =
         computedNewRoot = combineRootWithLength newLeafInternalRoot (witness.treeLength + 1)
         finalRootCheck = computedNewRoot == witness.newRoot
 
-    in appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && indexBoundsCheck &&
+       appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
        keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck
 
 template Hash
