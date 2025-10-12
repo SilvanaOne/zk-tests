@@ -1,0 +1,16 @@
+module Hash where
+
+type HashId = ContractId Hash
+
+template Hash
+  with
+    owner : Party
+    add_result : Int
+  where
+    signatory owner
+    choice Add : HashId
+      with
+        numbers : [Int]
+      controller owner
+      do create this with
+           add_result = sum numbers
