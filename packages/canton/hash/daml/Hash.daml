@@ -58,6 +58,15 @@ data MembershipProof = MembershipProof with
     leafProof : MerkleProof -- Merkle proof for the leaf
   deriving (Eq, Show)
 
+-- Proof of non-membership in indexed merkle map
+data NonMembershipProof = NonMembershipProof with
+    root : Text            -- Current root to verify against
+    key : Text             -- Key to prove non-membership
+    treeLength : Int       -- Tree length for root computation
+    lowLeaf : Leaf         -- Low leaf (largest key < query key)
+    lowLeafProof : MerkleProof -- Merkle proof for the low leaf
+  deriving (Eq, Show)
+
 -- Helper functions for SHA256 verification
 
 -- Convert a single digit to hex character
@@ -425,6 +434,60 @@ verifyMembershipProof proof =
        treeCapacityCheck && indexBoundsCheck && pathIndexConsistencyCheck &&
        leafMatchCheck && rootCheck
 
+-- Verify non-membership proof for indexed merkle map
+-- Uses "low leaf" concept: proves key doesn't exist by showing the largest key < query key
+verifyNonMembershipProof : NonMembershipProof -> Bool
+verifyNonMembershipProof proof =
+    -- HEX FORMAT VALIDATION (defense-in-depth)
+    let hexFieldsValid =
+            isValidHex32 proof.root &&
+            isValidHex32 proof.key &&
+            isValidHex32 proof.lowLeaf.key &&
+            isValidHex32 proof.lowLeaf.value &&
+            isValidHex32 proof.lowLeaf.nextKey &&
+            all isValidHex32 proof.lowLeafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length proof.lowLeafProof.siblings
+        proofPathIndicesLen = length proof.lowLeafProof.pathIndices
+        proofLengthCheck = proofSiblingsLen == proofPathIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree
+
+    -- TREE CAPACITY CHECK (max 2^31 for height 32)
+        treeCapacityCheck =
+            proof.treeLength > 0 &&
+            proof.treeLength <= 2147483648
+
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            proof.lowLeaf.index >= 0 &&
+            proof.lowLeaf.index < proof.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex proof.lowLeafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == proof.lowLeaf.index
+
+    -- KEY ORDERING VERIFICATION (CRITICAL for non-membership)
+    -- Verify: lowLeaf.key < query_key
+        keyOrderingCheck = proof.lowLeaf.key < proof.key
+
+    -- NEXT KEY ORDERING (if lowLeaf.next_key != 0, then query_key < lowLeaf.next_key)
+    -- This proves the query key would fall in the gap between lowLeaf.key and lowLeaf.next_key
+        nextKeyCheck =
+            if proof.lowLeaf.nextKey == "0000000000000000000000000000000000000000000000000000000000000000"
+            then True  -- No upper bound (low leaf is rightmost in sorted order)
+            else proof.key < proof.lowLeaf.nextKey
+
+    -- ROOT VERIFICATION: Verify low leaf exists in tree via merkle proof
+        lowLeafHash = hashLeaf proof.lowLeaf
+        lowLeafInternalRoot = computeRoot lowLeafHash proof.lowLeafProof
+        computedRoot = combineRootWithLength lowLeafInternalRoot proof.treeLength
+        rootCheck = computedRoot == proof.root
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck &&
+       treeCapacityCheck && indexBoundsCheck && pathIndexConsistencyCheck &&
+       keyOrderingCheck && nextKeyCheck && rootCheck
+
 template Hash
   with
     owner : Party
@@ -535,5 +598,24 @@ template Hash
         -- Verify the membership proof
         let isValid = verifyMembershipProof proof
         assertMsg "Membership proof verification failed" isValid
+
+        return isValid
+
+    nonconsuming choice VerifyExclusion : Bool
+      with
+        proof : NonMembershipProof
+        requester : Party
+      controller requester
+      do
+        -- Verify proof root matches current contract state
+        let currentRoot = case this.root of
+              Some r -> r
+              None -> error "Root not initialized"
+
+        assertMsg "Proof root does not match current state" (proof.root == currentRoot)
+
+        -- Verify the non-membership proof
+        let isValid = verifyNonMembershipProof proof
+        assertMsg "Non-membership proof verification failed" isValid
 
         return isValid
