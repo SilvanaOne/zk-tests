@@ -5,6 +5,7 @@ mod keccak;
 mod merkle;
 mod root;
 mod sha256;
+mod sha256n;
 mod url;
 
 use anyhow::Result;
@@ -34,6 +35,14 @@ enum Commands {
     Sha256 {
         /// Array of integers to hash (will be converted to hex)
         numbers: Vec<i64>,
+    },
+    /// Compute SHA256 hash n times iteratively
+    Sha256n {
+        /// Array of integers to hash (will be converted to hex)
+        numbers: Vec<i64>,
+        /// Number of iterations
+        #[arg(short, long)]
+        count: i64,
     },
     /// Calculate indexed merkle map root from key:value pairs
     Root {
@@ -65,6 +74,7 @@ async fn main() -> Result<()> {
         Commands::Add { numbers } => add::handle_add(numbers).await?,
         Commands::Keccak { numbers } => keccak::handle_keccak(numbers).await?,
         Commands::Sha256 { numbers } => sha256::handle_sha256(numbers).await?,
+        Commands::Sha256n { numbers, count } => sha256n::handle_sha256n(numbers, count).await?,
         Commands::Root { pairs } => root::handle_root(pairs).await?,
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
     }

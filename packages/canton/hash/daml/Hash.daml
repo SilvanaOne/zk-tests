@@ -98,6 +98,14 @@ compareFields a b = compare a b
 isZeroField : Text -> Bool
 isZeroField field = field == "0000000000000000000000000000000000000000000000000000000000000000"
 
+-- Helper function for iterative hashing (for Sha256n choice)
+-- Recursively hashes: hash_i+1 = sha256(hash_i <> args)
+hashNTimes : Int -> Text -> Text -> Text
+hashNTimes 0 currentHash _ = currentHash
+hashNTimes n currentHash args =
+    let nextHash = Crypto.sha256 (currentHash <> args)
+    in hashNTimes (n - 1) nextHash args
+
 -- Verify insert witness (implements all 8 constraints from ProvableIndexedMerkleMap::insert)
 verifyInsertWitness : InsertWitness -> Bool
 verifyInsertWitness witness =
@@ -178,6 +186,24 @@ template Hash
         let hash = Crypto.sha256 concatenated
         create this with
           sha256_result = Some hash
+
+    choice Sha256n : HashId
+      with
+        hexStrings : [Text]
+        count : Int
+      controller owner
+      do
+        -- Iteratively hash n times
+        -- hash1 = sha256(hexStrings)
+        -- hash2 = sha256(hash1 <> hexStrings)
+        -- ... n times
+        let concatenated = mconcat hexStrings
+            initialHash = Crypto.sha256 concatenated
+            finalHash = if count <= 1
+                        then initialHash
+                        else hashNTimes (count - 1) initialHash concatenated
+        create this with
+          sha256_result = Some finalHash
 
     choice AddMapElement : HashId
       with
