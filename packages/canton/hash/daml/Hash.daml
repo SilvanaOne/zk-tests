@@ -494,7 +494,8 @@ template Hash
     add_result : Int
     keccak_result : Optional Text
     sha256_result : Optional Text
-    root : Optional Text  -- hex-encoded merkle map root
+    root : Optional Text        -- hex-encoded merkle map root
+    root_time : Optional Time   -- timestamp when root was last updated
   where
     signatory owner
     choice Add : HashId
@@ -547,6 +548,9 @@ template Hash
         witness : InsertWitness
       controller owner
       do
+        -- Get ledger effective time
+        currentTime <- getTime
+
         -- Verify old root matches current state
         let currentRoot = case this.root of
               Some r -> r
@@ -558,15 +562,19 @@ template Hash
         -- Cryptographically verify the insert witness
         assertMsg "Insert witness verification failed" (verifyInsertWitness witness)
 
-        -- Update state with new root
+        -- Update state with new root and timestamp
         create this with
           root = Some witness.newRoot
+          root_time = Some currentTime
 
     choice UpdateMapElement : HashId
       with
         witness : UpdateWitness
       controller owner
       do
+        -- Get ledger effective time
+        currentTime <- getTime
+
         -- Verify old root matches current state
         let currentRoot = case this.root of
               Some r -> r
@@ -578,9 +586,10 @@ template Hash
         -- Cryptographically verify the update witness
         assertMsg "Update witness verification failed" (verifyUpdateWitness witness)
 
-        -- Update state with new root
+        -- Update state with new root and timestamp
         create this with
           root = Some witness.newRoot
+          root_time = Some currentTime
 
     nonconsuming choice VerifyInclusion : Bool
       with
