@@ -1,6 +1,6 @@
 module Hash where
 
-import DA.Crypto.Text (keccak256, toHex)
+import DA.Crypto.Text (keccak256, sha256, toHex)
 
 type HashId = ContractId Hash
 
@@ -9,6 +9,7 @@ template Hash
     owner : Party
     add_result : Int
     keccak_result : Optional Text
+    sha256_result : Optional Text
   where
     signatory owner
     choice Add : HashId
@@ -27,3 +28,13 @@ template Hash
         let hash = keccak256 concatenated
         create this with
           keccak_result = Some hash
+
+    choice Sha256 : HashId
+      with
+        hexStrings : [Text]
+      controller owner
+      do
+        let concatenated = mconcat hexStrings
+        let hash = sha256 concatenated
+        create this with
+          sha256_result = Some hash

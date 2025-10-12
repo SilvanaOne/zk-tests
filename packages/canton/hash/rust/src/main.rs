@@ -1,6 +1,7 @@
 mod add;
 mod contract;
 mod keccak;
+mod sha256;
 mod url;
 
 use anyhow::Result;
@@ -8,7 +9,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "hash")]
-#[command(about = "Hash contract CLI - Add integers and compute Keccak256 using Daml contract", version)]
+#[command(about = "Hash contract CLI - Add integers and compute hashes using Daml contract", version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -23,6 +24,11 @@ enum Commands {
     },
     /// Compute Keccak256 hash of hex-encoded integers
     Keccak {
+        /// Array of integers to hash (will be converted to hex)
+        numbers: Vec<i64>,
+    },
+    /// Compute SHA256 hash of hex-encoded integers
+    Sha256 {
         /// Array of integers to hash (will be converted to hex)
         numbers: Vec<i64>,
     },
@@ -43,6 +49,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Add { numbers } => add::handle_add(numbers).await?,
         Commands::Keccak { numbers } => keccak::handle_keccak(numbers).await?,
+        Commands::Sha256 { numbers } => sha256::handle_sha256(numbers).await?,
     }
 
     Ok(())

@@ -18,7 +18,8 @@ pub async fn create_hash_contract(
                 "createArguments": {
                     "owner": party_app_user,
                     "add_result": 0,
-                    "keccak_result": null
+                    "keccak_result": null,
+                    "sha256_result": null
                 }
             }
         }],
