@@ -1,4 +1,5 @@
 mod add;
+mod addmapelement;
 mod contract;
 mod keccak;
 mod merkle;
@@ -39,6 +40,13 @@ enum Commands {
         /// Array of key:value pairs (e.g., "1:20" "3:45" "67:5685")
         pairs: Vec<String>,
     },
+    /// Add an element to the indexed merkle map in Daml contract
+    AddMapElement {
+        /// Key to insert
+        key: i64,
+        /// Value to insert
+        value: i64,
+    },
 }
 
 #[tokio::main]
@@ -58,6 +66,7 @@ async fn main() -> Result<()> {
         Commands::Keccak { numbers } => keccak::handle_keccak(numbers).await?,
         Commands::Sha256 { numbers } => sha256::handle_sha256(numbers).await?,
         Commands::Root { pairs } => root::handle_root(pairs).await?,
+        Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
     }
 
     Ok(())

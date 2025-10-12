@@ -1,8 +1,141 @@
 module Hash where
 
-import DA.Crypto.Text (keccak256, sha256, toHex)
+import DA.Crypto.Text (keccak256, toHex)
+import qualified DA.Crypto.Text as Crypto
+import qualified DA.Text as T
+import DA.List (foldl)
 
 type HashId = ContractId Hash
+
+-- Data structures for IndexedMerkleMap witness verification
+
+data Leaf = Leaf with
+    key : Text        -- hex-encoded Field (32 bytes, 64 hex chars)
+    value : Text      -- hex-encoded Field (32 bytes, 64 hex chars)
+    nextKey : Text    -- hex-encoded Field (32 bytes, 64 hex chars)
+    index : Int
+  deriving (Eq, Show)
+
+data MerkleProof = MerkleProof with
+    siblings : [Text]      -- list of hex-encoded hashes (32 bytes each)
+    pathIndices : [Bool]   -- true = right, false = left
+  deriving (Eq, Show)
+
+data InsertWitness = InsertWitness with
+    oldRoot : Text
+    newRoot : Text
+    key : Text
+    value : Text
+    newLeafIndex : Int
+    treeLength : Int
+    lowLeaf : Leaf
+    lowLeafProof : MerkleProof
+    updatedLowLeaf : Leaf
+    newLeaf : Leaf
+    newLeafProofAfter : MerkleProof
+  deriving (Eq, Show)
+
+-- Helper functions for SHA256 verification
+
+-- Convert Int to 8-byte big-endian hex string (16 hex chars)
+-- Pads with zeros on the left to ensure 16 hex chars (8 bytes)
+intToHex8Bytes : Int -> Text
+intToHex8Bytes n =
+    let numText = show n
+        len = T.length numText
+        -- Simple approach: just pad enough zeros. For u64 max value (18446744073709551615)
+        -- we need at most 16 hex chars. Add padding as needed.
+        padding = "0000000000000000"
+        combined = padding <> numText
+        combinedLen = T.length combined
+        -- Take last 16 chars using drop
+    in T.drop (combinedLen - 16) combined
+
+-- Hash a leaf: sha256(key || value || next_key)
+hashLeaf : Leaf -> Text
+hashLeaf leaf =
+    Crypto.sha256 (leaf.key <> leaf.value <> leaf.nextKey)
+
+-- Hash two hashes together: sha256(left || right)
+hashPair : Text -> Text -> Text
+hashPair left right =
+    Crypto.sha256 (left <> right)
+
+-- Compute merkle root from leaf hash and proof
+computeRoot : Text -> MerkleProof -> Text
+computeRoot leafHash proof =
+    foldl (\current (sibling, isRight) ->
+        if isRight
+        then hashPair sibling current  -- current is right child
+        else hashPair current sibling  -- current is left child
+    ) leafHash (zip proof.siblings proof.pathIndices)
+
+-- Combine internal root with length to create final root
+combineRootWithLength : Text -> Int -> Text
+combineRootWithLength internalRoot length =
+    let lengthHex = intToHex8Bytes length
+    in Crypto.sha256 (internalRoot <> lengthHex)
+
+-- Convert path indices (bits) to leaf index
+pathIndicesToIndex : [Bool] -> Int
+pathIndicesToIndex bits =
+    let indexed = zip [0..] bits
+        addBit acc (level, isRight) = if isRight then acc + (2 ^ level) else acc
+    in foldl addBit 0 indexed
+
+-- Compare two hex-encoded Field values (32 bytes)
+-- Returns: LT if a < b, EQ if a == b, GT if a > b
+compareFields : Text -> Text -> Ordering
+compareFields a b = compare a b
+
+-- Check if field is zero (all zeros)
+isZeroField : Text -> Bool
+isZeroField field = field == "0000000000000000000000000000000000000000000000000000000000000000"
+
+-- Verify insert witness (implements all 8 constraints from ProvableIndexedMerkleMap::insert)
+verifyInsertWitness : InsertWitness -> Bool
+verifyInsertWitness witness =
+    -- CONSTRAINT 1: Verify append-only (new leaf index must equal tree length)
+    let appendOnlyCheck = witness.newLeafIndex == witness.treeLength
+
+    -- CONSTRAINT 2: Verify path-index consistency
+        lowIdx = pathIndicesToIndex witness.lowLeafProof.pathIndices
+        newIdx = pathIndicesToIndex witness.newLeafProofAfter.pathIndices
+        pathConsistencyCheck = lowIdx == witness.lowLeaf.index && newIdx == witness.newLeafIndex
+
+    -- CONSTRAINT 3: Verify non-membership (key doesn't exist in old tree)
+        lowLeafHash = hashLeaf witness.lowLeaf
+        lowLeafInternalRoot = computeRoot lowLeafHash witness.lowLeafProof
+        lowLeafRoot = combineRootWithLength lowLeafInternalRoot witness.treeLength
+        nonMembershipProofCheck = lowLeafRoot == witness.oldRoot
+
+    -- CONSTRAINT 4: Verify key ordering (low_leaf.key < new_key < low_leaf.next_key)
+        keyOrderingCheck =
+            compareFields witness.lowLeaf.key witness.key == LT &&
+            (isZeroField witness.lowLeaf.nextKey || compareFields witness.key witness.lowLeaf.nextKey == LT)
+
+    -- CONSTRAINT 5: Verify updated low leaf structure
+        updatedLowLeafCheck =
+            witness.updatedLowLeaf.key == witness.lowLeaf.key &&
+            witness.updatedLowLeaf.value == witness.lowLeaf.value &&
+            witness.updatedLowLeaf.index == witness.lowLeaf.index &&
+            witness.updatedLowLeaf.nextKey == witness.key
+
+    -- CONSTRAINT 6: Verify new leaf structure
+        newLeafCheck =
+            witness.newLeaf.key == witness.key &&
+            witness.newLeaf.value == witness.value &&
+            witness.newLeaf.nextKey == witness.lowLeaf.nextKey &&
+            witness.newLeaf.index == witness.newLeafIndex
+
+    -- CONSTRAINT 7 & 8: Verify final root computation
+        newLeafHash = hashLeaf witness.newLeaf
+        newLeafInternalRoot = computeRoot newLeafHash witness.newLeafProofAfter
+        computedNewRoot = combineRootWithLength newLeafInternalRoot (witness.treeLength + 1)
+        finalRootCheck = computedNewRoot == witness.newRoot
+
+    in appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
+       keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck
 
 template Hash
   with
@@ -10,6 +143,7 @@ template Hash
     add_result : Int
     keccak_result : Optional Text
     sha256_result : Optional Text
+    root : Optional Text  -- hex-encoded merkle map root
   where
     signatory owner
     choice Add : HashId
@@ -35,6 +169,26 @@ template Hash
       controller owner
       do
         let concatenated = mconcat hexStrings
-        let hash = sha256 concatenated
+        let hash = Crypto.sha256 concatenated
         create this with
           sha256_result = Some hash
+
+    choice AddMapElement : HashId
+      with
+        witness : InsertWitness
+      controller owner
+      do
+        -- Verify old root matches current state
+        let currentRoot = case this.root of
+              Some r -> r
+              None -> error "Root not initialized"
+
+        -- Check old root matches
+        assertMsg "Old root does not match current state" (witness.oldRoot == currentRoot)
+
+        -- Cryptographically verify the insert witness
+        assertMsg "Insert witness verification failed" (verifyInsertWitness witness)
+
+        -- Update state with new root
+        create this with
+          root = Some witness.newRoot

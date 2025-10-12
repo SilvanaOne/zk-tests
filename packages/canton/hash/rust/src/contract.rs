@@ -19,7 +19,8 @@ pub async fn create_hash_contract(
                     "owner": party_app_user,
                     "add_result": 0,
                     "keccak_result": null,
-                    "sha256_result": null
+                    "sha256_result": null,
+                    "root": "57ab3d49ec686be0a80697a09ac3b6fc936968c642df844eee5f5c1d9b89a714"
                 }
             }
         }],
