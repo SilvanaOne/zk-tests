@@ -1,6 +1,8 @@
 mod add;
 mod contract;
 mod keccak;
+mod merkle;
+mod root;
 mod sha256;
 mod url;
 
@@ -32,6 +34,11 @@ enum Commands {
         /// Array of integers to hash (will be converted to hex)
         numbers: Vec<i64>,
     },
+    /// Calculate indexed merkle map root from key:value pairs
+    Root {
+        /// Array of key:value pairs (e.g., "1:20" "3:45" "67:5685")
+        pairs: Vec<String>,
+    },
 }
 
 #[tokio::main]
@@ -50,6 +57,7 @@ async fn main() -> Result<()> {
         Commands::Add { numbers } => add::handle_add(numbers).await?,
         Commands::Keccak { numbers } => keccak::handle_keccak(numbers).await?,
         Commands::Sha256 { numbers } => sha256::handle_sha256(numbers).await?,
+        Commands::Root { pairs } => root::handle_root(pairs).await?,
     }
 
     Ok(())

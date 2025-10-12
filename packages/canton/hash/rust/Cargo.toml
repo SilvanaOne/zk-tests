@@ -15,6 +15,8 @@ serde_json = "1"
 sha2 = "0.10.9"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+indexed-merkle-map = { git = "https://github.com/SilvanaOne/silvana.git", package = "indexed-merkle-map" }
+crypto-bigint = "=0.5.5"
 tonic = { version = "0.12", features = ["tls", "tls-webpki-roots"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
