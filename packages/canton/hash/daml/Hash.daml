@@ -331,6 +331,15 @@ verifyUpdateWitness witness =
             witness.treeLength > 0 &&
             witness.treeLength <= 2147483648
 
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            witness.oldLeaf.index >= 0 &&
+            witness.oldLeaf.index < witness.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex witness.oldLeafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == witness.oldLeaf.index
+
     -- CONSTRAINT 1: Verify membership proof (key exists with old value in old tree)
         oldLeafHash = hashLeaf witness.oldLeaf
         oldLeafInternalRoot = computeRoot oldLeafHash witness.oldLeafProof
@@ -354,6 +363,7 @@ verifyUpdateWitness witness =
         finalRootCheck = computedNewRoot == witness.newRoot
 
     in hexFieldsValid && proofLengthCheck && proofBoundsCheck && treeCapacityCheck &&
+       indexBoundsCheck && pathIndexConsistencyCheck &&
        membershipProofCheck && updatedLeafCheck && finalRootCheck
 
 template Hash

@@ -3,7 +3,7 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v1-0.0.16.dar
+DAR := .daml/dist/hash-v1-0.0.17.dar
 
 .PHONY: help build clean upload parties updates get-update inspect
 
@@ -127,4 +127,4 @@ get-update:
 # Inspect DAR package ID
 inspect:
 	@echo "Inspecting DAR: $(DAR)"
-	@daml damlc inspect-dar $(DAR) | grep "hash-v1-0.0.16" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
+	@daml damlc inspect-dar $(DAR) | grep "hash-v1-0.0.17" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
