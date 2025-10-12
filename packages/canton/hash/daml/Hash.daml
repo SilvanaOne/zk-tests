@@ -77,11 +77,17 @@ combineRootWithLength internalRoot length =
     in Crypto.sha256 (internalRoot <> lengthHex)
 
 -- Convert path indices (bits) to leaf index
+-- Uses iterative doubling instead of power operations for efficiency
+-- Simulates bit shifting: result |= (bit << position)
 pathIndicesToIndex : [Bool] -> Int
 pathIndicesToIndex bits =
-    let indexed = zip [0..] bits
-        addBit acc (level, isRight) = if isRight then acc + (2 ^ level) else acc
-    in foldl addBit 0 indexed
+    let -- Process bits with position and power-of-2 value computed iteratively
+        addBit (idx, powerOf2) isRight =
+            let newIdx = if isRight then idx + powerOf2 else idx
+                newPower = powerOf2 * 2
+            in (newIdx, newPower)
+        (finalIdx, _) = foldl addBit (0, 1) bits
+    in finalIdx
 
 -- Compare two hex-encoded Field values (32 bytes)
 -- Returns: LT if a < b, EQ if a == b, GT if a > b
