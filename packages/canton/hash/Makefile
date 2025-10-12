@@ -3,9 +3,9 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v1-0.0.1.dar
+DAR := .daml/dist/hash-v1-0.0.2.dar
 
-.PHONY: help build clean upload parties updates get-update
+.PHONY: help build clean upload parties updates get-update inspect
 
 help:
 	@echo "Hash - Helper Commands"
@@ -19,6 +19,7 @@ help:
 	@echo "  make help          - Show this help"
 	@echo "  make build         - Build the hash DAR"
 	@echo "  make clean         - Remove build artifacts"
+	@echo "  make inspect       - Show DAR package ID"
 	@echo ""
 	@echo "Package Management:"
 	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to app-user node"
@@ -122,3 +123,8 @@ get-update:
 		-X POST $(APP_USER_API_URL)v2/updates/update-by-id \
 		-d '{"actAs": ["$(PARTY_APP_USER)"], "updateId": "$(UPDATE_ID)", "updateFormat": {"includeTransactions": {"eventFormat": {"filtersByParty": {"$(PARTY_APP_USER)": {}}, "verbose": true}, "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"}}}'); \
 	echo "$$RESP" | jq '.' 2>/dev/null || echo "$$RESP"
+
+# Inspect DAR package ID
+inspect:
+	@echo "Inspecting DAR: $(DAR)"
+	@daml damlc inspect-dar $(DAR) | grep "hash-v1-0.0.2" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'

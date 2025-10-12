@@ -1,11 +1,14 @@
 module Hash where
 
+import DA.Crypto.Text (keccak256, toHex)
+
 type HashId = ContractId Hash
 
 template Hash
   with
     owner : Party
     add_result : Int
+    keccak_result : Optional Text
   where
     signatory owner
     choice Add : HashId
@@ -14,3 +17,13 @@ template Hash
       controller owner
       do create this with
            add_result = sum numbers
+
+    choice Keccak : HashId
+      with
+        hexStrings : [Text]
+      controller owner
+      do
+        let concatenated = mconcat hexStrings
+        let hash = keccak256 concatenated
+        create this with
+          keccak_result = Some hash
