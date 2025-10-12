@@ -137,6 +137,40 @@ hashNTimes n currentHash args =
     let nextHash = Crypto.sha256 (currentHash <> args)
     in hashNTimes (n - 1) nextHash args
 
+-- Find the level where two merkle paths diverge (Lowest Common Ancestor)
+-- Returns the level index where paths first differ
+findLCALevelRec : [Bool] -> [Bool] -> Int -> Int
+findLCALevelRec [] [] level = level
+findLCALevelRec (p1::rest1) (p2::rest2) level =
+    if p1 == p2
+    then findLCALevelRec rest1 rest2 (level + 1)
+    else level
+findLCALevelRec _ _ level = level
+
+findLCALevel : [Bool] -> [Bool] -> Int
+findLCALevel path1 path2 = findLCALevelRec path1 path2 0
+
+-- Get nth element from a list (0-indexed), returns zero hash if out of bounds
+getNth : Int -> [Text] -> Text
+getNth 0 (x::_) = x
+getNth n (_::xs) = getNth (n - 1) xs
+getNth _ [] = "0000000000000000000000000000000000000000000000000000000000000000"
+
+-- Hash from a leaf up the tree to a specific level
+-- Used for LCA anchor check
+hashUpToLevelRec : Text -> [Text] -> [Bool] -> Int -> Int -> Text
+hashUpToLevelRec currentHash _ _ level targetLevel | level >= targetLevel = currentHash
+hashUpToLevelRec currentHash (sib::sibs) (isRight::paths) level targetLevel =
+    let nextHash = if isRight
+                   then hashPair sib currentHash  -- current is right child
+                   else hashPair currentHash sib  -- current is left child
+    in hashUpToLevelRec nextHash sibs paths (level + 1) targetLevel
+hashUpToLevelRec currentHash _ _ _ _ = currentHash
+
+hashUpToLevel : Text -> [Text] -> [Bool] -> Int -> Text
+hashUpToLevel leafHash siblings pathIndices targetLevel =
+    hashUpToLevelRec leafHash siblings pathIndices 0 targetLevel
+
 -- Verify insert witness (implements all 8 constraints from ProvableIndexedMerkleMap::insert)
 verifyInsertWitness : InsertWitness -> Bool
 verifyInsertWitness witness =
@@ -169,10 +203,18 @@ verifyInsertWitness witness =
             lowProofSiblingsLen == lowProofIndicesLen &&
             newProofSiblingsLen == newProofIndicesLen
 
-        -- Check proofs are non-empty and within bounds (1-32 for tree height)
+        -- FIXED HEIGHT CHECK: Enforce exactly 31 siblings (height 32 tree = 31 proof levels)
+        -- Rust implementation always generates exactly 31 siblings for all proofs
         proofBoundsCheck =
-            lowProofSiblingsLen >= 1 && lowProofSiblingsLen <= 32 &&
-            newProofSiblingsLen >= 1 && newProofSiblingsLen <= 32
+            lowProofSiblingsLen == 31 &&
+            newProofSiblingsLen == 31
+
+        -- TREE CAPACITY CHECK: Verify tree can hold the claimed number of leaves
+        -- Height 31 proofs can hold up to 2^31 = 2,147,483,648 leaves
+        treeCapacityCheck =
+            witness.treeLength > 0 &&
+            witness.treeLength <= 2147483648 &&
+            witness.treeLength + 1 <= 2147483648
 
         -- Compute indices once for reuse
         lowIdx = pathIndicesToIndex witness.lowLeafProof.pathIndices
@@ -222,9 +264,29 @@ verifyInsertWitness witness =
         computedNewRoot = combineRootWithLength newLeafInternalRoot (witness.treeLength + 1)
         finalRootCheck = computedNewRoot == witness.newRoot
 
-    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && indexBoundsCheck &&
+    -- LCA ANCHOR CHECK (Defense-in-depth): Link updatedLowLeaf path to newLeafProofAfter
+    -- Prevents using unrelated proofs from different trees
+        lcaLevel = findLCALevel witness.lowLeafProof.pathIndices witness.newLeafProofAfter.pathIndices
+
+        -- Hash updatedLowLeaf up to the LCA level along the low leaf path
+        anchorFromUpdatedLowLeaf = hashUpToLevel
+            (hashLeaf witness.updatedLowLeaf)
+            witness.lowLeafProof.siblings
+            witness.lowLeafProof.pathIndices
+            lcaLevel
+
+        -- Extract sibling at LCA level from new leaf proof
+        expectedSiblingAtLCA = getNth lcaLevel witness.newLeafProofAfter.siblings
+
+        -- Verify anchor matches sibling at LCA (only if paths diverge before root)
+        lcaAnchorCheck =
+            if lcaLevel < 31  -- Paths diverge before reaching root
+            then anchorFromUpdatedLowLeaf == expectedSiblingAtLCA
+            else True  -- Paths identical (shouldn't happen in practice, but allow it)
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && treeCapacityCheck && indexBoundsCheck &&
        appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
-       keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck
+       keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck && lcaAnchorCheck
 
 template Hash
   with
