@@ -48,6 +48,16 @@ data UpdateWitness = UpdateWitness with
     updatedLeaf : Leaf
   deriving (Eq, Show)
 
+-- Proof of membership in indexed merkle map
+data MembershipProof = MembershipProof with
+    root : Text            -- Current root to verify against
+    key : Text             -- Key to verify
+    value : Text           -- Value to verify
+    treeLength : Int       -- Tree length for root computation
+    leaf : Leaf            -- Leaf containing key-value
+    leafProof : MerkleProof -- Merkle proof for the leaf
+  deriving (Eq, Show)
+
 -- Helper functions for SHA256 verification
 
 -- Convert a single digit to hex character
@@ -366,6 +376,55 @@ verifyUpdateWitness witness =
        indexBoundsCheck && pathIndexConsistencyCheck &&
        membershipProofCheck && updatedLeafCheck && finalRootCheck
 
+-- Verify membership proof (proves key-value exists in map)
+verifyMembershipProof : MembershipProof -> Bool
+verifyMembershipProof proof =
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 proof.root &&
+            isValidHex32 proof.key &&
+            isValidHex32 proof.value &&
+            isValidHex32 proof.leaf.key &&
+            isValidHex32 proof.leaf.value &&
+            isValidHex32 proof.leaf.nextKey &&
+            all isValidHex32 proof.leafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length proof.leafProof.siblings
+        proofIndicesLen = length proof.leafProof.pathIndices
+
+        proofLengthCheck = proofSiblingsLen == proofIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree = 31 proof levels
+
+    -- TREE CAPACITY CHECK
+        treeCapacityCheck =
+            proof.treeLength > 0 &&
+            proof.treeLength <= 2147483648
+
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            proof.leaf.index >= 0 &&
+            proof.leaf.index < proof.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex proof.leafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == proof.leaf.index
+
+    -- MEMBERSHIP VERIFICATION: Verify leaf contains correct key-value
+        leafMatchCheck =
+            proof.leaf.key == proof.key &&
+            proof.leaf.value == proof.value
+
+    -- ROOT VERIFICATION: Verify merkle proof computes to root
+        leafHash = hashLeaf proof.leaf
+        leafInternalRoot = computeRoot leafHash proof.leafProof
+        computedRoot = combineRootWithLength leafInternalRoot proof.treeLength
+        rootCheck = computedRoot == proof.root
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck &&
+       treeCapacityCheck && indexBoundsCheck && pathIndexConsistencyCheck &&
+       leafMatchCheck && rootCheck
+
 template Hash
   with
     owner : Party
@@ -459,3 +518,22 @@ template Hash
         -- Update state with new root
         create this with
           root = Some witness.newRoot
+
+    nonconsuming choice VerifyInclusion : Bool
+      with
+        proof : MembershipProof
+        requester : Party
+      controller requester
+      do
+        -- Verify proof root matches current contract state
+        let currentRoot = case this.root of
+              Some r -> r
+              None -> error "Root not initialized"
+
+        assertMsg "Proof root does not match current state" (proof.root == currentRoot)
+
+        -- Verify the membership proof
+        let isValid = verifyMembershipProof proof
+        assertMsg "Membership proof verification failed" isValid
+
+        return isValid

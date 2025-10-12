@@ -20,14 +20,13 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     info!("Adding map element: key={}, value={}", key, value);
 
     // Load environment variables
-    let api_url = std::env::var("APP_USER_API_URL")
-        .context("APP_USER_API_URL not set in environment")?;
-    let jwt = std::env::var("APP_USER_JWT")
-        .context("APP_USER_JWT not set in environment")?;
-    let party_app_user = std::env::var("PARTY_APP_USER")
-        .context("PARTY_APP_USER not set in environment")?;
-    let hash_package_id = std::env::var("HASH_PACKAGE_ID")
-        .context("HASH_PACKAGE_ID not set in environment")?;
+    let api_url =
+        std::env::var("APP_USER_API_URL").context("APP_USER_API_URL not set in environment")?;
+    let jwt = std::env::var("APP_USER_JWT").context("APP_USER_JWT not set in environment")?;
+    let party_app_user =
+        std::env::var("PARTY_APP_USER").context("PARTY_APP_USER not set in environment")?;
+    let hash_package_id =
+        std::env::var("HASH_PACKAGE_ID").context("HASH_PACKAGE_ID not set in environment")?;
 
     let template_id = format!("{}:Hash:Hash", hash_package_id);
 
@@ -44,26 +43,30 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     info!("Generating witness for insertion...");
 
     // Generate witness
-    let witness = map.insert_and_generate_witness(key_field, value_field, true)?
+    let witness = map
+        .insert_and_generate_witness(key_field, value_field, true)?
         .ok_or_else(|| anyhow::anyhow!("Failed to generate witness"))?;
 
     info!("Witness generated successfully");
     info!("  Old root: {}", hex::encode(witness.old_root.as_bytes()));
     info!("  New root: {}", hex::encode(witness.new_root.as_bytes()));
 
+    // Get membership proof for inclusion verification (after insertion)
+    info!("Generating membership proof for inclusion verification...");
+    let membership_proof = map
+        .get_membership_proof(&key_field)
+        .ok_or_else(|| anyhow::anyhow!("Failed to get membership proof after insertion"))?;
+
+    // test: membership_proof.leaf.value = Field::from_u32(1000);
     // Convert witness to Daml-compatible JSON format
     let witness_json = convert_witness_to_daml_json(&witness)?;
 
     info!("Creating Hash contract...");
 
     // Create Hash contract
-    let contract_id = contract::create_hash_contract(
-        &client,
-        &api_url,
-        &jwt,
-        &party_app_user,
-        &template_id,
-    ).await?;
+    let contract_id =
+        contract::create_hash_contract(&client, &api_url, &jwt, &party_app_user, &template_id)
+            .await?;
 
     info!("Exercising AddMapElement choice...");
 
@@ -77,16 +80,11 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &contract_id,
         "AddMapElement",
         witness_json,
-    ).await?;
+    )
+    .await?;
 
     // Get and display the update
-    let update = contract::get_update(
-        &client,
-        &api_url,
-        &jwt,
-        &party_app_user,
-        &update_id,
-    ).await?;
+    let update = contract::get_update(&client, &api_url, &jwt, &party_app_user, &update_id).await?;
 
     println!("\n=== AddMapElement Update ===");
     println!("{}", serde_json::to_string_pretty(&update)?);
@@ -98,12 +96,18 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     {
         for event in events {
             if let Some(created) = event.get("CreatedEvent") {
-                if let Some(root) = created.pointer("/createArgument/root").and_then(|v| v.as_str()) {
+                if let Some(root) = created
+                    .pointer("/createArgument/root")
+                    .and_then(|v| v.as_str())
+                {
                     println!("\n=== Result ===");
                     println!("Key: {}", key);
                     println!("Value: {}", value);
                     println!("New root in contract: {}", root);
-                    println!("Expected new root:     {}", hex::encode(witness.new_root.as_bytes()));
+                    println!(
+                        "Expected new root:     {}",
+                        hex::encode(witness.new_root.as_bytes())
+                    );
 
                     if root == hex::encode(witness.new_root.as_bytes()) {
                         println!("✅ Roots match!");
@@ -116,11 +120,57 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         }
     }
 
+    // === PHASE 2: Verify Inclusion with Non-Consuming Choice ===
+    info!("\n=== Verifying Inclusion with VerifyInclusion Choice ===");
+
+    // Extract the new contract ID from the AddMapElement result
+    let new_contract_id = extract_contract_id(&update, &hash_package_id)?;
+    let new_root = hex::encode(witness.new_root.to_bytes());
+    let tree_length = map.next_index(); // tree_length after insertion
+
+    info!("Contract ID: {}", new_contract_id);
+    info!("Current root: {}", new_root);
+    info!("Tree length: {}", tree_length);
+
+    // Convert membership proof to Daml JSON
+    let membership_proof_json = convert_membership_proof_to_daml_json(
+        &membership_proof,
+        &new_root,
+        tree_length,
+        &party_app_user,
+    )?;
+
+    // Exercise VerifyInclusion choice (non-consuming) and get result directly
+    let verify_result = exercise_verify_inclusion(
+        &client,
+        &api_url,
+        &jwt,
+        &party_app_user,
+        &template_id,
+        &new_contract_id,
+        membership_proof_json,
+    )
+    .await?;
+
+    println!("\n=== Inclusion Verification ===");
+    println!("Key: {}", key);
+    println!("Value: {}", value);
+    println!(
+        "Verification result: {}",
+        if verify_result {
+            "✅ VERIFIED IN MAP"
+        } else {
+            "❌ VERIFICATION FAILED"
+        }
+    );
+
     Ok(())
 }
 
 /// Convert IndexedMerkleMap InsertWitness to Daml-compatible JSON format
-fn convert_witness_to_daml_json(witness: &indexed_merkle_map::InsertWitness) -> Result<serde_json::Value> {
+fn convert_witness_to_daml_json(
+    witness: &indexed_merkle_map::InsertWitness,
+) -> Result<serde_json::Value> {
     // Helper to convert Field to 64-char hex string
     let field_to_hex = |f: &Field| {
         let bytes = f.as_bytes();
@@ -128,9 +178,7 @@ fn convert_witness_to_daml_json(witness: &indexed_merkle_map::InsertWitness) -> 
     };
 
     // Helper to convert Hash to 64-char hex string
-    let hash_to_hex = |h: &indexed_merkle_map::Hash| {
-        hex::encode(h.as_bytes())
-    };
+    let hash_to_hex = |h: &indexed_merkle_map::Hash| hex::encode(h.as_bytes());
 
     // Helper to convert Leaf to JSON
     let leaf_to_json = |leaf: &indexed_merkle_map::Leaf| {
@@ -168,4 +216,127 @@ fn convert_witness_to_daml_json(witness: &indexed_merkle_map::InsertWitness) -> 
     });
 
     Ok(witness_json)
+}
+
+/// Extract contract ID from update JSON
+fn extract_contract_id(update_json: &serde_json::Value, package_id: &str) -> Result<String> {
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(&format!("{}:Hash:Hash", package_id)) {
+                        return created
+                            .pointer("/contractId")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                            .ok_or_else(|| anyhow::anyhow!("Contract ID not found"));
+                    }
+                }
+            }
+        }
+    }
+    Err(anyhow::anyhow!("Contract not found in update"))
+}
+
+/// Convert MembershipProof to Daml-compatible JSON format
+fn convert_membership_proof_to_daml_json(
+    proof: &indexed_merkle_map::MembershipProof,
+    root: &str,
+    tree_length: usize,
+    requester: &str,
+) -> Result<serde_json::Value> {
+    let proof_json = json!({
+        "proof": {
+            "root": root,
+            "key": hex::encode(proof.leaf.key.to_bytes()),
+            "value": hex::encode(proof.leaf.value.to_bytes()),
+            "treeLength": tree_length,
+            "leaf": {
+                "key": hex::encode(proof.leaf.key.to_bytes()),
+                "value": hex::encode(proof.leaf.value.to_bytes()),
+                "nextKey": hex::encode(proof.leaf.next_key.to_bytes()),
+                "index": proof.leaf.index
+            },
+            "leafProof": {
+                "siblings": proof.merkle_proof.siblings.iter()
+                    .map(|h| hex::encode(h.to_bytes()))
+                    .collect::<Vec<_>>(),
+                "pathIndices": proof.merkle_proof.path_indices.clone()
+            }
+        },
+        "requester": requester
+    });
+    Ok(proof_json)
+}
+
+/// Exercise VerifyInclusion choice and extract boolean result
+async fn exercise_verify_inclusion(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party_app_user: &str,
+    template_id: &str,
+    contract_id: &str,
+    choice_argument: serde_json::Value,
+) -> Result<bool> {
+    let cmdid = format!("verifyinclusion-hash-{}", chrono::Utc::now().timestamp());
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": contract_id,
+                "choice": "VerifyInclusion",
+                "choiceArgument": choice_argument
+            }
+        }],
+        "commandId": cmdid,
+        "actAs": [party_app_user],
+        "readAs": []
+    });
+
+    info!("Exercising VerifyInclusion choice");
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", api_url))
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to exercise VerifyInclusion choice: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_response: serde_json::Value = serde_json::from_str(&text)?;
+
+    // For non-consuming choices that return Bool, if the choice executed successfully
+    // without throwing an error, it means the assertions passed and the result is implicitly true
+    // The completionOffset indicates the choice was processed
+    if let Some(completion_offset) = json_response
+        .get("completionOffset")
+        .and_then(|v| v.as_i64())
+    {
+        info!(
+            "VerifyInclusion choice completed successfully at offset: {}",
+            completion_offset
+        );
+        // If we got here without an error from the submit-and-wait, the verification passed
+        // (all assertions in the choice succeeded, including verifyMembershipProof)
+        return Ok(true);
+    }
+
+    Err(anyhow::anyhow!(
+        "No completion offset in response - choice may not have completed"
+    ))
 }

@@ -3,7 +3,7 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v1-0.0.17.dar
+DAR := .daml/dist/hash-v1-0.0.18.dar
 
 .PHONY: help build clean upload parties updates get-update inspect
 
@@ -104,7 +104,7 @@ updates:
 		-H "Content-Type: application/json" \
 		-X POST "$(APP_USER_API_URL)v2/updates?limit=100&timeout=5" \
 		-d "$$(jq -nc --arg offset "$$OFFSET" --argjson filter "$$FILTER_JSON" \
-			'{beginExclusive: $$offset, filter: $$filter}')"); \
+			'{beginExclusive: $$offset, filter: $$filter, verbose: true}')"); \
 	echo "$$RESP" | jq '.' 2>/dev/null || echo "$$RESP"
 
 # Get update by ID (POST method)
@@ -127,4 +127,4 @@ get-update:
 # Inspect DAR package ID
 inspect:
 	@echo "Inspecting DAR: $(DAR)"
-	@daml damlc inspect-dar $(DAR) | grep "hash-v1-0.0.17" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
+	@daml damlc inspect-dar $(DAR) | grep "hash-v1-0.0.18" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
