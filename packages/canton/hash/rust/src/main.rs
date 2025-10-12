@@ -6,6 +6,7 @@ mod merkle;
 mod root;
 mod sha256;
 mod sha256n;
+mod updatemapelement;
 mod url;
 
 use anyhow::Result;
@@ -56,6 +57,15 @@ enum Commands {
         /// Value to insert
         value: i64,
     },
+    /// Update an element in the indexed merkle map in Daml contract
+    UpdateMapElement {
+        /// Key to update
+        key: i64,
+        /// Initial value to insert
+        value1: i64,
+        /// New value to update to
+        value2: i64,
+    },
 }
 
 #[tokio::main]
@@ -77,6 +87,7 @@ async fn main() -> Result<()> {
         Commands::Sha256n { numbers, count } => sha256n::handle_sha256n(numbers, count).await?,
         Commands::Root { pairs } => root::handle_root(pairs).await?,
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
+        Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
     }
 
     Ok(())

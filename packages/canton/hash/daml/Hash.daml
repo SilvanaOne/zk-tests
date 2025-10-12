@@ -35,6 +35,19 @@ data InsertWitness = InsertWitness with
     newLeafProofAfter : MerkleProof
   deriving (Eq, Show)
 
+-- Witness for updating existing key-value pair
+data UpdateWitness = UpdateWitness with
+    oldRoot : Text
+    newRoot : Text
+    key : Text
+    oldValue : Text
+    newValue : Text
+    treeLength : Int
+    oldLeaf : Leaf              -- From membership proof
+    oldLeafProof : MerkleProof  -- From membership proof
+    updatedLeaf : Leaf
+  deriving (Eq, Show)
+
 -- Helper functions for SHA256 verification
 
 -- Convert a single digit to hex character
@@ -288,6 +301,61 @@ verifyInsertWitness witness =
        appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
        keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck && lcaAnchorCheck
 
+-- Verify update witness (3 constraints from ProvableIndexedMerkleMap::update)
+verifyUpdateWitness : UpdateWitness -> Bool
+verifyUpdateWitness witness =
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 witness.oldRoot &&
+            isValidHex32 witness.newRoot &&
+            isValidHex32 witness.key &&
+            isValidHex32 witness.oldValue &&
+            isValidHex32 witness.newValue &&
+            isValidHex32 witness.oldLeaf.key &&
+            isValidHex32 witness.oldLeaf.value &&
+            isValidHex32 witness.oldLeaf.nextKey &&
+            isValidHex32 witness.updatedLeaf.key &&
+            isValidHex32 witness.updatedLeaf.value &&
+            isValidHex32 witness.updatedLeaf.nextKey &&
+            all isValidHex32 witness.oldLeafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length witness.oldLeafProof.siblings
+        proofIndicesLen = length witness.oldLeafProof.pathIndices
+
+        proofLengthCheck = proofSiblingsLen == proofIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree = 31 proof levels
+
+    -- TREE CAPACITY CHECK
+        treeCapacityCheck =
+            witness.treeLength > 0 &&
+            witness.treeLength <= 2147483648
+
+    -- CONSTRAINT 1: Verify membership proof (key exists with old value in old tree)
+        oldLeafHash = hashLeaf witness.oldLeaf
+        oldLeafInternalRoot = computeRoot oldLeafHash witness.oldLeafProof
+        oldLeafRoot = combineRootWithLength oldLeafInternalRoot witness.treeLength
+        membershipProofCheck =
+            oldLeafRoot == witness.oldRoot &&
+            witness.oldLeaf.key == witness.key &&
+            witness.oldLeaf.value == witness.oldValue
+
+    -- CONSTRAINT 2: Verify updated leaf structure
+        updatedLeafCheck =
+            witness.updatedLeaf.key == witness.key &&
+            witness.updatedLeaf.value == witness.newValue &&
+            witness.updatedLeaf.nextKey == witness.oldLeaf.nextKey &&
+            witness.updatedLeaf.index == witness.oldLeaf.index
+
+    -- CONSTRAINT 3: Verify new root computation
+        newLeafHash = hashLeaf witness.updatedLeaf
+        newLeafInternalRoot = computeRoot newLeafHash witness.oldLeafProof
+        computedNewRoot = combineRootWithLength newLeafInternalRoot witness.treeLength
+        finalRootCheck = computedNewRoot == witness.newRoot
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && treeCapacityCheck &&
+       membershipProofCheck && updatedLeafCheck && finalRootCheck
+
 template Hash
   with
     owner : Party
@@ -357,6 +425,26 @@ template Hash
 
         -- Cryptographically verify the insert witness
         assertMsg "Insert witness verification failed" (verifyInsertWitness witness)
+
+        -- Update state with new root
+        create this with
+          root = Some witness.newRoot
+
+    choice UpdateMapElement : HashId
+      with
+        witness : UpdateWitness
+      controller owner
+      do
+        -- Verify old root matches current state
+        let currentRoot = case this.root of
+              Some r -> r
+              None -> error "Root not initialized"
+
+        -- Check old root matches
+        assertMsg "Old root does not match current state" (witness.oldRoot == currentRoot)
+
+        -- Cryptographically verify the update witness
+        assertMsg "Update witness verification failed" (verifyUpdateWitness witness)
 
         -- Update state with new root
         create this with
