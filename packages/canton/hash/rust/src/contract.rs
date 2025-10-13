@@ -533,3 +533,110 @@ pub async fn get_update(
 
     Ok(json)
 }
+
+/// Get update with LEDGER_EFFECTS transaction shape to see ExercisedEvent nodes
+/// This is critical for providers to distinguish between:
+/// - AddMapElement (choice that returns new contract)
+/// - Archive+Recreate (separate commands)
+pub async fn get_update_with_exercise_events(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+    update_id: &str,
+) -> Result<serde_json::Value> {
+    let payload = json!({
+        "actAs": [party],
+        "updateId": update_id,
+        "updateFormat": {
+            "includeTransactions": {
+                "eventFormat": {
+                    "filtersByParty": {
+                        party: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    },
+                    "verbose": true
+                },
+                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+            }
+        }
+    });
+
+    debug!("Fetching update with LEDGER_EFFECTS");
+    let response = client
+        .post(&format!("{}v2/updates/update-by-id", api_url))
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch update: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let update_json: serde_json::Value = serde_json::from_str(&text)?;
+    Ok(update_json)
+}
+
+/// Analyze update to detect if it was AddMapElement or Archive+Recreate
+/// Returns: (update_type, details)
+pub fn detect_update_type(update_json: &serde_json::Value) -> (String, String) {
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        let mut has_add_map_element = false;
+        let mut has_archive = false;
+        let mut archive_descendants = 0;
+
+        for event in events {
+            if let Some(exercised) = event.get("ExercisedEvent") {
+                if let Some(choice) = exercised.get("choice").and_then(|v| v.as_str()) {
+                    if choice == "AddMapElement" || choice == "UpdateMapElement" {
+                        has_add_map_element = true;
+                        if let Some(last_desc) = exercised.get("lastDescendantNodeId").and_then(|v| v.as_i64()) {
+                            return (
+                                "CRYPTOGRAPHIC_UPDATE".to_string(),
+                                format!("Choice: {}, descendants: {}, exerciseResult contains new contract", choice, last_desc)
+                            );
+                        }
+                    } else if choice == "Archive" {
+                        has_archive = true;
+                        if let Some(last_desc) = exercised.get("lastDescendantNodeId").and_then(|v| v.as_i64()) {
+                            archive_descendants = last_desc;
+                        }
+                    }
+                }
+            }
+        }
+
+        if has_archive && !has_add_map_element {
+            return (
+                "ARCHIVE_RECREATE".to_string(),
+                format!("Archive choice with {} descendants, CreatedEvent is separate command", archive_descendants)
+            );
+        }
+
+        if has_add_map_element {
+            return ("CRYPTOGRAPHIC_UPDATE".to_string(), "AddMapElement/UpdateMapElement choice detected".to_string());
+        }
+    }
+
+    ("UNKNOWN".to_string(), "Could not determine update type".to_string())
+}

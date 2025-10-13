@@ -118,7 +118,8 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(&update)?);
 
     // Get and display the update from provider's perspective to verify cross-node visibility
-    let update_provider = contract::get_update(
+    // Use LEDGER_EFFECTS to see ExercisedEvent and detect update type
+    let update_provider = contract::get_update_with_exercise_events(
         &client,
         &app_provider_api_url,
         &app_provider_jwt,
@@ -126,8 +127,14 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &update_id
     ).await?;
 
-    println!("\n=== AddMapElement Update (Provider Node) ===");
+    println!("\n=== AddMapElement Update (Provider Node with LEDGER_EFFECTS) ===");
     println!("{}", serde_json::to_string_pretty(&update_provider)?);
+
+    // Provider detects update type
+    let (update_type, details) = contract::detect_update_type(&update_provider);
+    println!("\n🔍 Provider Detection:");
+    println!("  Update Type: {}", update_type);
+    println!("  Details: {}", details);
 
     // Extract and display the new root from contract state
     if let Some(events) = update
@@ -297,7 +304,8 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         ).await?;
 
     // Get the archive+create update from provider's perspective to verify cross-node visibility
-    let archive_update_provider = contract::get_update(
+    // Use LEDGER_EFFECTS to see ExercisedEvent and detect update type
+    let archive_update_provider = contract::get_update_with_exercise_events(
         &client,
         &app_provider_api_url,
         &app_provider_jwt,
@@ -308,14 +316,26 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     println!("\n=== Archive and Recreate Update (User Node) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_user)?);
 
-    println!("\n=== Archive and Recreate Update (Provider Node) ===");
+    println!("\n=== Archive and Recreate Update (Provider Node with LEDGER_EFFECTS) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_provider)?);
+
+    // Provider detects update type - should detect Archive+Recreate
+    let (archive_type, archive_details) = contract::detect_update_type(&archive_update_provider);
+    println!("\n🔍 Provider Detection:");
+    println!("  Update Type: {}", archive_type);
+    println!("  Details: {}", archive_details);
 
     println!("\n=== Contract Lifecycle Complete ===");
     println!("Archived contract ID: {}", new_contract_id);
     println!("New contract ID:      {}", new_contract_id_after_archive);
     println!("✅ Atomic archive and recreate confirmed");
     println!("✅ Cross-node visibility confirmed");
+
+    if archive_type == "ARCHIVE_RECREATE" {
+        println!("⚠️  Provider detected: Contract was copied without cryptographic update");
+    } else if archive_type == "CRYPTOGRAPHIC_UPDATE" {
+        println!("✅ Provider verified: Legitimate cryptographic update via AddMapElement/UpdateMapElement");
+    }
 
     Ok(())
 }
