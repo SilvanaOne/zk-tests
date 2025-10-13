@@ -1,0 +1,52 @@
+module HashRequest where
+
+import Hash qualified as H
+
+-- | Request template for creating a Hash contract with cross-node observer.
+-- Follows the Propose-Accept pattern for multi-party contracts.
+template HashRequest
+  with
+    owner : Party
+      -- ^ The account owner (signatory, on app-user node)
+    provider : Party
+      -- ^ The provider party (observer, on app-provider node)
+    id : Text
+      -- ^ Unique identifier for this Hash contract
+    add_result : Int
+    keccak_result : Optional Text
+    sha256_result : Optional Text
+    root : Text
+      -- ^ Initial merkle map root (hex-encoded)
+  where
+    signatory owner
+    observer provider
+
+    choice Accept : ContractId H.Hash
+      -- ^ Accept the request and create the Hash contract.
+      with
+        root_time : Optional Time
+          -- ^ Optional timestamp for root creation
+      controller provider
+      do
+        -- Provider accepts and creates the actual Hash contract
+        create H.Hash with
+          owner
+          provider
+          id
+          add_result
+          keccak_result
+          sha256_result
+          root
+          root_time
+
+    choice Decline : ()
+      -- ^ Decline the request.
+      controller provider
+      do
+        pure ()
+
+    choice Withdraw : ()
+      -- ^ Withdraw the request.
+      controller owner
+      do
+        pure ()

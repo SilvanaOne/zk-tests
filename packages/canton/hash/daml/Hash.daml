@@ -17,6 +17,8 @@ hashNTimes n currentHash args =
 template Hash
   with
     owner : Party
+    provider : Party   -- Provider party (maintainer of contract key)
+    id : Text          -- Unique identifier for this Hash contract
     add_result : Int
     keccak_result : Optional Text
     sha256_result : Optional Text
@@ -24,6 +26,7 @@ template Hash
     root_time : Optional Time   -- timestamp when root was last updated
   where
     signatory owner
+    observer provider
 
     -- Hash-specific choices (not related to IndexedMerkleMap)
     choice Add : HashId
@@ -75,6 +78,8 @@ template Hash
     interface instance IndexedMerkleMap for Hash where
       view = IndexedMerkleMapView with
         owner
+        provider
+        id
         root
         rootTime = root_time
 

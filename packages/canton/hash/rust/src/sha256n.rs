@@ -68,8 +68,12 @@ pub async fn handle_sha256n(numbers: Vec<i64>, count: i64) -> Result<()> {
         .context("APP_USER_JWT not set in environment")?;
     let party_app_user = std::env::var("PARTY_APP_USER")
         .context("PARTY_APP_USER not set in environment")?;
+    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
+        .context("PARTY_APP_PROVIDER not set in environment")?;
     let hash_package_id = std::env::var("HASH_PACKAGE_ID")
         .context("HASH_PACKAGE_ID not set in environment")?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .context("SYNCHRONIZER_ID not set in environment")?;
 
     let template_id = format!("{}:Hash:Hash", hash_package_id);
 
@@ -79,12 +83,14 @@ pub async fn handle_sha256n(numbers: Vec<i64>, count: i64) -> Result<()> {
     info!("Creating Hash contract...");
 
     // Create Hash contract
-    let (contract_id, _create_update) = contract::create_hash_contract(
+    let (contract_id, _hash_id, _create_update_id, _create_update) = contract::create_hash_contract(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        &party_app_provider,
         &template_id,
+        &synchronizer_id,
     )
     .await?;
 

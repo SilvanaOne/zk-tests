@@ -480,6 +480,8 @@ verifyNonMembershipProof proof =
 -- Interface view type for IndexedMerkleMap
 data IndexedMerkleMapView = IndexedMerkleMapView with
     owner : Party
+    provider : Party
+    id : Text
     root : Text
     rootTime : Optional Time
   deriving (Eq, Show)

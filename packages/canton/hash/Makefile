@@ -3,9 +3,9 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v3-0.0.1.dar
+DAR := .daml/dist/hash-v8-0.0.1.dar
 
-.PHONY: help build clean upload parties updates get-update inspect
+.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider
 
 help:
 	@echo "Hash - Helper Commands"
@@ -14,6 +14,7 @@ help:
 	@echo "Environment (from .env):"
 	@echo "  APP_USER_API_URL:     $${APP_USER_API_URL:-<unset>}"
 	@echo "  PARTY_APP_USER:       $${PARTY_APP_USER:-<unset>}"
+	@echo "  HASH_PACKAGE_ID:      $${HASH_PACKAGE_ID:-<unset>}"
 	@echo ""
 	@echo "Core Targets:"
 	@echo "  make help          - Show this help"
@@ -22,10 +23,17 @@ help:
 	@echo "  make inspect       - Show DAR package ID"
 	@echo ""
 	@echo "Package Management:"
-	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to app-user node"
+	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to both user and provider nodes"
+	@echo "  make packages-user             - List packages on app-user node"
+	@echo "  make packages-provider         - List packages on app-provider node"
+	@echo "  make package-status-user       - Get hash-v6 package status on app-user"
+	@echo "  make package-status-provider   - Get hash-v6 package status on app-provider"
+	@echo "  make vetting-status-user       - Check vetting status for both parties (from app-user)"
+	@echo "  make vetting-status-provider   - Check vetting status for both parties (from app-provider)"
 	@echo ""
 	@echo "Party Management:"
-	@echo "  make parties       - List parties visible to app-user"
+	@echo "  make parties          - List parties visible to app-user"
+	@echo "  make parties-provider - List parties visible to app-provider"
 	@echo ""
 	@echo "Ledger Updates:"
 	@echo "  make updates [OFFSET=n]        - Show last 100 updates from app-user"
@@ -37,10 +45,14 @@ build:
 clean:
 	@rm -rf .daml/dist
 
-# Upload DAR to app-user node
+# Upload DAR to both app-user and app-provider nodes
 upload:
 	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ]; then \
 		echo "Error: APP_USER_API_URL or APP_USER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
 		exit 1; \
 	fi; \
 	DAR_TO_UPLOAD=$${DAR_FILE:-$(DAR)}; \
@@ -49,12 +61,21 @@ upload:
 		echo "Build first (make build) or pass DAR_FILE=<path>"; \
 		exit 1; \
 	fi; \
+	echo "Uploading DAR file $$DAR_TO_UPLOAD to app-provider..."; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		-H "Content-Type: application/octet-stream" \
+		-X POST $(APP_PROVIDER_API_URL)v2/packages \
+		--data-binary "@$$DAR_TO_UPLOAD"); \
+	echo "App-provider response: $$RESP"; \
+	echo ""; \
 	echo "Uploading DAR file $$DAR_TO_UPLOAD to app-user..."; \
 	RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
 		-H "Content-Type: application/octet-stream" \
 		-X POST $(APP_USER_API_URL)v2/packages \
 		--data-binary "@$$DAR_TO_UPLOAD"); \
-	echo "Response (raw):"; echo "$$RESP"
+	echo "App-user response: $$RESP"; 
+	
+
 
 # List parties visible to app-user
 parties:
@@ -65,6 +86,17 @@ parties:
 	@echo "Fetching parties visible to app-user from $(APP_USER_API_URL)..."
 	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
 		$(APP_USER_API_URL)v2/parties | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch parties"
+
+# List parties visible to app-provider
+parties-provider:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Fetching parties visible to app-provider from $(APP_PROVIDER_API_URL)..."
+	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		$(APP_PROVIDER_API_URL)v2/parties | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch parties"
 
 # Get last updates (default last 100) for app-user
@@ -127,4 +159,104 @@ get-update:
 # Inspect DAR package ID
 inspect:
 	@echo "Inspecting DAR: $(DAR)"
-	@daml damlc inspect-dar $(DAR) | grep "hash-v3-0.0.1" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
+	@daml damlc inspect-dar $(DAR) | grep "hash-v8-0.0.1" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
+
+# List packages on app-user
+packages-user:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ]; then \
+		echo "Error: APP_USER_API_URL or APP_USER_JWT not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Fetching packages from app-user..."
+	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		$(APP_USER_API_URL)v2/packages | jq '.packageIds[]' 2>/dev/null || \
+		echo "Error: Unable to fetch packages"
+
+# List packages on app-provider
+packages-provider:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Fetching packages from app-provider..."
+	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		$(APP_PROVIDER_API_URL)v2/packages | jq '.packageIds[]' 2>/dev/null || \
+		echo "Error: Unable to fetch packages"
+
+# Get package status on app-user
+package-status-user:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(HASH_PACKAGE_ID)" ]; then \
+		echo "Error: APP_USER_API_URL, APP_USER_JWT, or HASH_PACKAGE_ID not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Fetching package status for $(HASH_PACKAGE_ID) from app-user..."
+	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		"$(APP_USER_API_URL)v2/packages/$(HASH_PACKAGE_ID)/status" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch package status"
+
+# Get package status on app-provider
+package-status-provider:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ] || [ -z "$(HASH_PACKAGE_ID)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL, APP_PROVIDER_JWT, or HASH_PACKAGE_ID not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Fetching package status for $(HASH_PACKAGE_ID) from app-provider..."
+	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		"$(APP_PROVIDER_API_URL)v2/packages/$(HASH_PACKAGE_ID)/status" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch package status"
+
+# Check vetting status from app-user perspective
+vetting-status-user:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(PARTY_APP_USER)" ] || [ -z "$(PARTY_APP_PROVIDER)" ] || [ -z "$(SYNCHRONIZER_ID)" ]; then \
+		echo "Error: Required environment variables not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Checking vetting status for hash-v6 with both parties from app-user perspective..."
+	@echo "Parties: $(PARTY_APP_USER), $(PARTY_APP_PROVIDER)"
+	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
+	@echo ""
+	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v6&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch vetting status"
+
+# Check vetting status from app-provider perspective
+vetting-status-provider:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ] || [ -z "$(PARTY_APP_USER)" ] || [ -z "$(PARTY_APP_PROVIDER)" ] || [ -z "$(SYNCHRONIZER_ID)" ]; then \
+		echo "Error: Required environment variables not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Checking vetting status for hash-v6 with both parties from app-provider perspective..."
+	@echo "Parties: $(PARTY_APP_USER), $(PARTY_APP_PROVIDER)"
+	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
+	@echo ""
+	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v6&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch vetting status"
+
+# Check vetting for app_user party only
+vetting-status-user-only:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(PARTY_APP_USER)" ] || [ -z "$(SYNCHRONIZER_ID)" ]; then \
+		echo "Error: Required environment variables not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Checking vetting status for hash-v8 with app_user party only..."
+	@echo "Party: $(PARTY_APP_USER)"
+	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
+	@echo ""
+	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v8&parties=$(PARTY_APP_USER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch vetting status"
+
+# Check vetting for app_provider party only
+vetting-status-provider-only:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ] || [ -z "$(PARTY_APP_PROVIDER)" ] || [ -z "$(SYNCHRONIZER_ID)" ]; then \
+		echo "Error: Required environment variables not set in .env"; \
+		exit 1; \
+	fi
+	@echo "Checking vetting status for hash-v8 with app_provider party only..."
+	@echo "Party: $(PARTY_APP_PROVIDER)"
+	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
+	@echo ""
+	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v8&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		echo "Error: Unable to fetch vetting status"

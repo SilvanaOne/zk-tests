@@ -25,8 +25,12 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     let jwt = std::env::var("APP_USER_JWT").context("APP_USER_JWT not set in environment")?;
     let party_app_user =
         std::env::var("PARTY_APP_USER").context("PARTY_APP_USER not set in environment")?;
+    let party_app_provider =
+        std::env::var("PARTY_APP_PROVIDER").context("PARTY_APP_PROVIDER not set in environment")?;
     let hash_package_id =
         std::env::var("HASH_PACKAGE_ID").context("HASH_PACKAGE_ID not set in environment")?;
+    let synchronizer_id =
+        std::env::var("SYNCHRONIZER_ID").context("SYNCHRONIZER_ID not set in environment")?;
 
     let template_id = format!("{}:Hash:Hash", hash_package_id);
 
@@ -61,15 +65,36 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     // Convert witness to Daml-compatible JSON format
     let witness_json = convert_witness_to_daml_json(&witness)?;
 
-    info!("Creating Hash contract...");
+    info!("Creating Hash contract via propose-accept workflow...");
 
-    // Create Hash contract
-    let (contract_id, create_update) =
-        contract::create_hash_contract(&client, &api_url, &jwt, &party_app_user, &template_id)
-            .await?;
+    // Load provider JWT for accepting the request
+    let app_provider_jwt = std::env::var("APP_PROVIDER_JWT")
+        .context("APP_PROVIDER_JWT not set in environment")?;
+    let app_provider_api_url = std::env::var("APP_PROVIDER_API_URL")
+        .context("APP_PROVIDER_API_URL not set in environment")?;
 
-    println!("\n=== Create Hash Contract Update ===");
-    println!("{}", serde_json::to_string_pretty(&create_update)?);
+    // Create HashRequest and have provider accept it
+    let (contract_id, hash_id, _create_update_id, _accept_update_id, create_update_json, accept_update_json) =
+        contract::create_and_accept_hash_contract(
+            &client,
+            &api_url,
+            &jwt,
+            &party_app_user,
+            &app_provider_api_url,
+            &app_provider_jwt,
+            &party_app_provider,
+            &template_id,
+            &synchronizer_id
+        ).await?;
+
+    info!("Hash ID: {}", hash_id);
+    info!("Hash contract ID: {}", contract_id);
+
+    println!("\n=== HashRequest Creation Transaction ===");
+    println!("{}", serde_json::to_string_pretty(&create_update_json)?);
+
+    println!("\n=== HashRequest Acceptance Transaction ===");
+    println!("{}", serde_json::to_string_pretty(&accept_update_json)?);
 
     info!("Exercising AddMapElement choice...");
 
@@ -144,7 +169,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     )?;
 
     // Exercise VerifyInclusion choice (non-consuming) and get result directly
-    let verify_result = exercise_verify_inclusion(
+    let (verify_result, verify_inclusion_update_id) = exercise_verify_inclusion(
         &client,
         &api_url,
         &jwt,
@@ -154,6 +179,18 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         membership_proof_json,
     )
     .await?;
+
+    // Fetch and print the transaction details
+    let verify_inclusion_update = contract::get_update(
+        &client,
+        &api_url,
+        &jwt,
+        &party_app_user,
+        &verify_inclusion_update_id
+    ).await?;
+
+    println!("\n=== VerifyInclusion Transaction ===");
+    println!("{}", serde_json::to_string_pretty(&verify_inclusion_update)?);
 
     println!("\n=== Inclusion Verification ===");
     println!("Key: {}", key);
@@ -187,15 +224,28 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     )?;
 
     // Exercise VerifyExclusion choice (non-consuming)
-    let exclusion_result = exercise_verify_exclusion(
+    let (exclusion_result, verify_exclusion_update_id) = exercise_verify_exclusion(
         &client,
         &api_url,
         &jwt,
+        &party_app_user,
         &template_id,
         &new_contract_id,
         non_membership_proof_json,
     )
     .await?;
+
+    // Fetch and print the transaction details
+    let verify_exclusion_update = contract::get_update(
+        &client,
+        &api_url,
+        &jwt,
+        &party_app_user,
+        &verify_exclusion_update_id
+    ).await?;
+
+    println!("\n=== VerifyExclusion Transaction ===");
+    println!("{}", serde_json::to_string_pretty(&verify_exclusion_update)?);
 
     println!("\n=== Exclusion Verification ===");
     println!("Query key: 1000 (0x{:064x})", 1000);
@@ -325,7 +375,7 @@ async fn exercise_verify_inclusion(
     template_id: &str,
     contract_id: &str,
     choice_argument: serde_json::Value,
-) -> Result<bool> {
+) -> Result<(bool, String)> {
     let cmdid = format!("verifyinclusion-hash-{}", chrono::Utc::now().timestamp());
 
     // Extract package ID from template_id (format: packageId:Module:Template)
@@ -369,6 +419,12 @@ async fn exercise_verify_inclusion(
 
     let json_response: serde_json::Value = serde_json::from_str(&text)?;
 
+    // Extract updateId
+    let update_id = json_response
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
+
     // For non-consuming choices that return Bool, if the choice executed successfully
     // without throwing an error, it means the assertions passed and the result is implicitly true
     // The completionOffset indicates the choice was processed
@@ -382,7 +438,7 @@ async fn exercise_verify_inclusion(
         );
         // If we got here without an error from the submit-and-wait, the verification passed
         // (all assertions in the choice succeeded, including verifyMembershipProof)
-        return Ok(true);
+        return Ok((true, update_id.to_string()));
     }
 
     Err(anyhow::anyhow!(
@@ -457,10 +513,11 @@ async fn exercise_verify_exclusion(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
+    _party_app_user: &str,
     template_id: &str,
     contract_id: &str,
     choice_argument: serde_json::Value,
-) -> Result<bool> {
+) -> Result<(bool, String)> {
     let cmdid = format!("verifyexclusion-hash-{}", chrono::Utc::now().timestamp());
 
     // Extract package ID from template_id (format: packageId:Module:Template)
@@ -504,6 +561,12 @@ async fn exercise_verify_exclusion(
 
     let json_response: serde_json::Value = serde_json::from_str(&text)?;
 
+    // Extract updateId
+    let update_id = json_response
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
+
     // For non-consuming choices that return Bool, if the choice executed successfully
     // without throwing an error, it means the assertions passed and the result is implicitly true
     if let Some(completion_offset) = json_response
@@ -514,7 +577,7 @@ async fn exercise_verify_exclusion(
             "VerifyExclusion choice completed successfully at offset: {}",
             completion_offset
         );
-        return Ok(true);
+        return Ok((true, update_id.to_string()));
     }
 
     Err(anyhow::anyhow!(

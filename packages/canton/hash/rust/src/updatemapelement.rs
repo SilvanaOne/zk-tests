@@ -10,6 +10,9 @@ pub async fn handle_updatemapelement(key: i64, value1: i64, value2: i64) -> Resu
     let party_app_user = std::env::var("PARTY_APP_USER")
         .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set in environment"))?;
 
+    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set in environment"))?;
+
     let api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set in environment"))?;
 
@@ -18,6 +21,8 @@ pub async fn handle_updatemapelement(key: i64, value1: i64, value2: i64) -> Resu
 
     let package_id = std::env::var("HASH_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("HASH_PACKAGE_ID not set in environment"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set in environment"))?;
 
     let template_id = format!("{}:Hash:Hash", package_id);
 
@@ -42,12 +47,14 @@ pub async fn handle_updatemapelement(key: i64, value1: i64, value2: i64) -> Resu
     info!("Rust calculated root after insert: {}", hex::encode(rust_root_after_insert.to_bytes()));
 
     // Create Hash contract
-    let (hash_contract_id, _create_update) = crate::contract::create_hash_contract(
+    let (hash_contract_id, _hash_id, _create_update_id, _create_update) = crate::contract::create_hash_contract(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        &party_app_provider,
         &template_id,
+        &synchronizer_id,
     ).await?;
 
     // Convert insert witness to Daml JSON
