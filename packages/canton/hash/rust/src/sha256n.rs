@@ -79,7 +79,7 @@ pub async fn handle_sha256n(numbers: Vec<i64>, count: i64) -> Result<()> {
     info!("Creating Hash contract...");
 
     // Create Hash contract
-    let contract_id = contract::create_hash_contract(
+    let (contract_id, _create_update) = contract::create_hash_contract(
         &client,
         &api_url,
         &jwt,

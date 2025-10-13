@@ -24,7 +24,7 @@ pub async fn handle_add(numbers: Vec<i64>) -> Result<()> {
     let client = crate::url::create_client_with_localhost_resolution()?;
 
     // Create Hash contract
-    let hash_contract_id = crate::contract::create_hash_contract(
+    let (hash_contract_id, _create_update) = crate::contract::create_hash_contract(
         &client,
         &api_url,
         &jwt,

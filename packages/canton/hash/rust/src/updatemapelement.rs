@@ -42,7 +42,7 @@ pub async fn handle_updatemapelement(key: i64, value1: i64, value2: i64) -> Resu
     info!("Rust calculated root after insert: {}", hex::encode(rust_root_after_insert.to_bytes()));
 
     // Create Hash contract
-    let hash_contract_id = crate::contract::create_hash_contract(
+    let (hash_contract_id, _create_update) = crate::contract::create_hash_contract(
         &client,
         &api_url,
         &jwt,

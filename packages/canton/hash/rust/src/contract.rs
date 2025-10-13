@@ -8,7 +8,7 @@ pub async fn create_hash_contract(
     jwt: &str,
     party_app_user: &str,
     template_id: &str,
-) -> Result<String> {
+) -> Result<(String, serde_json::Value)> {
     let create_cmdid = format!("create-hash-{}", chrono::Utc::now().timestamp());
 
     let create_payload = json!({
@@ -26,7 +26,8 @@ pub async fn create_hash_contract(
         }],
         "commandId": create_cmdid,
         "actAs": [party_app_user],
-        "readAs": []
+        "readAs": [],
+        "workflowId": "IndexedMerkleMap"
     });
 
     info!("Submitting Hash contract creation");
@@ -66,7 +67,17 @@ pub async fn create_hash_contract(
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        party_app_user: {}
+                        party_app_user: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
                     },
                     "verbose": true
                 },
@@ -76,6 +87,7 @@ pub async fn create_hash_contract(
     });
 
     debug!("Fetching update to get contract ID");
+    debug!("Update payload: {}", serde_json::to_string_pretty(&update_payload)?);
     let update_response = client
         .post(&format!("{}v2/updates/update-by-id", api_url))
         .bearer_auth(jwt)
@@ -83,7 +95,21 @@ pub async fn create_hash_contract(
         .send()
         .await?;
 
+    let update_status = update_response.status();
     let update_text = update_response.text().await?;
+
+    if !update_status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch update: HTTP {} - {}",
+            update_status,
+            update_text
+        ));
+    }
+
+    if update_text.is_empty() {
+        return Err(anyhow::anyhow!("Empty response when fetching update"));
+    }
+
     let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
 
     // Extract Hash contract ID
@@ -109,7 +135,7 @@ pub async fn create_hash_contract(
 
     info!("Hash contract ID: {}", hash_contract_id);
 
-    Ok(hash_contract_id)
+    Ok((hash_contract_id, update_json))
 }
 
 pub async fn exercise_choice(
@@ -135,7 +161,8 @@ pub async fn exercise_choice(
         }],
         "commandId": cmdid,
         "actAs": [party_app_user],
-        "readAs": []
+        "readAs": [],
+        "workflowId": "IndexedMerkleMap"
     });
 
     info!("Exercising {} choice", choice_name);
@@ -185,7 +212,17 @@ pub async fn get_update(
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        party_app_user: {}
+                        party_app_user: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
                     },
                     "verbose": true
                 },

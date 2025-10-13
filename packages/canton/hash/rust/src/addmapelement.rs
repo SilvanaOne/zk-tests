@@ -64,9 +64,12 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     info!("Creating Hash contract...");
 
     // Create Hash contract
-    let contract_id =
+    let (contract_id, create_update) =
         contract::create_hash_contract(&client, &api_url, &jwt, &party_app_user, &template_id)
             .await?;
+
+    println!("\n=== Create Hash Contract Update ===");
+    println!("{}", serde_json::to_string_pretty(&create_update)?);
 
     info!("Exercising AddMapElement choice...");
 
