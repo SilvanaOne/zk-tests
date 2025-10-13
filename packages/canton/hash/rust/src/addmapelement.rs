@@ -270,21 +270,33 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         }
     );
 
-    // === PHASE 4: Archive Contract ===
-    info!("\n=== Archiving Contract ===");
+    // === PHASE 4: Archive and Recreate Contract ===
+    info!("\n=== Archiving and Recreating Contract in Atomic Transaction ===");
 
-    // Archive the contract (using the contract ID from Phase 3, which is still active)
-    let (archive_update_id, archive_update_user) = contract::archive_hash_contract(
-        &client,
-        &api_url,
-        &jwt,
-        &party_app_user,
-        &template_id,
-        &new_contract_id,
-        &synchronizer_id
-    ).await?;
+    // Extract the current Hash contract fields from the AddMapElement update
+    // We'll use these to create an identical contract after archiving
+    let package_id = template_id.split(':').next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid template_id format"))?;
 
-    // Get the archive update from provider's perspective to verify cross-node visibility
+    let hash_fields = contract::extract_hash_fields(&update, package_id)?;
+
+    info!("Extracted Hash contract fields for recreation");
+
+    // Archive the old contract and atomically create a new one with the same fields
+    // Both operations happen in a single transaction
+    let (archive_update_id, new_contract_id_after_archive, archive_update_user) =
+        contract::archive_and_recreate_hash_contract(
+            &client,
+            &api_url,
+            &jwt,
+            &party_app_user,
+            &template_id,
+            &new_contract_id,
+            &synchronizer_id,
+            hash_fields
+        ).await?;
+
+    // Get the archive+create update from provider's perspective to verify cross-node visibility
     let archive_update_provider = contract::get_update(
         &client,
         &app_provider_api_url,
@@ -293,15 +305,17 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &archive_update_id
     ).await?;
 
-    println!("\n=== Archive Update (User Node) ===");
+    println!("\n=== Archive and Recreate Update (User Node) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_user)?);
 
-    println!("\n=== Archive Update (Provider Node) ===");
+    println!("\n=== Archive and Recreate Update (Provider Node) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_provider)?);
 
-    println!("\n=== Contract Archived Successfully ===");
-    println!("Contract ID: {}", new_contract_id);
-    println!("✅ Cross-node archive visibility confirmed");
+    println!("\n=== Contract Lifecycle Complete ===");
+    println!("Archived contract ID: {}", new_contract_id);
+    println!("New contract ID:      {}", new_contract_id_after_archive);
+    println!("✅ Atomic archive and recreate confirmed");
+    println!("✅ Cross-node visibility confirmed");
 
     Ok(())
 }

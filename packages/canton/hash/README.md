@@ -375,12 +375,20 @@ cargo run -- add-map-element 1001 30
 - Proves query key (1000) does NOT exist in map
 - Uses "low leaf" proof to show gap in sorted keys
 
-**Phase 5: Archive Contract**
+**Phase 5: Atomic Archive and Recreate**
 
-- Exercises built-in `Archive` choice
-- Removes contract from active contract set
-- Fetches archive event from **both** user and provider nodes
-- Confirms cross-node visibility of archive
+- **Demonstrates atomic multi-command transactions in Canton**
+- Single transaction contains TWO commands:
+  1. `ExerciseCommand` - Archive old contract
+  2. `CreateCommand` - Create new Hash contract with identical fields
+- Both operations succeed or fail together (atomicity guarantee)
+- New contract has same owner, provider, id, root, and all other fields
+- Fetches transaction from **both** user and provider nodes
+- Both nodes observe in the same transaction:
+  - `ArchivedEvent` for old contract
+  - `CreatedEvent` for new contract
+- Confirms atomic cross-node transaction visibility
+- No temporal gap between archive and create (happens atomically)
 
 ### Update Existing Key
 
@@ -505,11 +513,12 @@ The Rust client:
 
 - `rust/src/main.rs` - CLI entry point
 - `rust/src/contract.rs` - Canton API interaction functions
+  - `extract_hash_fields()` - Extract Hash contract fields from update JSON
   - `create_hash_contract()` - Creates HashRequest
   - `accept_hash_request()` - Provider accepts request
   - `create_and_accept_hash_contract()` - Full propose-accept workflow
   - `exercise_choice()` - Generic choice execution
-  - `archive_hash_contract()` - Archive contract with cross-node verification
+  - `archive_and_recreate_hash_contract()` - Atomic archive + create transaction
   - `get_update()` - Fetch transaction details by updateId
 - `rust/src/addmapelement.rs` - Complete add-map-element workflow (5 phases)
 - `rust/src/updatemapelement.rs` - Update existing key workflow

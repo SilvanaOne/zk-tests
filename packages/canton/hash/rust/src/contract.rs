@@ -2,6 +2,31 @@ use anyhow::Result;
 use serde_json::json;
 use tracing::{info, debug};
 
+/// Extract Hash contract fields from an update JSON
+/// Returns the createArgument object containing all Hash contract fields
+pub fn extract_hash_fields(
+    update_json: &serde_json::Value,
+    package_id: &str
+) -> Result<serde_json::Value> {
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(&format!("{}:Hash:Hash", package_id)) {
+                        if let Some(create_argument) = created.get("createArgument") {
+                            return Ok(create_argument.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Err(anyhow::anyhow!("Could not find Hash contract fields in update"))
+}
+
 pub async fn create_hash_contract(
     client: &reqwest::Client,
     api_url: &str,
@@ -284,8 +309,9 @@ pub async fn accept_hash_request(
     Ok((hash_contract_id, update_id.to_string(), update_json))
 }
 
-/// Archive a Hash contract using the built-in Archive choice
-pub async fn archive_hash_contract(
+/// Archive a Hash contract and atomically create a new one with the same fields
+/// This demonstrates atomic multi-command transactions in Canton
+pub async fn archive_and_recreate_hash_contract(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
@@ -293,18 +319,28 @@ pub async fn archive_hash_contract(
     template_id: &str,
     contract_id: &str,
     synchronizer_id: &str,
-) -> Result<(String, serde_json::Value)> {
-    let cmdid = format!("archive-hash-{}", chrono::Utc::now().timestamp());
+    hash_fields: serde_json::Value,
+) -> Result<(String, String, serde_json::Value)> {
+    let cmdid = format!("archive-and-recreate-{}", chrono::Utc::now().timestamp());
 
+    // Atomic transaction: Archive old contract + Create new contract
     let payload = json!({
-        "commands": [{
-            "ExerciseCommand": {
-                "templateId": template_id,
-                "contractId": contract_id,
-                "choice": "Archive",
-                "choiceArgument": {}
+        "commands": [
+            {
+                "ExerciseCommand": {
+                    "templateId": template_id,
+                    "contractId": contract_id,
+                    "choice": "Archive",
+                    "choiceArgument": {}
+                }
+            },
+            {
+                "CreateCommand": {
+                    "templateId": template_id,
+                    "createArguments": hash_fields
+                }
             }
-        }],
+        ],
         "commandId": cmdid,
         "actAs": [party_app_user],
         "readAs": [],
@@ -312,7 +348,7 @@ pub async fn archive_hash_contract(
         "synchronizerId": synchronizer_id
     });
 
-    info!("Archiving Hash contract");
+    info!("Archiving and recreating Hash contract in atomic transaction");
 
     let response = client
         .post(&format!("{}v2/commands/submit-and-wait", api_url))
@@ -326,7 +362,7 @@ pub async fn archive_hash_contract(
 
     if !status.is_success() {
         return Err(anyhow::anyhow!(
-            "Failed to archive Hash contract: HTTP {} - {}",
+            "Failed to archive and recreate Hash contract: HTTP {} - {}",
             status,
             text
         ));
@@ -337,14 +373,42 @@ pub async fn archive_hash_contract(
     let update_id = json_response
         .get("updateId")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("No updateId in archive response"))?;
+        .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
 
-    info!("Hash contract archived, updateId: {}", update_id);
+    info!("Hash contract archived and recreated, updateId: {}", update_id);
 
-    // Fetch and return the full update
+    // Fetch the full update containing both events
     let update_json = get_update(client, api_url, jwt, party_app_user, update_id).await?;
 
-    Ok((update_id.to_string(), update_json))
+    // Extract the new contract ID from the CreatedEvent
+    let package_id = template_id.split(':').next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid template_id format"))?;
+
+    let mut new_contract_id = None;
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(&format!("{}:Hash:Hash", package_id)) {
+                        new_contract_id = created.pointer("/contractId")
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    let new_contract_id = new_contract_id
+        .ok_or_else(|| anyhow::anyhow!("Could not find new Hash contract in update"))?;
+
+    info!("New Hash contract ID: {}", new_contract_id);
+
+    Ok((update_id.to_string(), new_contract_id, update_json))
 }
 
 pub async fn exercise_choice(
