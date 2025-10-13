@@ -328,10 +328,15 @@ async fn exercise_verify_inclusion(
 ) -> Result<bool> {
     let cmdid = format!("verifyinclusion-hash-{}", chrono::Utc::now().timestamp());
 
+    // Extract package ID from template_id (format: packageId:Module:Template)
+    let package_id = template_id.split(':').next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid template_id format"))?;
+    let interface_id = format!("{}:Silvana:IndexedMerkleMap", package_id);
+
     let payload = json!({
         "commands": [{
             "ExerciseCommand": {
-                "templateId": template_id,
+                "templateId": interface_id,
                 "contractId": contract_id,
                 "choice": "VerifyInclusion",
                 "choiceArgument": choice_argument
@@ -458,10 +463,15 @@ async fn exercise_verify_exclusion(
 ) -> Result<bool> {
     let cmdid = format!("verifyexclusion-hash-{}", chrono::Utc::now().timestamp());
 
+    // Extract package ID from template_id (format: packageId:Module:Template)
+    let package_id = template_id.split(':').next()
+        .ok_or_else(|| anyhow::anyhow!("Invalid template_id format"))?;
+    let interface_id = format!("{}:Silvana:IndexedMerkleMap", package_id);
+
     let payload = json!({
         "commands": [{
             "ExerciseCommand": {
-                "templateId": template_id,
+                "templateId": interface_id,
                 "contractId": contract_id,
                 "choice": "VerifyExclusion",
                 "choiceArgument": choice_argument

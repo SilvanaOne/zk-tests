@@ -1,0 +1,530 @@
+module Silvana where
+
+import qualified DA.Crypto.Text as Crypto
+import qualified DA.Text as T
+import DA.List ()
+
+-- Data structures for IndexedMerkleMap witness verification
+
+data Leaf = Leaf with
+    key : Text        -- hex-encoded Field (32 bytes, 64 hex chars)
+    value : Text      -- hex-encoded Field (32 bytes, 64 hex chars)
+    nextKey : Text    -- hex-encoded Field (32 bytes, 64 hex chars)
+    index : Int
+  deriving (Eq, Show)
+
+data MerkleProof = MerkleProof with
+    siblings : [Text]      -- list of hex-encoded hashes (32 bytes each)
+    pathIndices : [Bool]   -- true = right, false = left
+  deriving (Eq, Show)
+
+data InsertWitness = InsertWitness with
+    oldRoot : Text
+    newRoot : Text
+    key : Text
+    value : Text
+    newLeafIndex : Int
+    treeLength : Int
+    lowLeaf : Leaf
+    lowLeafProof : MerkleProof
+    updatedLowLeaf : Leaf
+    newLeaf : Leaf
+    newLeafProofAfter : MerkleProof
+  deriving (Eq, Show)
+
+-- Witness for updating existing key-value pair
+data UpdateWitness = UpdateWitness with
+    oldRoot : Text
+    newRoot : Text
+    key : Text
+    oldValue : Text
+    newValue : Text
+    treeLength : Int
+    oldLeaf : Leaf              -- From membership proof
+    oldLeafProof : MerkleProof  -- From membership proof
+    updatedLeaf : Leaf
+  deriving (Eq, Show)
+
+-- Proof of membership in indexed merkle map
+data MembershipProof = MembershipProof with
+    root : Text            -- Current root to verify against
+    key : Text             -- Key to verify
+    value : Text           -- Value to verify
+    treeLength : Int       -- Tree length for root computation
+    leaf : Leaf            -- Leaf containing key-value
+    leafProof : MerkleProof -- Merkle proof for the leaf
+  deriving (Eq, Show)
+
+-- Proof of non-membership in indexed merkle map
+data NonMembershipProof = NonMembershipProof with
+    root : Text            -- Current root to verify against
+    key : Text             -- Key to prove non-membership
+    treeLength : Int       -- Tree length for root computation
+    lowLeaf : Leaf         -- Low leaf (largest key < query key)
+    lowLeafProof : MerkleProof -- Merkle proof for the low leaf
+  deriving (Eq, Show)
+
+-- Helper functions for SHA256 verification
+
+-- Convert a single digit to hex character
+toHexDigit : Int -> Text
+toHexDigit d =
+    if d < 10 then show d
+    else if d == 10 then "a"
+    else if d == 11 then "b"
+    else if d == 12 then "c"
+    else if d == 13 then "d"
+    else if d == 14 then "e"
+    else "f"
+
+-- Recursively convert integer to hex string
+toHexRec : Int -> Text -> Text
+toHexRec 0 acc = if T.length acc == 0 then "0" else acc
+toHexRec num acc =
+    let remainder = num % 16
+        quotient = num / 16
+    in toHexRec quotient (toHexDigit remainder <> acc)
+
+-- Convert Int to 8-byte big-endian hex string (16 hex chars)
+-- Pads with zeros on the left to ensure 16 hex chars (8 bytes)
+intToHex8Bytes : Int -> Text
+intToHex8Bytes n =
+    let hexText = toHexRec n ""
+        hexLen = T.length hexText
+        -- Pad with zeros to get exactly 16 characters (8 bytes)
+        zerosNeeded = 16 - hexLen
+        padding = if zerosNeeded <= 0 then ""
+                  else T.take zerosNeeded "0000000000000000"
+    in padding <> hexText
+
+-- Hash a leaf: sha256(key || value || next_key)
+hashLeaf : Leaf -> Text
+hashLeaf leaf =
+    Crypto.sha256 (leaf.key <> leaf.value <> leaf.nextKey)
+
+-- Hash two hashes together: sha256(left || right)
+hashPair : Text -> Text -> Text
+hashPair left right =
+    Crypto.sha256 (left <> right)
+
+-- Compute merkle root from leaf hash and proof
+computeRoot : Text -> MerkleProof -> Text
+computeRoot leafHash proof =
+    foldl (\current (sibling, isRight) ->
+        if isRight
+        then hashPair sibling current  -- current is right child
+        else hashPair current sibling  -- current is left child
+    ) leafHash (zip proof.siblings proof.pathIndices)
+
+-- Combine internal root with length to create final root
+combineRootWithLength : Text -> Int -> Text
+combineRootWithLength internalRoot length =
+    let lengthHex = intToHex8Bytes length
+    in Crypto.sha256 (internalRoot <> lengthHex)
+
+-- Convert path indices (bits) to leaf index
+-- Uses iterative doubling instead of power operations for efficiency
+-- Simulates bit shifting: result |= (bit << position)
+pathIndicesToIndex : [Bool] -> Int
+pathIndicesToIndex bits =
+    let -- Process bits with position and power-of-2 value computed iteratively
+        addBit (idx, powerOf2) isRight =
+            let newIdx = if isRight then idx + powerOf2 else idx
+                newPower = powerOf2 * 2
+            in (newIdx, newPower)
+        (finalIdx, _) = foldl addBit (0, 1) bits
+    in finalIdx
+
+-- Compare two hex-encoded Field values (32 bytes)
+-- Returns: LT if a < b, EQ if a == b, GT if a > b
+compareFields : Text -> Text -> Ordering
+compareFields a b = compare a b
+
+-- Check if field is zero (all zeros)
+isZeroField : Text -> Bool
+isZeroField field = field == "0000000000000000000000000000000000000000000000000000000000000000"
+
+-- Helper function to check all characters in a hex string are valid
+checkAllHexChars : Text -> Int -> Int -> Bool
+checkAllHexChars hexStr i len =
+    if i >= len then True
+    else
+        let char = T.take 1 (T.drop i hexStr)
+        in (char >= "0" && char <= "9" || char >= "a" && char <= "f") && checkAllHexChars hexStr (i + 1) len
+
+-- Validate hex string is exactly 64 lowercase hex characters (32 bytes)
+isValidHex32 : Text -> Bool
+isValidHex32 hexStr =
+    let len = T.length hexStr
+    in len == 64 && checkAllHexChars hexStr 0 len
+
+-- Find the level where two merkle paths diverge (Lowest Common Ancestor)
+-- Returns the level index where paths first differ
+findLCALevelRec : [Bool] -> [Bool] -> Int -> Int
+findLCALevelRec [] [] level = level
+findLCALevelRec (p1::rest1) (p2::rest2) level =
+    if p1 == p2
+    then findLCALevelRec rest1 rest2 (level + 1)
+    else level
+findLCALevelRec _ _ level = level
+
+findLCALevel : [Bool] -> [Bool] -> Int
+findLCALevel path1 path2 = findLCALevelRec path1 path2 0
+
+-- Get nth element from a list (0-indexed), returns zero hash if out of bounds
+getNth : Int -> [Text] -> Text
+getNth 0 (x::_) = x
+getNth n (_::xs) = getNth (n - 1) xs
+getNth _ [] = "0000000000000000000000000000000000000000000000000000000000000000"
+
+-- Hash from a leaf up the tree to a specific level
+-- Used for LCA anchor check
+hashUpToLevelRec : Text -> [Text] -> [Bool] -> Int -> Int -> Text
+hashUpToLevelRec currentHash _ _ level targetLevel | level >= targetLevel = currentHash
+hashUpToLevelRec currentHash (sib::sibs) (isRight::paths) level targetLevel =
+    let nextHash = if isRight
+                   then hashPair sib currentHash  -- current is right child
+                   else hashPair currentHash sib  -- current is left child
+    in hashUpToLevelRec nextHash sibs paths (level + 1) targetLevel
+hashUpToLevelRec currentHash _ _ _ _ = currentHash
+
+hashUpToLevel : Text -> [Text] -> [Bool] -> Int -> Text
+hashUpToLevel leafHash siblings pathIndices targetLevel =
+    hashUpToLevelRec leafHash siblings pathIndices 0 targetLevel
+
+-- Verify insert witness (implements all 8 constraints from ProvableIndexedMerkleMap::insert)
+verifyInsertWitness : InsertWitness -> Bool
+verifyInsertWitness witness =
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 witness.oldRoot &&
+            isValidHex32 witness.newRoot &&
+            isValidHex32 witness.key &&
+            isValidHex32 witness.value &&
+            isValidHex32 witness.lowLeaf.key &&
+            isValidHex32 witness.lowLeaf.value &&
+            isValidHex32 witness.lowLeaf.nextKey &&
+            isValidHex32 witness.updatedLowLeaf.key &&
+            isValidHex32 witness.updatedLowLeaf.value &&
+            isValidHex32 witness.updatedLowLeaf.nextKey &&
+            isValidHex32 witness.newLeaf.key &&
+            isValidHex32 witness.newLeaf.value &&
+            isValidHex32 witness.newLeaf.nextKey &&
+            all isValidHex32 witness.lowLeafProof.siblings &&
+            all isValidHex32 witness.newLeafProofAfter.siblings
+
+    -- SANITY CHECKS: Validate proof structure
+        lowProofSiblingsLen = length witness.lowLeafProof.siblings
+        lowProofIndicesLen = length witness.lowLeafProof.pathIndices
+        newProofSiblingsLen = length witness.newLeafProofAfter.siblings
+        newProofIndicesLen = length witness.newLeafProofAfter.pathIndices
+
+        -- Check proof lengths match
+        proofLengthCheck =
+            lowProofSiblingsLen == lowProofIndicesLen &&
+            newProofSiblingsLen == newProofIndicesLen
+
+        -- FIXED HEIGHT CHECK: Enforce exactly 31 siblings (height 32 tree = 31 proof levels)
+        -- Rust implementation always generates exactly 31 siblings for all proofs
+        proofBoundsCheck =
+            lowProofSiblingsLen == 31 &&
+            newProofSiblingsLen == 31
+
+        -- TREE CAPACITY CHECK: Verify tree can hold the claimed number of leaves
+        -- Height 31 proofs can hold up to 2^31 = 2,147,483,648 leaves
+        treeCapacityCheck =
+            witness.treeLength > 0 &&
+            witness.treeLength <= 2147483648 &&
+            witness.treeLength + 1 <= 2147483648
+
+        -- Compute indices once for reuse
+        lowIdx = pathIndicesToIndex witness.lowLeafProof.pathIndices
+        newIdx = pathIndicesToIndex witness.newLeafProofAfter.pathIndices
+
+        -- Index bounds checks
+        indexBoundsCheck =
+            witness.treeLength >= 1 &&  -- Tree must have at least sentinel leaf
+            lowIdx >= 0 && lowIdx < witness.treeLength &&  -- Low leaf must be within tree
+            witness.newLeafIndex >= 0 &&  -- New leaf index must be non-negative
+            witness.newLeafIndex == witness.treeLength  -- Must be append-only
+
+    -- CONSTRAINT 1: Verify append-only (new leaf index must equal tree length)
+        appendOnlyCheck = witness.newLeafIndex == witness.treeLength
+
+    -- CONSTRAINT 2: Verify path-index consistency
+        pathConsistencyCheck = lowIdx == witness.lowLeaf.index && newIdx == witness.newLeafIndex
+
+    -- CONSTRAINT 3: Verify non-membership (key doesn't exist in old tree)
+        lowLeafHash = hashLeaf witness.lowLeaf
+        lowLeafInternalRoot = computeRoot lowLeafHash witness.lowLeafProof
+        lowLeafRoot = combineRootWithLength lowLeafInternalRoot witness.treeLength
+        nonMembershipProofCheck = lowLeafRoot == witness.oldRoot
+
+    -- CONSTRAINT 4: Verify key ordering (low_leaf.key < new_key < low_leaf.next_key)
+        keyOrderingCheck =
+            compareFields witness.lowLeaf.key witness.key == LT &&
+            (isZeroField witness.lowLeaf.nextKey || compareFields witness.key witness.lowLeaf.nextKey == LT)
+
+    -- CONSTRAINT 5: Verify updated low leaf structure
+        updatedLowLeafCheck =
+            witness.updatedLowLeaf.key == witness.lowLeaf.key &&
+            witness.updatedLowLeaf.value == witness.lowLeaf.value &&
+            witness.updatedLowLeaf.index == witness.lowLeaf.index &&
+            witness.updatedLowLeaf.nextKey == witness.key
+
+    -- CONSTRAINT 6: Verify new leaf structure
+        newLeafCheck =
+            witness.newLeaf.key == witness.key &&
+            witness.newLeaf.value == witness.value &&
+            witness.newLeaf.nextKey == witness.lowLeaf.nextKey &&
+            witness.newLeaf.index == witness.newLeafIndex
+
+    -- CONSTRAINT 7 & 8: Verify final root computation
+        newLeafHash = hashLeaf witness.newLeaf
+        newLeafInternalRoot = computeRoot newLeafHash witness.newLeafProofAfter
+        computedNewRoot = combineRootWithLength newLeafInternalRoot (witness.treeLength + 1)
+        finalRootCheck = computedNewRoot == witness.newRoot
+
+    -- LCA ANCHOR CHECK (Defense-in-depth): Link updatedLowLeaf path to newLeafProofAfter
+    -- Prevents using unrelated proofs from different trees
+        lcaLevel = findLCALevel witness.lowLeafProof.pathIndices witness.newLeafProofAfter.pathIndices
+
+        -- Hash updatedLowLeaf up to the LCA level along the low leaf path
+        anchorFromUpdatedLowLeaf = hashUpToLevel
+            (hashLeaf witness.updatedLowLeaf)
+            witness.lowLeafProof.siblings
+            witness.lowLeafProof.pathIndices
+            lcaLevel
+
+        -- Extract sibling at LCA level from new leaf proof
+        expectedSiblingAtLCA = getNth lcaLevel witness.newLeafProofAfter.siblings
+
+        -- Verify anchor matches sibling at LCA (only if paths diverge before root)
+        lcaAnchorCheck =
+            if lcaLevel < 31  -- Paths diverge before reaching root
+            then anchorFromUpdatedLowLeaf == expectedSiblingAtLCA
+            else True  -- Paths identical (shouldn't happen in practice, but allow it)
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && treeCapacityCheck && indexBoundsCheck &&
+       appendOnlyCheck && pathConsistencyCheck && nonMembershipProofCheck &&
+       keyOrderingCheck && updatedLowLeafCheck && newLeafCheck && finalRootCheck && lcaAnchorCheck
+
+-- Verify update witness (3 constraints from ProvableIndexedMerkleMap::update)
+verifyUpdateWitness : UpdateWitness -> Bool
+verifyUpdateWitness witness =
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 witness.oldRoot &&
+            isValidHex32 witness.newRoot &&
+            isValidHex32 witness.key &&
+            isValidHex32 witness.oldValue &&
+            isValidHex32 witness.newValue &&
+            isValidHex32 witness.oldLeaf.key &&
+            isValidHex32 witness.oldLeaf.value &&
+            isValidHex32 witness.oldLeaf.nextKey &&
+            isValidHex32 witness.updatedLeaf.key &&
+            isValidHex32 witness.updatedLeaf.value &&
+            isValidHex32 witness.updatedLeaf.nextKey &&
+            all isValidHex32 witness.oldLeafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length witness.oldLeafProof.siblings
+        proofIndicesLen = length witness.oldLeafProof.pathIndices
+
+        proofLengthCheck = proofSiblingsLen == proofIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree = 31 proof levels
+
+    -- TREE CAPACITY CHECK
+        treeCapacityCheck =
+            witness.treeLength > 0 &&
+            witness.treeLength <= 2147483648
+
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            witness.oldLeaf.index >= 0 &&
+            witness.oldLeaf.index < witness.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex witness.oldLeafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == witness.oldLeaf.index
+
+    -- CONSTRAINT 1: Verify membership proof (key exists with old value in old tree)
+        oldLeafHash = hashLeaf witness.oldLeaf
+        oldLeafInternalRoot = computeRoot oldLeafHash witness.oldLeafProof
+        oldLeafRoot = combineRootWithLength oldLeafInternalRoot witness.treeLength
+        membershipProofCheck =
+            oldLeafRoot == witness.oldRoot &&
+            witness.oldLeaf.key == witness.key &&
+            witness.oldLeaf.value == witness.oldValue
+
+    -- CONSTRAINT 2: Verify updated leaf structure
+        updatedLeafCheck =
+            witness.updatedLeaf.key == witness.key &&
+            witness.updatedLeaf.value == witness.newValue &&
+            witness.updatedLeaf.nextKey == witness.oldLeaf.nextKey &&
+            witness.updatedLeaf.index == witness.oldLeaf.index
+
+    -- CONSTRAINT 3: Verify new root computation
+        newLeafHash = hashLeaf witness.updatedLeaf
+        newLeafInternalRoot = computeRoot newLeafHash witness.oldLeafProof
+        computedNewRoot = combineRootWithLength newLeafInternalRoot witness.treeLength
+        finalRootCheck = computedNewRoot == witness.newRoot
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck && treeCapacityCheck &&
+       indexBoundsCheck && pathIndexConsistencyCheck &&
+       membershipProofCheck && updatedLeafCheck && finalRootCheck
+
+-- Verify membership proof (proves key-value exists in map)
+verifyMembershipProof : MembershipProof -> Bool
+verifyMembershipProof proof =
+    -- HEX FORMAT VALIDATION: Ensure all fields are valid 32-byte hex strings
+    let hexFieldsValid =
+            isValidHex32 proof.root &&
+            isValidHex32 proof.key &&
+            isValidHex32 proof.value &&
+            isValidHex32 proof.leaf.key &&
+            isValidHex32 proof.leaf.value &&
+            isValidHex32 proof.leaf.nextKey &&
+            all isValidHex32 proof.leafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length proof.leafProof.siblings
+        proofIndicesLen = length proof.leafProof.pathIndices
+
+        proofLengthCheck = proofSiblingsLen == proofIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree = 31 proof levels
+
+    -- TREE CAPACITY CHECK
+        treeCapacityCheck =
+            proof.treeLength > 0 &&
+            proof.treeLength <= 2147483648
+
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            proof.leaf.index >= 0 &&
+            proof.leaf.index < proof.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex proof.leafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == proof.leaf.index
+
+    -- MEMBERSHIP VERIFICATION: Verify leaf contains correct key-value
+        leafMatchCheck =
+            proof.leaf.key == proof.key &&
+            proof.leaf.value == proof.value
+
+    -- ROOT VERIFICATION: Verify merkle proof computes to root
+        leafHash = hashLeaf proof.leaf
+        leafInternalRoot = computeRoot leafHash proof.leafProof
+        computedRoot = combineRootWithLength leafInternalRoot proof.treeLength
+        rootCheck = computedRoot == proof.root
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck &&
+       treeCapacityCheck && indexBoundsCheck && pathIndexConsistencyCheck &&
+       leafMatchCheck && rootCheck
+
+-- Verify non-membership proof for indexed merkle map
+-- Uses "low leaf" concept: proves key doesn't exist by showing the largest key < query key
+verifyNonMembershipProof : NonMembershipProof -> Bool
+verifyNonMembershipProof proof =
+    -- HEX FORMAT VALIDATION (defense-in-depth)
+    let hexFieldsValid =
+            isValidHex32 proof.root &&
+            isValidHex32 proof.key &&
+            isValidHex32 proof.lowLeaf.key &&
+            isValidHex32 proof.lowLeaf.value &&
+            isValidHex32 proof.lowLeaf.nextKey &&
+            all isValidHex32 proof.lowLeafProof.siblings
+
+    -- PROOF STRUCTURE CHECKS
+        proofSiblingsLen = length proof.lowLeafProof.siblings
+        proofPathIndicesLen = length proof.lowLeafProof.pathIndices
+        proofLengthCheck = proofSiblingsLen == proofPathIndicesLen
+        proofBoundsCheck = proofSiblingsLen == 31  -- Fixed height 32 tree
+
+    -- TREE CAPACITY CHECK (max 2^31 for height 32)
+        treeCapacityCheck =
+            proof.treeLength > 0 &&
+            proof.treeLength <= 2147483648
+
+    -- INDEX BOUNDS CHECK (defense-in-depth)
+        indexBoundsCheck =
+            proof.lowLeaf.index >= 0 &&
+            proof.lowLeaf.index < proof.treeLength
+
+    -- PATH-INDEX CONSISTENCY CHECK
+        computedIndex = pathIndicesToIndex proof.lowLeafProof.pathIndices
+        pathIndexConsistencyCheck = computedIndex == proof.lowLeaf.index
+
+    -- KEY ORDERING VERIFICATION (CRITICAL for non-membership)
+    -- Verify: lowLeaf.key < query_key
+        keyOrderingCheck = proof.lowLeaf.key < proof.key
+
+    -- NEXT KEY ORDERING (if lowLeaf.next_key != 0, then query_key < lowLeaf.next_key)
+    -- This proves the query key would fall in the gap between lowLeaf.key and lowLeaf.next_key
+        nextKeyCheck =
+            if proof.lowLeaf.nextKey == "0000000000000000000000000000000000000000000000000000000000000000"
+            then True  -- No upper bound (low leaf is rightmost in sorted order)
+            else proof.key < proof.lowLeaf.nextKey
+
+    -- ROOT VERIFICATION: Verify low leaf exists in tree via merkle proof
+        lowLeafHash = hashLeaf proof.lowLeaf
+        lowLeafInternalRoot = computeRoot lowLeafHash proof.lowLeafProof
+        computedRoot = combineRootWithLength lowLeafInternalRoot proof.treeLength
+        rootCheck = computedRoot == proof.root
+
+    in hexFieldsValid && proofLengthCheck && proofBoundsCheck &&
+       treeCapacityCheck && indexBoundsCheck && pathIndexConsistencyCheck &&
+       keyOrderingCheck && nextKeyCheck && rootCheck
+
+-- Interface view type for IndexedMerkleMap
+data IndexedMerkleMapView = IndexedMerkleMapView with
+    owner : Party
+    root : Text
+    rootTime : Optional Time
+  deriving (Eq, Show)
+
+-- IndexedMerkleMap Interface
+-- Provides cryptographically verified key-value storage using indexed merkle maps
+interface IndexedMerkleMap where
+  viewtype IndexedMerkleMapView
+
+  -- Methods to access contract state
+  getOwner : Party
+  getRoot : Text
+  getRootTime : Optional Time
+
+  -- Interface choices for merkle map operations
+  choice AddMapElement : ContractId IndexedMerkleMap
+    with witness : InsertWitness
+    controller getOwner this
+    do
+      addMapElementImpl this witness
+
+  choice UpdateMapElement : ContractId IndexedMerkleMap
+    with witness : UpdateWitness
+    controller getOwner this
+    do
+      updateMapElementImpl this witness
+
+  nonconsuming choice VerifyInclusion : Bool
+    with
+      proof : MembershipProof
+      requester : Party
+    controller requester
+    do
+      verifyInclusionImpl this proof
+
+  nonconsuming choice VerifyExclusion : Bool
+    with
+      proof : NonMembershipProof
+      requester : Party
+    controller requester
+    do
+      verifyExclusionImpl this proof
+
+  -- Implementation methods (defined in interface, implemented by templates)
+  addMapElementImpl : InsertWitness -> Update (ContractId IndexedMerkleMap)
+  updateMapElementImpl : UpdateWitness -> Update (ContractId IndexedMerkleMap)
+  verifyInclusionImpl : MembershipProof -> Update Bool
+  verifyExclusionImpl : NonMembershipProof -> Update Bool

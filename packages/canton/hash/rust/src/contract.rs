@@ -150,15 +150,31 @@ pub async fn exercise_choice(
 ) -> Result<String> {
     let cmdid = format!("{}-hash-{}", choice_name.to_lowercase(), chrono::Utc::now().timestamp());
 
+    // For interface choices (AddMapElement, UpdateMapElement, VerifyInclusion, VerifyExclusion),
+    // we need to use the interface ID as the templateId
+    let is_interface_choice = matches!(choice_name, "AddMapElement" | "UpdateMapElement" | "VerifyInclusion" | "VerifyExclusion");
+
+    let (effective_template_id, command_key) = if is_interface_choice {
+        // Extract package ID from template_id (format: packageId:Module:Template)
+        let package_id = template_id.split(':').next()
+            .ok_or_else(|| anyhow::anyhow!("Invalid template_id format"))?;
+        let interface_id = format!("{}:Silvana:IndexedMerkleMap", package_id);
+        (interface_id, "ExerciseCommand")
+    } else {
+        (template_id.to_string(), "ExerciseCommand")
+    };
+
+    let command = json!({
+        command_key: {
+            "templateId": effective_template_id,
+            "contractId": contract_id,
+            "choice": choice_name,
+            "choiceArgument": choice_argument
+        }
+    });
+
     let payload = json!({
-        "commands": [{
-            "ExerciseCommand": {
-                "templateId": template_id,
-                "contractId": contract_id,
-                "choice": choice_name,
-                "choiceArgument": choice_argument
-            }
-        }],
+        "commands": [command],
         "commandId": cmdid,
         "actAs": [party_app_user],
         "readAs": [],
