@@ -111,11 +111,23 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
     )
     .await?;
 
-    // Get and display the update
+    // Get and display the update from user's perspective
     let update = contract::get_update(&client, &api_url, &jwt, &party_app_user, &update_id).await?;
 
-    println!("\n=== AddMapElement Update ===");
+    println!("\n=== AddMapElement Update (User Node) ===");
     println!("{}", serde_json::to_string_pretty(&update)?);
+
+    // Get and display the update from provider's perspective to verify cross-node visibility
+    let update_provider = contract::get_update(
+        &client,
+        &app_provider_api_url,
+        &app_provider_jwt,
+        &party_app_provider,
+        &update_id
+    ).await?;
+
+    println!("\n=== AddMapElement Update (Provider Node) ===");
+    println!("{}", serde_json::to_string_pretty(&update_provider)?);
 
     // Extract and display the new root from contract state
     if let Some(events) = update
