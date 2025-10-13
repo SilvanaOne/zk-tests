@@ -8,14 +8,50 @@ This contract enables privacy-preserving key-value storage using an **Indexed Me
 
 **Key Features:**
 
+- ✅ **Cross-node observers**: Full support for observers on different Canton participant nodes
+- ✅ **Propose-accept pattern**: Proper authorization for cross-node contract creation
 - ✅ **Witness-based verification**: Verify insertions and updates without reconstructing the full map
 - ✅ **Membership & non-membership proofs**: Prove key existence or non-existence with cryptographic guarantees
 - ✅ **Fixed-height tree (32 levels)**: Supports up to 2³¹ = 2,147,483,648 elements
 - ✅ **Defense-in-depth validation**: 9+ verification layers including hex format, bounds checks, path consistency
 - ✅ **Timestamp tracking**: Ledger Effective Time (LET) captured for audit trails
 - ✅ **SHA256-based hashing**: Uses Canton's alpha `DA.Crypto.Text` library
+- ✅ **Transaction visibility**: Full transaction details with updateIds for all operations
+- ✅ **Archive support**: Complete lifecycle including cross-node archive visibility
 
 ## Architecture
+
+### Cross-Node Design
+
+This implementation demonstrates a **multi-participant Canton setup** with proper cross-node observer patterns:
+
+**Topology:**
+
+```
+┌─────────────────────┐         ┌─────────────────────┐
+│   User Node         │         │   Provider Node     │
+│   (Participant 1)   │         │   (Participant 2)   │
+│                     │         │                     │
+│  app_user (owner)   │◄───────►│  app_provider       │
+│    - signatory      │         │    - observer       │
+│    - initiates ops  │         │    - cross-node     │
+└─────────────────────┘         └─────────────────────┘
+          │                               │
+          └───────────┬───────────────────┘
+                      ▼
+              ┌──────────────┐
+              │ Synchronizer │
+              │ (Domain)     │
+              └──────────────┘
+```
+
+**Key Design Patterns:**
+
+1. **Propose-Accept for Creation**: Uses `HashRequest` → `Accept` pattern to properly authorize cross-node contract creation
+2. **SynchronizerId Parameter**: All commands include `synchronizerId` to route transactions through the correct domain
+3. **Package Vetting**: Both nodes must have the package vetted for the respective parties
+4. **Cross-Node Visibility**: All operations (create, update, verify, archive) are visible to both parties
+5. **Dual Fetch**: Critical operations fetch updates from both nodes to verify synchronization
 
 ### Data Structures
 
@@ -62,45 +98,84 @@ data MerkleProof = MerkleProof with
 - Proves query key falls in gap: `lowLeaf.key < queryKey < lowLeaf.nextKey`
 - Used by `VerifyExclusion` non-consuming choice
 
-### Contract State
+### Contract Templates
+
+#### HashRequest (Propose-Accept Pattern)
+
+```daml
+template HashRequest
+  with
+    owner : Party
+    provider : Party
+    id : Text
+    add_result : Int
+    keccak_result : Optional Text
+    sha256_result : Optional Text
+    root : Text
+  where
+    signatory owner
+    observer provider
+
+    choice Accept : ContractId Hash
+      controller provider
+
+    choice Decline : ()
+      controller provider
+
+    choice Withdraw : ()
+      controller owner
+```
+
+**Purpose**: Enables cross-node contract creation where the `provider` (observer) is hosted on a different Canton participant node than the `owner`. This implements the proper propose-accept pattern for cross-node authorization.
+
+#### Hash (Main Contract)
 
 ```daml
 template Hash
   with
     owner : Party
+    provider : Party               -- Provider party (maintainer, cross-node observer)
+    id : Text                      -- Unique identifier
     add_result : Int               -- Simple addition result (legacy)
     keccak_result : Optional Text  -- Keccak256 hash result (legacy)
     sha256_result : Optional Text  -- SHA256 hash result (legacy)
-    root : Optional Text           -- Current merkle map root (hex-encoded)
+    root : Text                    -- Current merkle map root (hex-encoded)
     root_time : Optional Time      -- Timestamp when root was last updated
+  where
+    signatory owner
+    observer provider              -- Cross-node observer
 ```
 
 ### Choices
 
-#### Merkle Map Operations
+#### Merkle Map Operations (via IndexedMerkleMap Interface)
+
+The `Hash` template implements the `IndexedMerkleMap` interface, providing standardized merkle map operations:
 
 **AddMapElement** - Insert new key-value pair
 
 ```daml
-choice AddMapElement : HashId
+choice AddMapElement : ContractId IndexedMerkleMap
   with witness : InsertWitness
   controller owner
 ```
 
 - Verifies insert witness with 8 cryptographic constraints
 - Updates root and timestamp
+- Returns interface contract ID (consuming choice - creates new contract)
 - **Defense-in-depth**: Hex validation, proof bounds, index checks, LCA anchor verification
 
 **UpdateMapElement** - Update existing key's value
 
 ```daml
-choice UpdateMapElement : HashId
+choice UpdateMapElement : ContractId IndexedMerkleMap
   with witness : UpdateWitness
   controller owner
 ```
 
 - Verifies update witness with 3 constraints
 - Updates root and timestamp
+- Returns interface contract ID (consuming choice - creates new contract)
 - Validates membership proof, leaf structure, root computation
 
 **VerifyInclusion** - Non-consuming proof of membership
@@ -131,12 +206,26 @@ nonconsuming choice VerifyExclusion : Bool
 - Uses low leaf to prove gap in sorted keys
 - Does not modify contract (non-consuming)
 
-#### Add and Hash Operations
+**Archive** - Archive the contract (built-in choice)
+
+```daml
+choice Archive : ()
+  controller owner
+```
+
+- Standard DAML choice available on all templates
+- Archives (consumes) the contract, removing it from active contract set
+- Cross-node observers (provider) can see the archive event
+- No return value (consuming choice)
+
+#### Hash-Specific Operations (Template Choices)
 
 **Add** - Sum a list of integers
 **Keccak** - Compute Keccak256 hash of concatenated hex strings
 **Sha256** - Compute SHA256 hash of concatenated hex strings
 **Sha256n** - Iteratively hash n times: `hash_i+1 = sha256(hash_i || args)`
+
+Note: These are direct template choices, not part of the IndexedMerkleMap interface.
 
 ## Verification Logic
 
@@ -224,71 +313,101 @@ hashUpToLevel : Text -> [Text] -> [Bool] -> Int -> Text
 
 ## Usage Example
 
-### 1. Create Hash Contract
+### Cross-Node Setup
+
+This implementation supports **cross-node observers** where:
+
+- `owner` (app_user) is hosted on one Canton participant node
+- `provider` (app_provider) is hosted on a different Canton participant node
+- Both parties can observe all contract operations and events
+
+**Environment Configuration**:
 
 ```bash
-# Initialize with empty root (or None)
-curl -X POST "$API_URL/v2/commands/submit-and-wait" \
-  -H "Authorization: Bearer $JWT" \
-  -d '{
-    "commands": [{
-      "CreateCommand": {
-        "templateId": "PACKAGE_ID:Hash:Hash",
-        "createArgument": {
-          "owner": "PARTY_ID",
-          "add_result": "0",
-          "keccak_result": null,
-          "sha256_result": null,
-          "root": "INITIAL_ROOT_HEX",
-          "root_time": null
-        }
-      }
-    }]
-  }'
+# User node
+APP_USER_API_URL=http://localhost:7575/api/json-api/
+APP_USER_JWT=...
+PARTY_APP_USER=app_user_localnet-localparty-1::122...
+
+# Provider node (different participant)
+APP_PROVIDER_API_URL=http://localhost:7576/api/json-api/
+APP_PROVIDER_JWT=...
+PARTY_APP_PROVIDER=app_provider_localnet-localparty-1::122...
+
+# Synchronizer (domain) for cross-node transactions
+SYNCHRONIZER_ID=global-domain::122075d227a0...
 ```
 
-### 2. Insert Key-Value Pair
+### Complete Workflow (add-map-element)
+
+The Rust client demonstrates the full cross-node lifecycle:
 
 ```bash
-# Generate InsertWitness using Rust client
-cargo run -- add-map-element 44 900
-
-# This performs 3 phases:
-# Phase 1: INSERT (exercises AddMapElement with witness)
-# Phase 2: VERIFY INCLUSION (exercises VerifyInclusion)
-# Phase 3: VERIFY EXCLUSION of KEY=1000 (exercises VerifyExclusion)
+# Execute complete workflow: Create → Update → Verify → Archive
+cargo run -- add-map-element 1001 30
 ```
 
-### 3. Update Existing Key
+**Workflow Phases**:
+
+**Phase 1: Create Contract (Propose-Accept Pattern)**
+
+- User creates `HashRequest` (signatory: owner, observer: provider)
+- Provider accepts request via `Accept` choice
+- Creates final `Hash` contract visible to both nodes
+- Includes `synchronizerId` for cross-node coordination
+
+**Phase 2: Insert Key-Value (AddMapElement)**
+
+- Generates cryptographic `InsertWitness` off-chain
+- Submits via interface choice `AddMapElement`
+- Updates merkle map root with ZK proof verification
+- Fetches update from **both** user and provider nodes
+
+**Phase 3: Verify Inclusion**
+
+- Exercises non-consuming `VerifyInclusion` choice
+- Proves key-value exists in map via membership proof
+- Contract remains active (non-consuming)
+
+**Phase 4: Verify Exclusion**
+
+- Exercises non-consuming `VerifyExclusion` choice
+- Proves query key (1000) does NOT exist in map
+- Uses "low leaf" proof to show gap in sorted keys
+
+**Phase 5: Archive Contract**
+
+- Exercises built-in `Archive` choice
+- Removes contract from active contract set
+- Fetches archive event from **both** user and provider nodes
+- Confirms cross-node visibility of archive
+
+### Update Existing Key
 
 ```bash
-# Generate UpdateWitness using Rust client
-cargo run -- update-map-element 44 950 1000
+# Generate UpdateWitness and update existing key
+cargo run -- update-map-element 1001 950 2000
 ```
 
-### 4. Query Membership (Non-Consuming)
+### Hash Operations
 
 ```bash
-# Exercises VerifyInclusion without consuming contract
-curl -X POST "$API_URL/v2/commands/submit-and-wait" \
-  -d '{
-    "commands": [{
-      "ExerciseCommand": {
-        "templateId": "PACKAGE_ID:Hash:Hash",
-        "contractId": "CONTRACT_ID",
-        "choice": "VerifyInclusion",
-        "choiceArgument": {
-          "proof": { /* MembershipProof JSON */ },
-          "requester": "PARTY_ID"
-        }
-      }
-    }]
-  }'
+# Simple addition
+cargo run -- add 10 20 30
+
+# Keccak256 hash
+cargo run -- keccak "deadbeef" "cafebabe"
+
+# SHA256 hash
+cargo run -- sha256 "deadbeef"
+
+# Iterative SHA256 (n times)
+cargo run -- sha256n "deadbeef" 5
 ```
 
 ## Security Properties
 
-### Fixed Tree Height (Audit Compliance)
+### Fixed Tree Height
 
 All proofs enforce **exactly 31 siblings** (height 32 tree):
 
@@ -375,29 +494,77 @@ The Rust client:
 
 ## Files
 
-- `daml/Hash.daml` - Main contract implementation (this file)
-- `daml.yaml` - Project configuration
-- `Makefile` - Build, upload, and inspection commands
-- `.env` - Environment variables (API URLs, party IDs, package ID)
-- `rust/` - Rust client for witness generation and Canton API interaction
+### DAML Files
+
+- `daml/Hash.daml` - Main `Hash` template with IndexedMerkleMap interface implementation
+- `daml/HashRequest.daml` - Propose-accept pattern for cross-node contract creation
+- `daml/Silvana.daml` - IndexedMerkleMap interface and verification functions
+- `daml.yaml` - Project configuration (package name: hash-v8)
+
+### Rust Client
+
+- `rust/src/main.rs` - CLI entry point
+- `rust/src/contract.rs` - Canton API interaction functions
+  - `create_hash_contract()` - Creates HashRequest
+  - `accept_hash_request()` - Provider accepts request
+  - `create_and_accept_hash_contract()` - Full propose-accept workflow
+  - `exercise_choice()` - Generic choice execution
+  - `archive_hash_contract()` - Archive contract with cross-node verification
+  - `get_update()` - Fetch transaction details by updateId
+- `rust/src/addmapelement.rs` - Complete add-map-element workflow (5 phases)
+- `rust/src/updatemapelement.rs` - Update existing key workflow
+- `rust/src/add.rs`, `keccak.rs`, `sha256.rs`, `sha256n.rs` - Hash operations
+
+### Configuration
+
+- `.env` - Environment variables (API URLs, JWTs, party IDs, package ID, synchronizer ID)
+- `Makefile` - Build, upload, vetting, and inspection commands
 
 ## Building and Deployment
+
+### DAML Package
 
 ```bash
 # Build DAR
 make build
 
-# Upload to Canton Network
-make upload
+# Upload to both nodes
+make upload-user      # Upload to user node
+make upload-provider  # Upload to provider node
 
 # Get package ID
 make inspect
 
+# Check vetting status (important for cross-node)
+make vetting-status-user
+make vetting-status-provider
+
 # List parties
-make parties
+make parties-user      # Parties on user node
+make parties-provider  # Parties on provider node
 
 # Query updates
 make updates OFFSET=15000
+```
+
+### Cross-Node Package Vetting
+
+**Important**: For cross-node transactions, packages must be vetted on both participant nodes:
+
+1. Auto-vetting: Some nodes (e.g., with Splice validator backend) automatically vet packages on upload
+2. Manual vetting: Other nodes require explicit vetting via Canton console:
+   ```scala
+   `app-provider`.dars.vetting.enable("PACKAGE_ID")
+   ```
+
+Use `make vetting-status-provider-only` to verify the provider party has the package vetted.
+
+### Rust Client
+
+```bash
+cd rust
+cargo build
+cargo run -- add-map-element 1001 30
 ```
 
 ## Dependencies
