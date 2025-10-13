@@ -650,17 +650,20 @@ pub struct TrafficStatus {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct TrafficStatusInner {
     pub actual: TrafficActual,
+    #[allow(dead_code)]
     pub target: TrafficTarget,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct TrafficActual {
     pub total_consumed: i64,
+    #[allow(dead_code)]
     pub total_limit: i64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct TrafficTarget {
+    #[allow(dead_code)]
     pub total_purchased: i64,
 }
 
