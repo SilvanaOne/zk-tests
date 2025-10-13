@@ -2,11 +2,12 @@
 # https://docs.daml.com/tools/assistant.html#project-config-file-daml-yaml
 
 sdk-version: 3.3.0-snapshot.20250930.0
-name: hash-v1
+name: hash-v2
 source: daml
-version: 0.0.20
+version: 0.0.2
 dependencies:
   - daml-prim
   - daml-stdlib
 build-options:
   - --target=2.1
+  - -Wno-crypto-text-is-alpha
