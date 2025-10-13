@@ -270,6 +270,39 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         }
     );
 
+    // === PHASE 4: Archive Contract ===
+    info!("\n=== Archiving Contract ===");
+
+    // Archive the contract (using the contract ID from Phase 3, which is still active)
+    let (archive_update_id, archive_update_user) = contract::archive_hash_contract(
+        &client,
+        &api_url,
+        &jwt,
+        &party_app_user,
+        &template_id,
+        &new_contract_id,
+        &synchronizer_id
+    ).await?;
+
+    // Get the archive update from provider's perspective to verify cross-node visibility
+    let archive_update_provider = contract::get_update(
+        &client,
+        &app_provider_api_url,
+        &app_provider_jwt,
+        &party_app_provider,
+        &archive_update_id
+    ).await?;
+
+    println!("\n=== Archive Update (User Node) ===");
+    println!("{}", serde_json::to_string_pretty(&archive_update_user)?);
+
+    println!("\n=== Archive Update (Provider Node) ===");
+    println!("{}", serde_json::to_string_pretty(&archive_update_provider)?);
+
+    println!("\n=== Contract Archived Successfully ===");
+    println!("Contract ID: {}", new_contract_id);
+    println!("✅ Cross-node archive visibility confirmed");
+
     Ok(())
 }
 

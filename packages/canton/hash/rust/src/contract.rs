@@ -284,6 +284,69 @@ pub async fn accept_hash_request(
     Ok((hash_contract_id, update_id.to_string(), update_json))
 }
 
+/// Archive a Hash contract using the built-in Archive choice
+pub async fn archive_hash_contract(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party_app_user: &str,
+    template_id: &str,
+    contract_id: &str,
+    synchronizer_id: &str,
+) -> Result<(String, serde_json::Value)> {
+    let cmdid = format!("archive-hash-{}", chrono::Utc::now().timestamp());
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": contract_id,
+                "choice": "Archive",
+                "choiceArgument": {}
+            }
+        }],
+        "commandId": cmdid,
+        "actAs": [party_app_user],
+        "readAs": [],
+        "workflowId": "IndexedMerkleMap",
+        "synchronizerId": synchronizer_id
+    });
+
+    info!("Archiving Hash contract");
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", api_url))
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to archive Hash contract: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_response: serde_json::Value = serde_json::from_str(&text)?;
+
+    let update_id = json_response
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("No updateId in archive response"))?;
+
+    info!("Hash contract archived, updateId: {}", update_id);
+
+    // Fetch and return the full update
+    let update_json = get_update(client, api_url, jwt, party_app_user, update_id).await?;
+
+    Ok((update_id.to_string(), update_json))
+}
+
 pub async fn exercise_choice(
     client: &reqwest::Client,
     api_url: &str,
