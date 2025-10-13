@@ -576,6 +576,67 @@ cargo build
 cargo run -- add-map-element 1001 30
 ```
 
+## Traffic Measurement
+
+The Rust client automatically measures Canton synchronizer traffic consumed by each transaction using the Scan API.
+
+### How It Works
+
+The implementation queries traffic status before and after each transaction using Canton's `/v0/domains/{domain_id}/members/{member_id}/traffic-status` endpoint:
+
+- **User Node**: Measures traffic for all transactions initiated by app_user
+- **Provider Node**: Measures traffic for observer (when traffic tracking is enabled)
+
+Traffic is reported in bytes for:
+1. HashRequest creation
+2. HashRequest acceptance
+3. AddMapElement update
+4. Archive and recreate transaction
+
+### Quick Check with Make Command
+
+To view current traffic status for the user participant:
+
+```bash
+make traffic
+```
+
+Output:
+```
+Canton Synchronizer Traffic Status
+===================================
+
+User Participant: participant::12204f3ee187212336da5f8c74e44f3ab709f8020438e8a2aa5159eb2a89caa388ca
+Domain: global-domain::122075d227a0482dc186fa09a3ddc4e0b2046d1ce9fdf4ec7375bd698b362525632e
+Member ID: PAR::participant::12204f3ee187212336da5f8c74e44f3ab709f8020438e8a2aa5159eb2a89caa388ca
+
+Fetching traffic status...
+
+Traffic Status:
+  Total Consumed: 0 bytes
+  Total Limit:    1200000 bytes
+  Total Purchased: 1200000 bytes
+
+Available Traffic: 1200000 bytes
+```
+
+### Example Output During Transactions
+
+```
+📊 Traffic Consumed (User Node): 1234 bytes
+📊 Traffic Consumed (Provider Node): Not available
+```
+
+### Configuration
+
+Traffic measurement requires:
+- `SCAN_API_URL`: URL to Canton Scan API (e.g., `http://scan.localhost:4000/api/scan/`)
+- `PARTY_PARTICIPANT_USER` and `PARTY_PARTICIPANT_PROVIDER`: Participant party IDs in format `participant::fingerprint`
+
+The code automatically converts participant party IDs to member IDs (format: `PAR::participant::fingerprint`) for the Scan API.
+
+**Note:** Traffic tracking may not be enabled for all participants in development environments. The code gracefully handles this by showing "Not available" when traffic tracking is not configured.
+
 ## Dependencies
 
 - `daml-prim`

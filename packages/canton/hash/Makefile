@@ -5,7 +5,7 @@ export
 
 DAR := .daml/dist/hash-v8-0.0.1.dar
 
-.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider
+.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic
 
 help:
 	@echo "Hash - Helper Commands"
@@ -38,6 +38,9 @@ help:
 	@echo "Ledger Updates:"
 	@echo "  make updates [OFFSET=n]        - Show last 100 updates from app-user"
 	@echo "  make get-update UPDATE_ID=<id> - Get details of a specific update"
+	@echo ""
+	@echo "Traffic Monitoring:"
+	@echo "  make traffic                   - Show current traffic status for user participant"
 
 build:
 	@daml build
@@ -260,3 +263,27 @@ vetting-status-provider-only:
 	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
 		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v8&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch vetting status"
+
+traffic:
+	@echo "Canton Synchronizer Traffic Status"
+	@echo "==================================="
+	@echo ""
+	@if [ -z "$(SCAN_API_URL)" ] || [ -z "$(PARTY_PARTICIPANT_USER)" ]; then \
+		echo "Error: SCAN_API_URL and PARTY_PARTICIPANT_USER must be set in .env"; \
+		exit 1; \
+	fi
+	@ENCODED_DOMAIN=$$(echo "$(SYNCHRONIZER_ID)" | sed 's/:/%3A/g'); \
+	MEMBER_ID="PAR::$(PARTY_PARTICIPANT_USER)"; \
+	ENCODED_MEMBER=$$(echo "$$MEMBER_ID" | sed 's/:/%3A/g'); \
+	echo "User Participant: $(PARTY_PARTICIPANT_USER)"; \
+	echo "Domain: $(SYNCHRONIZER_ID)"; \
+	echo "Member ID: $$MEMBER_ID"; \
+	echo ""; \
+	echo "Fetching traffic status..."; \
+	echo ""; \
+	RESPONSE=$$(curl -s "$(SCAN_API_URL)v0/domains/$$ENCODED_DOMAIN/members/$$ENCODED_MEMBER/traffic-status"); \
+	echo "Raw Response:"; \
+	echo "$$RESPONSE" | jq '.' 2>/dev/null || echo "$$RESPONSE"; \
+	echo ""; \
+	echo "Parsed:"; \
+	echo "$$RESPONSE" | jq -r '. as $$root | if .error then "Error: " + .error else "  Total Consumed:  \($$root.traffic_status.actual.total_consumed) bytes\n  Total Limit:     \($$root.traffic_status.actual.total_limit) bytes\n  Total Purchased: \($$root.traffic_status.target.total_purchased) bytes\n  Available:       \($$root.traffic_status.actual.total_limit - $$root.traffic_status.actual.total_consumed) bytes" end' 2>/dev/null || echo "Error: Unable to parse traffic status"

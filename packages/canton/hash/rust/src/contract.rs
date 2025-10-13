@@ -640,3 +640,67 @@ pub fn detect_update_type(update_json: &serde_json::Value) -> (String, String) {
 
     ("UNKNOWN".to_string(), "Could not determine update type".to_string())
 }
+
+/// Traffic status returned from Scan API
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TrafficStatus {
+    pub traffic_status: TrafficStatusInner,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TrafficStatusInner {
+    pub actual: TrafficActual,
+    pub target: TrafficTarget,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TrafficActual {
+    pub total_consumed: i64,
+    pub total_limit: i64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TrafficTarget {
+    pub total_purchased: i64,
+}
+
+/// Get traffic status for a member from Scan API
+/// Returns traffic status showing total_consumed, total_limit, and total_purchased in bytes
+pub async fn get_member_traffic_status(
+    client: &reqwest::Client,
+    scan_api_url: &str,
+    domain_id: &str,
+    member_id: &str,
+) -> Result<TrafficStatus> {
+    // URL encode the domain_id and member_id since they contain :: characters
+    let encoded_domain = domain_id.replace("::", "%3A%3A");
+    let encoded_member = member_id.replace("::", "%3A%3A");
+
+    let url = format!(
+        "{}v0/domains/{}/members/{}/traffic-status",
+        scan_api_url,
+        encoded_domain,
+        encoded_member
+    );
+
+    debug!("Fetching traffic status from: {}", url);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to get traffic status: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let traffic_status: TrafficStatus = serde_json::from_str(&text)?;
+    Ok(traffic_status)
+}

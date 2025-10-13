@@ -163,7 +163,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_user
-    ).await.ok();
+    ).await?;
 
     // Measure traffic BEFORE AddMapElement (provider node)
     let traffic_provider_before_addmap = contract::get_member_traffic_status(
@@ -171,7 +171,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_provider
-    ).await.ok();
+    ).await?;
 
     // Exercise AddMapElement choice
     let update_id = contract::exercise_choice(
@@ -192,7 +192,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_user
-    ).await.ok();
+    ).await?;
 
     // Measure traffic AFTER AddMapElement (provider node)
     let traffic_provider_after_addmap = contract::get_member_traffic_status(
@@ -200,20 +200,16 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_provider
-    ).await.ok();
+    ).await?;
 
     // Get and display the update from user's perspective
     let update = contract::get_update(&client, &api_url, &jwt, &party_app_user, &update_id).await?;
 
     println!("\n=== AddMapElement Update (User Node) ===");
     println!("{}", serde_json::to_string_pretty(&update)?);
-    if let (Some(before), Some(after)) = (&traffic_user_before_addmap, &traffic_user_after_addmap) {
-        let addmap_user_traffic = after.traffic_status.actual.total_consumed
-            - before.traffic_status.actual.total_consumed;
-        println!("\n📊 Traffic Consumed (User Node): {} bytes", addmap_user_traffic);
-    } else {
-        println!("\n📊 Traffic Consumed (User Node): Not available");
-    }
+    let addmap_user_traffic = traffic_user_after_addmap.traffic_status.actual.total_consumed
+        - traffic_user_before_addmap.traffic_status.actual.total_consumed;
+    println!("\n📊 Traffic Consumed (User Node): {} bytes", addmap_user_traffic);
 
     // Get and display the update from provider's perspective to verify cross-node visibility
     // Use LEDGER_EFFECTS to see ExercisedEvent and detect update type
@@ -227,13 +223,9 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
 
     println!("\n=== AddMapElement Update (Provider Node with LEDGER_EFFECTS) ===");
     println!("{}", serde_json::to_string_pretty(&update_provider)?);
-    if let (Some(before), Some(after)) = (&traffic_provider_before_addmap, &traffic_provider_after_addmap) {
-        let addmap_provider_traffic = after.traffic_status.actual.total_consumed
-            - before.traffic_status.actual.total_consumed;
-        println!("\n📊 Traffic Consumed (Provider Node): {} bytes", addmap_provider_traffic);
-    } else {
-        println!("\n📊 Traffic Consumed (Provider Node): Not available");
-    }
+    let addmap_provider_traffic = traffic_provider_after_addmap.traffic_status.actual.total_consumed
+        - traffic_provider_before_addmap.traffic_status.actual.total_consumed;
+    println!("\n📊 Traffic Consumed (Provider Node): {} bytes", addmap_provider_traffic);
 
     // Provider detects update type
     let (update_type, details) = contract::detect_update_type(&update_provider);
@@ -400,7 +392,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_user
-    ).await.ok();
+    ).await?;
 
     // Measure traffic BEFORE Archive+Recreate (provider node)
     let traffic_provider_before_archive = contract::get_member_traffic_status(
@@ -408,7 +400,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_provider
-    ).await.ok();
+    ).await?;
 
     // Archive the old contract and atomically create a new one with the same fields
     // Both operations happen in a single transaction
@@ -430,7 +422,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_user
-    ).await.ok();
+    ).await?;
 
     // Measure traffic AFTER Archive+Recreate (provider node)
     let traffic_provider_after_archive = contract::get_member_traffic_status(
@@ -438,7 +430,7 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
         &scan_api_url,
         &synchronizer_id,
         &member_id_provider
-    ).await.ok();
+    ).await?;
 
     // Get the archive+create update from provider's perspective to verify cross-node visibility
     // Use LEDGER_EFFECTS to see ExercisedEvent and detect update type
@@ -452,23 +444,15 @@ pub async fn handle_addmapelement(key: i64, value: i64) -> Result<()> {
 
     println!("\n=== Archive and Recreate Update (User Node) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_user)?);
-    if let (Some(before), Some(after)) = (&traffic_user_before_archive, &traffic_user_after_archive) {
-        let archive_user_traffic = after.traffic_status.actual.total_consumed
-            - before.traffic_status.actual.total_consumed;
-        println!("\n📊 Traffic Consumed (User Node): {} bytes", archive_user_traffic);
-    } else {
-        println!("\n📊 Traffic Consumed (User Node): Not available");
-    }
+    let archive_user_traffic = traffic_user_after_archive.traffic_status.actual.total_consumed
+        - traffic_user_before_archive.traffic_status.actual.total_consumed;
+    println!("\n📊 Traffic Consumed (User Node): {} bytes", archive_user_traffic);
 
     println!("\n=== Archive and Recreate Update (Provider Node with LEDGER_EFFECTS) ===");
     println!("{}", serde_json::to_string_pretty(&archive_update_provider)?);
-    if let (Some(before), Some(after)) = (&traffic_provider_before_archive, &traffic_provider_after_archive) {
-        let archive_provider_traffic = after.traffic_status.actual.total_consumed
-            - before.traffic_status.actual.total_consumed;
-        println!("\n📊 Traffic Consumed (Provider Node): {} bytes", archive_provider_traffic);
-    } else {
-        println!("\n📊 Traffic Consumed (Provider Node): Not available");
-    }
+    let archive_provider_traffic = traffic_provider_after_archive.traffic_status.actual.total_consumed
+        - traffic_provider_before_archive.traffic_status.actual.total_consumed;
+    println!("\n📊 Traffic Consumed (Provider Node): {} bytes", archive_provider_traffic);
 
     // Provider detects update type - should detect Archive+Recreate
     let (archive_type, archive_details) = contract::detect_update_type(&archive_update_provider);
