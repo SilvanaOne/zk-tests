@@ -1,0 +1,146 @@
+-- Copyright (c) 2025 Silvana. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+-- | ProofOfReserves implementation for Token Standard (CIP-56).
+--
+-- This module provides proof of reserves functionality for tokens implementing
+-- the Holding interface from the Canton Token Standard, using interface-based
+-- queries instead of template-based queries.
+module TokenReserve where
+
+import Splice.Api.Token.HoldingV1 qualified as Token.Holding
+import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
+import Splice.Round
+import Splice.Types
+import qualified DA.Foldable as Foldable
+import DA.List (unique)
+
+-- | A proof of reserves contract for token holdings.
+--
+-- This template allows a prover to demonstrate ownership of token holdings
+-- with multiple guarantors, each with a guaranteed cap. The total proven
+-- amount is the sum of capped amounts per guarantor.
+template TokenProofOfReserves
+  with
+    prover : Party
+      -- ^ The party proving the reserves.
+    round : Round
+      -- ^ The round when reserves were proven.
+    amount : Decimal
+      -- ^ The total proven reserve amount (sum of capped guarantor amounts).
+    instrumentId : Token.Holding.InstrumentId
+      -- ^ The token instrument being proven.
+    guarantors : [(Party, Decimal)]
+      -- ^ List of (guarantor party, guaranteed cap amount).
+    observers : [Party]
+      -- ^ Parties that can observe this proof.
+  where
+    signatory prover
+    observer observers
+
+    ensure isDefinedRound round &&
+           amount >= 0.0 &&
+           all (\(_, cap) -> cap >= 0.0) guarantors &&
+           unique (map fst guarantors)
+
+    choice ProveTokenReserves : ContractId TokenProofOfReserves
+      -- ^ Prove reserves by providing holding contract IDs and OpenMiningRound.
+      --
+      -- This choice validates that:
+      -- 1. All holdings are for the correct instrument
+      -- 2. All holdings are unlocked
+      -- 3. All holding owners are guarantors
+      -- 4. Calculates capped amounts per guarantor
+      with
+        holdingCids : [ContractId Token.Holding.Holding]
+          -- ^ List of Holding contract IDs to prove.
+        openRoundCid : ContractId OpenMiningRound
+          -- ^ OpenMiningRound contract for round verification.
+      controller prover :: map fst guarantors
+      do
+        -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
+        openMiningRound <- exercise openRoundCid OpenMiningRound_Fetch with p = prover
+        -- Validate no duplicate holdings
+        assertMsg "Holding CIDs must be unique" (unique holdingCids)
+
+        -- Fetch all holdings via interface and get views
+        views <- mapA (\cid -> do
+          holding <- fetch cid
+          return (view holding)
+          ) holdingCids
+
+        -- Verify all holdings are for the correct instrument
+        assertMsg "All holdings must be for the same instrument"
+          (all (\v -> v.instrumentId == instrumentId) views)
+
+        -- Verify no holdings are locked
+        -- (Optional: Could allow locked holdings with specific context)
+        assertMsg "Holdings must not be locked"
+          (all (\v -> v.lock == None) views)
+
+        -- Create map of guarantor parties
+        let guarantorParties = map fst guarantors
+
+        -- Verify all holding owners are guarantors
+        let owners = map (\v -> v.owner) views
+        assertMsg "All holdings must be owned by guarantors"
+          (all (\o -> o `elem` guarantorParties) owners)
+
+        -- Calculate capped amount per guarantor
+        let calculateGuarantorAmount (party, cap) =
+              let partyHoldings = filter (\v -> v.owner == party) views
+                  totalAmount = Foldable.sum $ map (\v -> v.amount) partyHoldings
+                  cappedAmount = min totalAmount cap
+              in cappedAmount
+
+        -- Calculate total proven amount (sum of all capped amounts)
+        let newAmount = Foldable.sum $ map calculateGuarantorAmount guarantors
+
+        create this with
+          round = openMiningRound.round
+          amount = newAmount
+
+    choice AddObserver : ContractId TokenProofOfReserves
+      -- ^ Add a new observer to the proof contract.
+      with
+        newObserver : Party
+          -- ^ The party to add as observer.
+      controller prover
+      do
+        assertMsg "Observer already exists" (newObserver `notElem` observers)
+        create this with observers = newObserver :: observers
+
+    choice RemoveObserver : ContractId TokenProofOfReserves
+      -- ^ Remove an observer from the proof contract.
+      with
+        observerToRemove : Party
+          -- ^ The party to remove from observers.
+      controller prover
+      do
+        create this with
+          observers = filter (/= observerToRemove) observers
+
+    choice AddGuarantor : ContractId TokenProofOfReserves
+      -- ^ Add a new guarantor with a guaranteed cap.
+      with
+        newGuarantor : Party
+          -- ^ The party to add as guarantor.
+        guaranteedAmount : Decimal
+          -- ^ The cap amount for this guarantor.
+      controller prover
+      do
+        let existingGuarantors = map fst guarantors
+        assertMsg "Guarantor already exists" (newGuarantor `notElem` existingGuarantors)
+        assertMsg "Guaranteed amount must be non-negative" (guaranteedAmount >= 0.0)
+        create this with
+          guarantors = (newGuarantor, guaranteedAmount) :: guarantors
+
+    choice RemoveGuarantor : ContractId TokenProofOfReserves
+      -- ^ Remove a guarantor from the proof contract.
+      with
+        guarantorToRemove : Party
+          -- ^ The party to remove from guarantors.
+      controller prover
+      do
+        create this with
+          guarantors = filter (\(p, _) -> p /= guarantorToRemove) guarantors

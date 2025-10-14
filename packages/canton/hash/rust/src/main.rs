@@ -8,6 +8,7 @@ mod reserve;
 mod root;
 mod sha256;
 mod sha256n;
+mod token_reserve;
 mod updatemapelement;
 mod url;
 
@@ -72,6 +73,8 @@ enum Commands {
     Reserve,
     /// Mint TestToken to PARTY_APP_USER and PARTY_BANK
     Mint,
+    /// Create TokenProofOfReserves and prove TestToken reserves
+    TokenReserve,
 }
 
 #[tokio::main]
@@ -96,6 +99,7 @@ async fn main() -> Result<()> {
         Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
         Commands::Reserve => reserve::handle_reserve().await?,
         Commands::Mint => mint::handle_mint().await?,
+        Commands::TokenReserve => token_reserve::handle_token_reserve().await?,
     }
 
     Ok(())
