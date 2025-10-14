@@ -5,7 +5,7 @@ export
 
 DAR := .daml/dist/hash-v9-0.0.1.dar
 
-.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package
+.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets extract-contract-blobs
 
 help:
 	@echo "Hash - Helper Commands"
@@ -43,6 +43,10 @@ help:
 	@echo ""
 	@echo "Traffic Monitoring:"
 	@echo "  make traffic                   - Show current traffic status for user participant"
+	@echo ""
+	@echo "Amulet Contracts:"
+	@echo "  make find-amulets [PARTY=<party>] - Find Amulet contracts for party (defaults to PARTY_APP_USER)"
+	@echo "  make split-amulets              - Split largest amulet into 5x 10 CC + remainder"
 
 build:
 	@daml build
@@ -323,3 +327,183 @@ get-package:
 	@echo "Decoding DALF package..."
 	@echo ""
 	@daml damlc inspect "hash-package-$(HASH_PACKAGE_ID).dalf" 2>&1 || echo "Could not decode DALF"
+
+find-amulets:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ]; then \
+		echo "Error: APP_USER_API_URL or APP_USER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	PARTY=$${PARTY:-$(PARTY_APP_USER)}; \
+	if [ -z "$$PARTY" ]; then \
+		echo "Error: PARTY not specified and PARTY_APP_USER not set"; \
+		exit 1; \
+	fi; \
+	echo "Searching for Amulet contracts for party $$PARTY..."; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		$(APP_USER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$PARTY" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	AMULETS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("Splice.Amulet:Amulet")))]' 2>/dev/null); \
+	if [ "$$AMULETS" != "[]" ] && [ -n "$$AMULETS" ] && [ "$$AMULETS" != "null" ]; then \
+		echo "Found Amulet contracts:"; \
+		echo "$$AMULETS" | jq -r '.[] | "  Contract ID: \(.contractEntry.JsActiveContract.createdEvent.contractId)\n  Amount: \(.contractEntry.JsActiveContract.createdEvent.createArgument.amount.initialAmount) AMT\n  Created At Round: \(.contractEntry.JsActiveContract.createdEvent.createArgument.amount.createdAt.number // "N/A")"' 2>/dev/null; \
+		echo ""; \
+		CIDS=$$(echo "$$AMULETS" | jq -r '[.[] | .contractEntry.JsActiveContract.createdEvent.contractId] | join(",")' 2>/dev/null); \
+		if [ -n "$$CIDS" ] && [ "$$CIDS" != "null" ]; then \
+			echo "INPUT_AMULET_CIDS=$$CIDS"; \
+		fi; \
+	else \
+		echo "No Amulet contracts found for party $$PARTY"; \
+		echo ""; \
+		echo "The party needs some Amulets first."; \
+	fi
+
+extract-contract-blobs:
+	@if [ -z "$(SCAN_API_URL)" ]; then \
+		echo "Error: SCAN_API_URL not set in .env"; \
+		exit 1; \
+	fi; \
+	echo "Extracting contract blobs from Scan API..." >&2; \
+	echo "" >&2; \
+	echo "Fetching AmuletRules from /v0/dso..." >&2; \
+	DSO_RESP=$$(curl -s "$(SCAN_API_URL)v0/dso"); \
+	AMULET_BLOB=$$(echo "$$DSO_RESP" | jq -r '.amulet_rules.contract.created_event_blob // empty'); \
+	AMULET_CID=$$(echo "$$DSO_RESP" | jq -r '.amulet_rules.contract.contract_id // empty'); \
+	echo "  AmuletRules CID: $$AMULET_CID" >&2; \
+	echo "Fetching current OpenMiningRound from /v0/open-and-issuing-mining-rounds..." >&2; \
+	ROUNDS_RESP=$$(curl -s -H "Content-Type: application/json" \
+		-X POST "$(SCAN_API_URL)v0/open-and-issuing-mining-rounds" \
+		-d '{"cached_open_mining_round_contract_ids": [], "cached_issuing_round_contract_ids": []}' 2>/dev/null || echo "{}"); \
+	if echo "$$ROUNDS_RESP" | jq -e '.open_mining_rounds' >/dev/null 2>&1; then \
+		MINING_CID=$$(echo "$$ROUNDS_RESP" | jq -r '.open_mining_rounds | to_entries | sort_by(.value.payload.opensAt) | first | .value.contract.contract_id // empty' 2>/dev/null); \
+		MINING_BLOB=$$(echo "$$ROUNDS_RESP" | jq -r '.open_mining_rounds | to_entries | sort_by(.value.payload.opensAt) | first | .value.contract.created_event_blob // empty' 2>/dev/null); \
+		if [ -n "$$MINING_CID" ]; then \
+			echo "  OpenMiningRound CID: $$MINING_CID (current round)" >&2; \
+		else \
+			echo "  Warning: Could not find current OpenMiningRound" >&2; \
+		fi; \
+	else \
+		echo "  Warning: Could not fetch open mining rounds" >&2; \
+		MINING_CID=""; \
+		MINING_BLOB=""; \
+	fi; \
+	echo "" >&2; \
+	echo "Extracting synchronizer ID..." >&2; \
+	SYNC_ID=$$(echo "$$AMULET_BLOB" | base64 -d | strings | grep -o "global-domain::[a-f0-9]*" | head -1); \
+	if [ -z "$$SYNC_ID" ]; then \
+		echo "  Warning: Could not extract synchronizer ID from blob" >&2; \
+		SYNC_ID=""; \
+	else \
+		echo "  Extracted synchronizer ID: $$SYNC_ID" >&2; \
+	fi; \
+	echo "" >&2; \
+	echo "Writing to contract-blobs.env..." >&2; \
+	{ \
+		echo "# Contract blobs and CIDs extracted from Scan API"; \
+		echo "# Generated on $$(date)"; \
+		echo ""; \
+		echo "# Contract IDs"; \
+		echo "AMULET_RULES_CID=$$AMULET_CID"; \
+		echo "OPEN_MINING_ROUND_CID=$$MINING_CID"; \
+		echo ""; \
+		echo "# Contract blobs for disclosure"; \
+		echo "AMULET_RULES_BLOB=$$AMULET_BLOB"; \
+		echo "OPEN_MINING_ROUND_BLOB=$$MINING_BLOB"; \
+		echo ""; \
+		echo "# Synchronizer ID"; \
+		echo "SYNCHRONIZER_ID=$$SYNC_ID"; \
+	} > contract-blobs.env; \
+	echo "✅ Contract blobs saved to contract-blobs.env" >&2
+
+split-amulets: extract-contract-blobs
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(PARTY_APP_USER)" ] || [ -z "$(SPLICE_PACKAGE_ID)" ]; then \
+		echo "Error: APP_USER_API_URL, APP_USER_JWT, PARTY_APP_USER, and SPLICE_PACKAGE_ID must be set in .env"; \
+		exit 1; \
+	fi; \
+	if [ ! -f contract-blobs.env ]; then \
+		echo "Error: contract-blobs.env not found"; \
+		exit 1; \
+	fi; \
+	source contract-blobs.env; \
+	echo "Using contracts from contract-blobs.env:"; \
+	echo "  AmuletRules: $$AMULET_RULES_CID"; \
+	echo "  OpenMiningRound: $$OPEN_MINING_ROUND_CID"; \
+	echo ""; \
+	echo "Finding amulets for $(PARTY_APP_USER)..."; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		$(APP_USER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$(PARTY_APP_USER)" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	AMULETS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("Splice.Amulet:Amulet")) and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("LockedAmulet") | not))]' 2>/dev/null); \
+	if [ "$$AMULETS" = "[]" ] || [ -z "$$AMULETS" ] || [ "$$AMULETS" = "null" ]; then \
+		echo "No Amulet contracts found for party $(PARTY_APP_USER)"; \
+		exit 1; \
+	fi; \
+	LARGEST=$$(echo "$$AMULETS" | jq 'sort_by(.contractEntry.JsActiveContract.createdEvent.createArgument.amount.initialAmount | tonumber) | reverse | .[0]'); \
+	AMULET_CID=$$(echo "$$LARGEST" | jq -r '.contractEntry.JsActiveContract.createdEvent.contractId'); \
+	AMOUNT=$$(echo "$$LARGEST" | jq -r '.contractEntry.JsActiveContract.createdEvent.createArgument.amount.initialAmount'); \
+	echo "Found largest amulet: $$AMULET_CID"; \
+	echo "Amount: $$AMOUNT CC"; \
+	REMAINDER=$$(echo "$$AMOUNT - 50" | bc); \
+	if [ $$(echo "$$REMAINDER < 0" | bc) -eq 1 ]; then \
+		echo "Error: Amulet amount ($$AMOUNT CC) is less than 50 CC needed for split"; \
+		exit 1; \
+	fi; \
+	echo "Splitting into 5x 10 CC + $$REMAINDER CC remainder..."; \
+	echo ""; \
+	echo "Building disclosed contracts array..."; \
+	DISCLOSED_CONTRACTS="[]"; \
+	if [ -n "$$AMULET_RULES_BLOB" ] && [ -n "$$SYNCHRONIZER_ID" ]; then \
+		DISCLOSED_CONTRACTS=$$(echo "$$DISCLOSED_CONTRACTS" | jq --arg sync "$$SYNCHRONIZER_ID" '. + [{"templateId": "$(SPLICE_PACKAGE_ID):Splice.AmuletRules:AmuletRules", "contractId": "'"$$AMULET_RULES_CID"'", "createdEventBlob": "'"$$AMULET_RULES_BLOB"'", "synchronizerId": $$sync}]'); \
+	fi; \
+	if [ -n "$$OPEN_MINING_ROUND_BLOB" ] && [ -n "$$SYNCHRONIZER_ID" ]; then \
+		DISCLOSED_CONTRACTS=$$(echo "$$DISCLOSED_CONTRACTS" | jq --arg sync "$$SYNCHRONIZER_ID" '. + [{"templateId": "$(SPLICE_PACKAGE_ID):Splice.Round:OpenMiningRound", "contractId": "'"$$OPEN_MINING_ROUND_CID"'", "createdEventBlob": "'"$$OPEN_MINING_ROUND_BLOB"'", "synchronizerId": $$sync}]'); \
+	fi; \
+	echo "  Disclosed contracts: $$(echo "$$DISCLOSED_CONTRACTS" | jq 'length') contracts"; \
+	TRANSFER_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/commands/submit-and-wait-for-transaction" \
+		-d "$$(jq -nc \
+			--arg amulet_cid "$$AMULET_CID" \
+			--arg open_round "$$OPEN_MINING_ROUND_CID" \
+			--arg party "$(PARTY_APP_USER)" \
+			--arg remainder "$$REMAINDER" \
+			--arg amulet_rules_cid "$$AMULET_RULES_CID" \
+			--arg sync_id "$$SYNCHRONIZER_ID" \
+			--argjson disclosed "$$DISCLOSED_CONTRACTS" \
+			'{commands: {commands: [{ExerciseCommand: {templateId: "$(SPLICE_PACKAGE_ID):Splice.AmuletRules:AmuletRules", contractId: $$amulet_rules_cid, choice: "AmuletRules_Transfer", choiceArgument: {transfer: {sender: $$party, provider: $$party, inputs: [{tag: "InputAmulet", value: $$amulet_cid}], outputs: [{receiver: $$party, amount: "10.0", receiverFeeRatio: 0.0, lock: null}, {receiver: $$party, amount: "10.0", receiverFeeRatio: 0.0, lock: null}, {receiver: $$party, amount: "10.0", receiverFeeRatio: 0.0, lock: null}, {receiver: $$party, amount: "10.0", receiverFeeRatio: 0.0, lock: null}, {receiver: $$party, amount: "10.0", receiverFeeRatio: 0.0, lock: null}, {receiver: $$party, amount: $$remainder, receiverFeeRatio: 0.0, lock: null}], beneficiaries: null}, context: {openMiningRound: $$open_round, issuingMiningRounds: [], validatorRights: [], featuredAppRight: null}, expectedDso: "DSO::122075d227a0482dc186fa09a3ddc4e0b2046d1ce9fdf4ec7375bd698b362525632e"}}}], actAs: [$$party], readAs: [], disclosedContracts: $$disclosed, domainId: $$sync_id, workflowId: null, commandId: "split-\(now)", deduplicationPeriod: null, submissionId: null, minLedgerTimeAbs: null, minLedgerTimeRel: null, applicationId: "hash-split"}}')"); \
+	if echo "$$TRANSFER_RESP" | jq -e '.error' >/dev/null 2>&1; then \
+		echo "❌ Error splitting amulet:"; \
+		echo "$$TRANSFER_RESP" | jq '.' 2>/dev/null || echo "$$TRANSFER_RESP"; \
+		exit 1; \
+	fi; \
+	if echo "$$TRANSFER_RESP" | jq -e '.transaction' >/dev/null 2>&1; then \
+		echo "✅ Amulet split successful!"; \
+		echo ""; \
+		NEW_AMULETS=$$(echo "$$TRANSFER_RESP" | jq -r '.transaction.events[]? | select(.CreatedEvent?) | .CreatedEvent | select(.templateId | contains("Splice.Amulet:Amulet")) | "  \(.contractId): \(.createArgument.amount.initialAmount) CC"' 2>/dev/null); \
+		if [ -n "$$NEW_AMULETS" ]; then \
+			echo "New amulets created:"; \
+			echo "$$NEW_AMULETS"; \
+		else \
+			echo "Transaction completed but no new Amulet contracts found in response."; \
+			echo "Run 'make find-amulets' to see your updated amulets."; \
+		fi; \
+	else \
+		echo "❌ Unexpected response format:"; \
+		echo "$$TRANSFER_RESP" | jq '.' 2>/dev/null || echo "$$TRANSFER_RESP"; \
+		exit 1; \
+	fi
