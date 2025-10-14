@@ -5,7 +5,7 @@ export
 
 DAR := .daml/dist/hash-v9-0.0.1.dar
 
-.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic
+.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package
 
 help:
 	@echo "Hash - Helper Commands"
@@ -24,6 +24,8 @@ help:
 	@echo ""
 	@echo "Package Management:"
 	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to both user and provider nodes"
+	@echo "  make get-package               - Download and verify DALF package from Canton"
+	@echo "  make decode-package [DALF=<file>] - Decode and inspect DALF file"
 	@echo "  make packages-user             - List packages on app-user node"
 	@echo "  make packages-provider         - List packages on app-provider node"
 	@echo "  make package-status-user       - Get hash-v9 package status on app-user"
@@ -287,3 +289,37 @@ traffic:
 	echo ""; \
 	echo "Parsed:"; \
 	echo "$$RESPONSE" | jq -r '. as $$root | if .error then "Error: " + .error else "  Total Consumed:  \($$root.traffic_status.actual.total_consumed) bytes\n  Total Limit:     \($$root.traffic_status.actual.total_limit) bytes\n  Total Purchased: \($$root.traffic_status.target.total_purchased) bytes\n  Available:       \($$root.traffic_status.actual.total_limit - $$root.traffic_status.actual.total_consumed) bytes" end' 2>/dev/null || echo "Error: Unable to parse traffic status"
+
+get-package:
+	@if [ -z "$(HASH_PACKAGE_ID)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(APP_USER_API_URL)" ]; then \
+		echo "Error: HASH_PACKAGE_ID, APP_USER_JWT, and APP_USER_API_URL must be set in .env"; \
+		exit 1; \
+	fi
+	@echo "Downloading package $(HASH_PACKAGE_ID)..."
+	@echo ""
+	@curl -v -H "Authorization: Bearer $(APP_USER_JWT)" \
+		"$(APP_USER_API_URL)v2/packages/$(HASH_PACKAGE_ID)" \
+		-o "hash-package-$(HASH_PACKAGE_ID).dalf" 2>&1 | grep -E "Canton-Package-Hash|HTTP/|Content-"
+	@echo ""
+	@echo "Package downloaded to: hash-package-$(HASH_PACKAGE_ID).dalf"
+	@ls -lh "hash-package-$(HASH_PACKAGE_ID).dalf"
+	@echo ""
+	@echo "Verifying SHA256 hash..."
+	@ACTUAL_HASH=$$(sha256sum "hash-package-$(HASH_PACKAGE_ID).dalf" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "hash-package-$(HASH_PACKAGE_ID).dalf" | cut -d' ' -f1); \
+	if [ "$$ACTUAL_HASH" = "$(HASH_PACKAGE_ID)" ]; then \
+		echo "✅ Hash verified: $$ACTUAL_HASH"; \
+	else \
+		echo "❌ Hash mismatch!"; \
+		echo "  Expected: $(HASH_PACKAGE_ID)"; \
+		echo "  Actual:   $$ACTUAL_HASH"; \
+	fi
+	@echo ""
+	@echo "Adding DAML-LF envelope for decoding..."
+	@mv "hash-package-$(HASH_PACKAGE_ID).dalf" "hash-package-$(HASH_PACKAGE_ID).raw"
+	@(printf '\x1a\xdf\xc6\x0a'; cat "hash-package-$(HASH_PACKAGE_ID).raw"; printf '\x22\x40%s' "$(HASH_PACKAGE_ID)") > "hash-package-$(HASH_PACKAGE_ID).dalf"
+	@rm "hash-package-$(HASH_PACKAGE_ID).raw"
+	@echo "✅ DAML-LF envelope added (4 + 66 bytes)"
+	@echo ""
+	@echo "Decoding DALF package..."
+	@echo ""
+	@daml damlc inspect "hash-package-$(HASH_PACKAGE_ID).dalf" 2>&1 || echo "Could not decode DALF"
