@@ -9,7 +9,7 @@ PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs
+.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs
 
 help:
 	@echo "Hash - Helper Commands"
@@ -40,6 +40,7 @@ help:
 	@echo "Party Management:"
 	@echo "  make parties          - List parties visible to app-user"
 	@echo "  make parties-provider - List parties visible to app-provider"
+	@echo "  make create-party [PARTY_HINT=<name>] - Create a party on app-user"
 	@echo ""
 	@echo "Ledger Updates:"
 	@echo "  make updates [OFFSET=n]        - Show last 100 updates from app-user"
@@ -112,6 +113,31 @@ parties-provider:
 	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
 		$(APP_PROVIDER_API_URL)v2/parties | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch parties"
+
+# Create a new party on app-user node
+create-party:
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ]; then \
+		echo "Error: APP_USER_API_URL or APP_USER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(PARTY_HINT)" ]; then \
+		PARTY_HINT=userParty; \
+		echo "PARTY_HINT not provided. Using default: $$PARTY_HINT"; \
+	fi; \
+	echo "Allocating party with hint '$$PARTY_HINT' on app-user..."; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST $(APP_USER_API_URL)v2/parties \
+		-d '{"partyIdHint":"'"$$PARTY_HINT"'","identityProviderId":""}'); \
+	echo "Response (raw):"; echo "$$RESP"; \
+	NEW_PARTY=$$(echo "$$RESP" | jq -r '.partyDetails.party // .partyDetails.partyId // .party // .partyId // empty' 2>/dev/null); \
+	if [ -n "$$NEW_PARTY" ]; then \
+		echo "Created party: $$NEW_PARTY"; \
+		echo "Export this in your environment if needed:"; \
+		echo "  export PARTY_NEW=$$NEW_PARTY"; \
+	else \
+		echo "Warning: Could not parse created party id"; \
+	fi
 
 # Get last updates (default last 100) for app-user
 updates:
