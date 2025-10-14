@@ -1,7 +1,7 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute prove-core verify-core prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
+.PHONY: help build execute prove-core verify-core prove-shrink prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
 
 # Load environment variables from .env file
 include .env
@@ -21,11 +21,16 @@ help:
 	@echo "                   Usage: make prove-core OPERATIONS=10 PROOFS=2"
 	@echo "  verify-core    - Verify a saved core proof from JSON"
 	@echo "                   Usage: make verify-core [PROOF=path/to/proof.json] [AGGREGATE=1]"
+	@echo "  prove-shrink   - Generate SP1 shrink proof (zkVerify compatible)"
+	@echo "                   Usage: make prove-shrink OPERATIONS=10 PROOFS=2 [HOSTED=true]"
 	@echo "  prove-groth16  - Generate Groth16 EVM proof and fixture"
-	@echo "                   Usage: make prove-groth16 OPERATIONS=10 PROOFS=2"
+	@echo "                   Usage: make prove-groth16 OPERATIONS=10 PROOFS=2 [HOSTED=true]"
 	@echo "  prove-plonk    - Generate PLONK EVM proof and fixture"
-	@echo "                   Usage: make prove-plonk OPERATIONS=10 PROOFS=2"
+	@echo "                   Usage: make prove-plonk OPERATIONS=10 PROOFS=2 [HOSTED=true]"
 	@echo "  vkey          - Get verification keys for both add and aggregate programs"
+	@echo ""
+	@echo "Options:"
+	@echo "  HOSTED=true    - Use cloud/hosted prover (default: local CPU prover)"
 	@echo ""
 	@echo "Contract Deployment:"
 	@echo "  deploy-groth16 - Deploy Add contract with Groth16 verifier"
@@ -117,12 +122,23 @@ verify-core:
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	echo "⏱️  Duration: $${duration} seconds"
 
-prove-groth16:
-	@echo "Generating Groth16 EVM proof..."
-	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=2"
+prove-shrink:
+	@echo "Generating SP1 shrink proof (zkVerify compatible)..."
+	@echo "Usage: make prove-shrink OPERATIONS=10 PROOFS=2 [HOSTED=true]"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
+	cd script && cargo run --release --bin shrink -- --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2) $(if $(filter true,$(HOSTED)),--hosted,); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+prove-groth16:
+	@echo "Generating Groth16 EVM proof..."
+	@echo "Usage: make prove-groth16 OPERATIONS=10 PROOFS=2 [HOSTED=true]"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin evm -- --system groth16 --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2) $(if $(filter true,$(HOSTED)),--hosted,); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
@@ -130,10 +146,10 @@ prove-groth16:
 
 prove-plonk:
 	@echo "Generating PLONK EVM proof..."
-	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=2"
+	@echo "Usage: make prove-plonk OPERATIONS=10 PROOFS=2 [HOSTED=true]"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
-	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2); \
+	cd script && cargo run --release --bin evm -- --system plonk --operations $(or $(OPERATIONS),10) --proofs $(or $(PROOFS),2) $(if $(filter true,$(HOSTED)),--hosted,); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \

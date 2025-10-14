@@ -39,6 +39,8 @@ struct EVMArgs {
     system: ProofSystem,
     #[arg(long, default_value = "2")]
     proofs: u32,
+    #[arg(long, default_value = "false")]
+    hosted: bool,
 }
 
 /// Enum representing the available proof systems
@@ -181,6 +183,7 @@ fn generate_aggregated_evm_proofs(args: &EVMArgs) {
         args.proofs,
         args.operations,
         final_proof_type,
+        args.hosted,
     )
     .expect("failed to generate and aggregate proofs");
 

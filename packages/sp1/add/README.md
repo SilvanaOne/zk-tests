@@ -154,3 +154,51 @@ The optimal recursion strategy differs from Mina and consists of:
 - Sui CLI (for Sui)
 - Anchor CLI (for Solana)
 - Environment variables configured in `.env` file
+
+## Benchmarking on M2
+
+2 proofs, 10 operations each
+
+### Core proof - 344 seconds
+
+=== Performance Summary ===
+Setup time: 7.31s
+Individual proofs: 252.01s
+Aggregation: 85.07s
+Verification: 0.08s
+Total time: 344.47s
+
+### Groth16 proof - 326 seconds
+
+=== Performance Summary - groth16 generated in sp1 cloud for 0.05 USD ===
+Setup time: 7.22s
+Individual proofs: 237.44s
+Aggregation: 26.24s (cloud)
+Verification: 0.34s
+Total time: 271.24s
+
+=== Performance Summary - cpu ===
+Setup time: 7.28s
+Individual proofs: 262.24s
+Aggregation: 435.95s
+Verification: 0.40s
+Total time: 705.88s
+
+### Plonk proof - 472 seconds
+
+=== Performance Summary - plonk generated in sp1 cloud for 0.05 USD ===
+Setup time: 7.53s
+Individual proofs: 348.01s
+Aggregation: 116.53s
+Verification: 0.50s
+Total time: 472.56s
+
+### Shrink proof - 351 seconds
+
+=== Performance Summary ===
+Setup time: 7.42s
+Individual proofs: 255.73s
+Aggregation: 81.69s
+Shrink: 6.65s
+Verification: 0.00s
+Total time: 351.48s

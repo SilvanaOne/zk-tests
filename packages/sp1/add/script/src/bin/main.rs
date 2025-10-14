@@ -165,6 +165,7 @@ fn main() {
             args.proofs,
             args.operations,
             FinalProofType::Core,
+            false, // use_hosted: always use CPU for core proofs
         )
         .expect("failed to generate and aggregate proofs");
 

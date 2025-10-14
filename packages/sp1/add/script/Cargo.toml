@@ -28,8 +28,16 @@ path = "src/bin/extract_sui_vkey.rs"
 name = "hash"
 path = "src/bin/hash.rs"
 
+[[bin]]
+name = "shrink"
+path = "src/bin/shrink.rs"
+
 [dependencies]
 sp1-sdk = { version = "5.1.0", default-features = false, features = ["network", "reserved-capacity"] }
+sp1-core-executor = "5.1.0"
+sp1-prover = "5.1.0"
+sp1-stark = "5.1.0"
+sp1-primitives = "5.1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 clap = { version = "4.0", features = ["derive", "env"] }
