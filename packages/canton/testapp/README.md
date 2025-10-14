@@ -5,6 +5,7 @@ https://docs.dev.sync.global/app_dev/testing/localnet.html
 https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.4.19/0.4.19_splice-node.tar.gz
 https://docs.sync.global/app_dev/scan_api/scan_openapi.html
 https://docs.dev.sync.global/release_notes.html
+https://www.npmjs.com/package/@canton-network/wallet-sdk
 
 ```sh
 tar xzvf 0.4.19_splice-node.tar.gz

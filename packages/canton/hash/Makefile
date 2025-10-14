@@ -3,13 +3,13 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v15-0.0.1.dar
+DAR := .daml/dist/hash-v19-0.0.1.dar
 # Extract package name from DAR filename (e.g., hash-v15-0.0.1.dar -> hash-v15-0.0.1)
 PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs
+.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens
 
 help:
 	@echo "Hash - Helper Commands"
@@ -50,6 +50,9 @@ help:
 	@echo "  make traffic                   - Show current traffic status for user participant"
 	@echo ""
 	@echo "Amulet Contracts:"
+	@echo ""
+	@echo "TestToken Management:"
+	@echo "  make tokens                     - Show TestToken balances using mint.env data"
 	@echo "  make find-amulets [PARTY=<party>] - Find Amulet contracts for party (defaults to PARTY_APP_USER)"
 	@echo "  make split-amulets              - Split largest amulet into 5x 10 CC + remainder"
 	@echo "  make merge-amulets              - Merge all amulets into a single amulet"
@@ -627,3 +630,74 @@ merge-amulets: extract-contract-blobs
 		echo "$$TRANSFER_RESP" | jq '.' 2>/dev/null || echo "$$TRANSFER_RESP"; \
 		exit 1; \
 	fi
+
+# TestToken Management
+tokens:
+	@if [ ! -f rust/mint.env ]; then \
+		echo "Error: rust/mint.env not found. Run 'cargo run -- mint' first."; \
+		exit 1; \
+	fi; \
+	source rust/mint.env; \
+	if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ]; then \
+		echo "Error: APP_USER_API_URL or APP_USER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	echo "=== TestToken Balances ==="; \
+	echo ""; \
+	echo "Package ID: $$HASH_PACKAGE_ID"; \
+	echo "Instrument ID: $$APP_USER_TOKEN_INSTRUMENT_ID"; \
+	echo ""; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		$(APP_USER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	echo "Querying holdings via Holding interface at offset $$LEDGER_END..."; \
+	INTERFACE_ID="$$HASH_PACKAGE_ID:TestToken:TestToken"; \
+	echo ""; \
+	echo "Fetching PARTY_APP_USER tokens..."; \
+	APP_USER_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$APP_USER_TOKEN_OWNER" --arg template "$$INTERFACE_ID" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {templateFilters: [{templateId: $$template, includeCreatedEventBlob: true}]}}}, verbose: true}')"); \
+	APP_USER_TOKENS=$$(echo "$$APP_USER_RESP" | jq '[.[] | select(.contractEntry.JsActiveContract.createdEvent.templateId == "'$$INTERFACE_ID'")]'); \
+	APP_USER_COUNT=$$(echo "$$APP_USER_TOKENS" | jq 'length'); \
+	APP_USER_TOTAL=$$(echo "$$APP_USER_TOKENS" | jq '[.[].contractEntry.JsActiveContract.createdEvent.createArgument.amount | tonumber] | add // 0'); \
+	echo "✅ PARTY_APP_USER Holdings:"; \
+	echo "  Owner: $$APP_USER_TOKEN_OWNER"; \
+	echo "  Token Count: $$APP_USER_COUNT"; \
+	echo "  Total Balance: $$APP_USER_TOTAL"; \
+	echo "  Instrument: $$APP_USER_TOKEN_INSTRUMENT_ID"; \
+	if [ "$$APP_USER_COUNT" -gt 0 ]; then \
+		echo ""; \
+		echo "  Contracts:"; \
+		echo "$$APP_USER_TOKENS" | jq -r '.[] | "    - CID: " + .contractEntry.JsActiveContract.createdEvent.contractId + " | Amount: " + .contractEntry.JsActiveContract.createdEvent.createArgument.amount'; \
+	fi; \
+	echo ""; \
+	echo "Fetching PARTY_BANK tokens..."; \
+	BANK_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$BANK_TOKEN_OWNER" --arg template "$$INTERFACE_ID" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {templateFilters: [{templateId: $$template, includeCreatedEventBlob: true}]}}}, verbose: true}')"); \
+	BANK_TOKENS=$$(echo "$$BANK_RESP" | jq '[.[] | select(.contractEntry.JsActiveContract.createdEvent.templateId == "'$$INTERFACE_ID'")]'); \
+	BANK_COUNT=$$(echo "$$BANK_TOKENS" | jq 'length'); \
+	BANK_TOTAL=$$(echo "$$BANK_TOKENS" | jq '[.[].contractEntry.JsActiveContract.createdEvent.createArgument.amount | tonumber] | add // 0'); \
+	echo "✅ PARTY_BANK Holdings:"; \
+	echo "  Owner: $$BANK_TOKEN_OWNER"; \
+	echo "  Token Count: $$BANK_COUNT"; \
+	echo "  Total Balance: $$BANK_TOTAL"; \
+	echo "  Instrument: $$BANK_TOKEN_INSTRUMENT_ID"; \
+	if [ "$$BANK_COUNT" -gt 0 ]; then \
+		echo ""; \
+		echo "  Contracts:"; \
+		echo "$$BANK_TOKENS" | jq -r '.[] | "    - CID: " + .contractEntry.JsActiveContract.createdEvent.contractId + " | Amount: " + .contractEntry.JsActiveContract.createdEvent.createArgument.amount'; \
+	fi; \
+	echo ""; \
+	echo "=== Summary ==="; \
+	TOTAL=$$(echo "$$APP_USER_TOTAL + $$BANK_TOTAL" | bc); \
+	echo "Total Supply: $$TOTAL TestToken"; \
+	echo "APP_USER: $$APP_USER_TOTAL ($$APP_USER_COUNT contracts)"; \
+	echo "BANK: $$BANK_TOTAL ($$BANK_COUNT contracts)"

@@ -1,0 +1,105 @@
+-- Copyright (c) 2025 Silvana. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+-- | A test token template implementing the Canton Token Standard (CIP-56).
+--
+-- This template demonstrates how to create tokens compliant with the token standard
+-- by implementing the Holding interface from splice-api-token-holding-v1.
+module TestToken where
+
+import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
+import Splice.Api.Token.HoldingV1 qualified as Token.Holding
+import DA.TextMap qualified as TextMap
+
+-- | A test token that implements the Holding interface.
+--
+-- This represents a fungible token holding that can be split, transferred, and burned.
+-- It implements the CIP-56 Holding interface for compatibility with the token standard ecosystem.
+template TestToken
+  with
+    owner : Party
+      -- ^ The party that owns this token holding.
+    issuer : Party
+      -- ^ The party that issued this token.
+    amount : Decimal
+      -- ^ The amount of tokens in this holding.
+    instrumentId : Text
+      -- ^ The identifier for this token instrument (e.g., "TestUSD", "TestToken").
+    metadata : TextMap.TextMap Text
+      -- ^ Additional metadata for this holding.
+  where
+    signatory owner
+    observer issuer
+
+    ensure amount > 0.0
+
+    -- Implement the Holding interface for CIP-56 compliance
+    interface instance Token.Holding.Holding for TestToken where
+      view = Token.Holding.HoldingView with
+        owner
+        instrumentId = Token.Holding.InstrumentId with
+          admin = issuer
+          id = instrumentId
+        amount
+        lock = None
+        meta = Token.Metadata.Metadata with values = metadata
+
+    -- Additional convenience choices for direct template usage
+
+    choice Split : (ContractId TestToken, ContractId TestToken)
+      -- ^ Split this token holding into two separate holdings.
+      with
+        splitAmount : Decimal
+          -- ^ The amount for the first holding. The second holding will contain (amount - splitAmount).
+      controller owner
+      do
+        assertMsg "Split amount must be positive" (splitAmount > 0.0)
+        assertMsg "Split amount must be less than total amount" (splitAmount < amount)
+
+        cid1 <- create this with amount = splitAmount
+        cid2 <- create this with amount = amount - splitAmount
+        return (cid1, cid2)
+
+    choice Transfer : ContractId TestToken
+      -- ^ Transfer this token holding to a new owner.
+      with
+        newOwner : Party
+          -- ^ The party that will become the new owner.
+      controller owner
+      do
+        create this with owner = newOwner
+
+    choice Burn : ()
+      -- ^ Burn (destroy) this token holding.
+      controller owner
+      do
+        return ()
+
+-- | A factory template for minting new test tokens.
+--
+-- The issuer can use this factory to create new token holdings for receivers.
+template TestTokenFactory
+  with
+    issuer : Party
+      -- ^ The party that issues tokens using this factory.
+    instrumentId : Text
+      -- ^ The identifier for the token instrument that this factory mints.
+  where
+    signatory issuer
+
+    nonconsuming choice Mint : ContractId TestToken
+      -- ^ Mint new tokens and assign them to a receiver.
+      with
+        receiver : Party
+          -- ^ The party that will receive the newly minted tokens.
+        amount : Decimal
+          -- ^ The amount of tokens to mint.
+      controller issuer, receiver
+      do
+        assertMsg "Mint amount must be positive" (amount > 0.0)
+        create TestToken with
+          owner = receiver
+          issuer
+          amount
+          instrumentId
+          metadata = TextMap.empty

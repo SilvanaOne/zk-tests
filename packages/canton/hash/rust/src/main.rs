@@ -3,6 +3,7 @@ mod addmapelement;
 mod contract;
 mod keccak;
 mod merkle;
+mod mint;
 mod reserve;
 mod root;
 mod sha256;
@@ -69,6 +70,8 @@ enum Commands {
     },
     /// Create ProofOfReserves and prove reserves with all user amulets
     Reserve,
+    /// Mint TestToken to PARTY_APP_USER and PARTY_BANK
+    Mint,
 }
 
 #[tokio::main]
@@ -92,6 +95,7 @@ async fn main() -> Result<()> {
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
         Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
         Commands::Reserve => reserve::handle_reserve().await?,
+        Commands::Mint => mint::handle_mint().await?,
     }
 
     Ok(())
