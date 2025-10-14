@@ -32,12 +32,11 @@ template ProofOfReserves
       with
         amuletCids: [ContractId Amulet]
         openRoundCid: ContractId OpenMiningRound
-        currentRound: Round
       controller prover
       do
-        -- Note: We don't fetch openRoundCid because we don't have DSO authority.
-        -- Instead, we pass the round from the disclosed OpenMiningRound contract.
-        -- The disclosed contract (provided in API call) proves the round is valid.
+        -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
+        -- This provides cryptographic proof that the prover cannot fake the round number
+        openMiningRound <- exercise openRoundCid OpenMiningRound_Fetch with p = prover
 
         -- Check that amuletCids has no duplicates
         assertMsg "Amulet CIDs must be unique" (unique amuletCids)
@@ -65,7 +64,7 @@ template ProofOfReserves
         let newAmount = Foldable.sum $ map calculateGuarantorAmount guarantors
 
         create this with
-          round = currentRound
+          round = openMiningRound.round
           amount = newAmount
 
     choice AddObserver : ContractId ProofOfReserves

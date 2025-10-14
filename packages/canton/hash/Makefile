@@ -3,10 +3,10 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v14-0.0.1.dar
-# Extract package name from DAR filename (e.g., hash-v14-0.0.1.dar -> hash-v10-0.0.1)
+DAR := .daml/dist/hash-v15-0.0.1.dar
+# Extract package name from DAR filename (e.g., hash-v15-0.0.1.dar -> hash-v15-0.0.1)
 PACKAGE_NAME := $(basename $(notdir $(DAR)))
-# Extract package name without version (e.g., hash-v14-0.0.1 -> hash-v10)
+# Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
 .PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs

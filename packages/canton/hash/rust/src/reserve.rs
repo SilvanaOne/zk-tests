@@ -241,7 +241,6 @@ async fn exercise_prove_reserve(
     open_round_cid: &str,
     open_round_blob: &str,
     open_round_template_id: &str,
-    round_number: i64,
     synchronizer_id: &str,
 ) -> Result<serde_json::Value> {
     let cmdid = format!("prove-reserve-{}", chrono::Utc::now().timestamp());
@@ -257,10 +256,7 @@ async fn exercise_prove_reserve(
                 "choice": "ProveReserve",
                 "choiceArgument": {
                     "amuletCids": amulet_cids,
-                    "openRoundCid": open_round_cid,
-                    "currentRound": {
-                        "number": round_number
-                    }
+                    "openRoundCid": open_round_cid
                 }
             }
         }],
@@ -405,7 +401,7 @@ pub async fn handle_reserve() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Could not get OpenMiningRound template ID"))?
         .to_string();
 
-    // Extract round number from the OpenMiningRound payload (it's a string in JSON)
+    // Extract round number for logging
     let round_number = dso
         .pointer("/latest_mining_round/contract/payload/round/number")
         .and_then(|v| v.as_str())
@@ -450,7 +446,6 @@ pub async fn handle_reserve() -> Result<()> {
         &open_round_cid,
         &open_round_blob,
         &open_round_template_id,
-        round_number,
         &synchronizer_id,
     ).await?;
 
