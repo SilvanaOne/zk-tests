@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde_json::json;
 use tracing::{info, debug};
 
-/// Find all Amulet contracts owned by a specific party
+/// Find all Amulet contract IDs owned by a specific party
 async fn find_all_amulets(
     client: &reqwest::Client,
     api_url: &str,
@@ -49,7 +49,7 @@ async fn find_all_amulets(
         .await?;
 
     // Find Amulet contracts (excluding LockedAmulet)
-    let mut amulet_cids = Vec::new();
+    let mut amulet_data = Vec::new();
 
     for contract in contracts {
         if let Some(entry) = contract.get("contractEntry") {
@@ -60,19 +60,20 @@ async fn find_all_amulets(
                             // Include Splice.Amulet:Amulet but exclude LockedAmulet
                             if template_str.contains("Splice.Amulet:Amulet")
                                 && !template_str.contains("LockedAmulet") {
-                                if let Some(contract_id) = created.get("contractId") {
-                                    let cid = contract_id.as_str().unwrap_or_default().to_string();
+                                let cid = created.get("contractId")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or_else(|| anyhow::anyhow!("Missing contractId"))?
+                                    .to_string();
 
-                                    // Log the amount if available
-                                    if let Some(amount) = created
-                                        .pointer("/createArgument/amount/initialAmount")
-                                        .and_then(|v| v.as_str())
-                                    {
-                                        info!(cid = %cid, amount = %amount, "Found Amulet contract");
-                                    }
-
-                                    amulet_cids.push(cid);
+                                // Log the amount if available
+                                if let Some(amount) = created
+                                    .pointer("/createArgument/amount/initialAmount")
+                                    .and_then(|v| v.as_str())
+                                {
+                                    info!(cid = %cid, amount = %amount, "Found Amulet contract");
                                 }
+
+                                amulet_data.push(cid);
                             }
                         }
                     }
@@ -81,15 +82,15 @@ async fn find_all_amulets(
         }
     }
 
-    if amulet_cids.is_empty() {
+    if amulet_data.is_empty() {
         return Err(anyhow::anyhow!(
             "No Amulet contracts found for party {}",
             party
         ));
     }
 
-    info!(count = amulet_cids.len(), "Found Amulet contracts");
-    Ok(amulet_cids)
+    info!(count = amulet_data.len(), "Found Amulet contracts");
+    Ok(amulet_data)
 }
 
 /// Create a ProofOfReserves contract
@@ -98,13 +99,14 @@ async fn create_proof_of_reserves(
     api_url: &str,
     jwt: &str,
     party_app_user: &str,
+    party_bank: &str,
     package_id: &str,
     synchronizer_id: &str,
 ) -> Result<(String, serde_json::Value)> {
     let cmdid = format!("create-proof-of-reserves-{}", chrono::Utc::now().timestamp());
     let template_id = format!("{}:Reserve:ProofOfReserves", package_id);
 
-    info!("Creating ProofOfReserves contract");
+    info!("Creating ProofOfReserves contract with 2 guarantors");
 
     let create_payload = json!({
         "commands": [{
@@ -116,7 +118,10 @@ async fn create_proof_of_reserves(
                         "number": 0
                     },
                     "amount": "1000.0",
-                    "guarantors": [{"_1": party_app_user, "_2": "1000.0"}],
+                    "guarantors": [
+                        {"_1": party_app_user, "_2": "1000.0"},
+                        {"_1": party_bank, "_2": "100000.0"}
+                    ],
                     "observers": []
                 }
             }
@@ -229,12 +234,13 @@ async fn create_proof_of_reserves(
     Ok((proof_cid, update_json))
 }
 
-/// Exercise the ProveReserve choice with disclosed contracts
+/// Exercise the ProveReserve choice with disclosed OpenMiningRound contract
 async fn exercise_prove_reserve(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
     party_app_user: &str,
+    party_bank: &str,
     package_id: &str,
     proof_cid: &str,
     amulet_cids: Vec<String>,
@@ -248,6 +254,17 @@ async fn exercise_prove_reserve(
 
     info!(amulet_count = amulet_cids.len(), "Exercising ProveReserve choice");
 
+    // Build disclosedContracts array with only OpenMiningRound
+    // Amulets will be fetched directly using readAs authorization
+    let disclosed_contracts = vec![
+        json!({
+            "contractId": open_round_cid,
+            "createdEventBlob": open_round_blob,
+            "synchronizerId": synchronizer_id,
+            "templateId": open_round_template_id
+        })
+    ];
+
     let payload = json!({
         "commands": [{
             "ExerciseCommand": {
@@ -260,17 +277,9 @@ async fn exercise_prove_reserve(
                 }
             }
         }],
-        "disclosedContracts": [
-            {
-                "contractId": open_round_cid,
-                "createdEventBlob": open_round_blob,
-                "synchronizerId": synchronizer_id,
-                "templateId": open_round_template_id
-            }
-        ],
+        "disclosedContracts": disclosed_contracts,
         "commandId": cmdid,
-        "actAs": [party_app_user],
-        "readAs": [],
+        "actAs": [party_app_user, party_bank],
         "workflowId": "ProofOfReserves",
         "synchronizerId": synchronizer_id
     });
@@ -350,6 +359,9 @@ pub async fn handle_reserve() -> Result<()> {
     let party_app_user = std::env::var("PARTY_APP_USER")
         .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set in environment"))?;
 
+    let party_bank = std::env::var("PARTY_BANK")
+        .map_err(|_| anyhow::anyhow!("PARTY_BANK not set in environment"))?;
+
     let api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set in environment"))?;
 
@@ -412,19 +424,38 @@ pub async fn handle_reserve() -> Result<()> {
     info!("Current round number: {}", round_number);
 
     // Find all amulets owned by PARTY_APP_USER
-    let amulet_cids = find_all_amulets(&client, &api_url, &jwt, &party_app_user).await?;
+    info!("Finding amulets for PARTY_APP_USER...");
+    let app_user_amulet_cids = find_all_amulets(&client, &api_url, &jwt, &party_app_user).await?;
 
-    println!("\nFound {} Amulet contract(s) for {}", amulet_cids.len(), party_app_user);
-    for cid in &amulet_cids {
+    println!("\nFound {} Amulet contract(s) for {}", app_user_amulet_cids.len(), party_app_user);
+    for cid in &app_user_amulet_cids {
         println!("  - {}", cid);
     }
 
-    // Create ProofOfReserves contract
+    // Find all amulets owned by PARTY_BANK
+    info!("Finding amulets for PARTY_BANK...");
+    let bank_amulet_cids = find_all_amulets(&client, &api_url, &jwt, &party_bank).await?;
+
+    println!("\nFound {} Amulet contract(s) for {}", bank_amulet_cids.len(), party_bank);
+    for cid in &bank_amulet_cids {
+        println!("  - {}", cid);
+    }
+
+    // Combine all amulet CIDs
+    let all_amulet_cids: Vec<String> = [
+        app_user_amulet_cids.clone(),
+        bank_amulet_cids.clone()
+    ].concat();
+
+    println!("\nTotal amulets to verify: {}", all_amulet_cids.len());
+
+    // Create ProofOfReserves contract with both guarantors
     let (proof_cid, create_update) = create_proof_of_reserves(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        &party_bank,
         &package_id,
         &synchronizer_id,
     ).await?;
@@ -434,15 +465,16 @@ pub async fn handle_reserve() -> Result<()> {
 
     println!("\nProofOfReserves contract created: {}", proof_cid);
 
-    // Exercise ProveReserve choice
+    // Exercise ProveReserve choice with prover's amulets and bank authorization
     let result_json = exercise_prove_reserve(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        &party_bank,
         &package_id,
         &proof_cid,
-        amulet_cids.clone(),
+        all_amulet_cids.clone(),
         &open_round_cid,
         &open_round_blob,
         &open_round_template_id,
@@ -473,7 +505,8 @@ pub async fn handle_reserve() -> Result<()> {
                         if let Some(guarantors) = created.pointer("/createArgument/guarantors").and_then(|v| v.as_array()) {
                             println!("Guarantors: {}", guarantors.len());
                         }
-                        println!("Amulets Verified: {}", amulet_cids.len());
+                        println!("Amulets Verified: {} (APP_USER: {}, BANK: {})",
+                                 all_amulet_cids.len(), app_user_amulet_cids.len(), bank_amulet_cids.len());
                         return Ok(());
                     }
                 }

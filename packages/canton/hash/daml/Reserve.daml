@@ -32,7 +32,7 @@ template ProofOfReserves
       with
         amuletCids: [ContractId Amulet]
         openRoundCid: ContractId OpenMiningRound
-      controller prover
+      controller prover :: map fst guarantors
       do
         -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
         -- This provides cryptographic proof that the prover cannot fake the round number
