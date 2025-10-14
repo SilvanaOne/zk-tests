@@ -5,7 +5,7 @@ export
 
 DAR := .daml/dist/hash-v9-0.0.1.dar
 
-.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets extract-contract-blobs
+.PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs
 
 help:
 	@echo "Hash - Helper Commands"
@@ -47,6 +47,7 @@ help:
 	@echo "Amulet Contracts:"
 	@echo "  make find-amulets [PARTY=<party>] - Find Amulet contracts for party (defaults to PARTY_APP_USER)"
 	@echo "  make split-amulets              - Split largest amulet into 5x 10 CC + remainder"
+	@echo "  make merge-amulets              - Merge all amulets into a single amulet"
 
 build:
 	@daml build
@@ -500,6 +501,95 @@ split-amulets: extract-contract-blobs
 			echo "$$NEW_AMULETS"; \
 		else \
 			echo "Transaction completed but no new Amulet contracts found in response."; \
+			echo "Run 'make find-amulets' to see your updated amulets."; \
+		fi; \
+	else \
+		echo "❌ Unexpected response format:"; \
+		echo "$$TRANSFER_RESP" | jq '.' 2>/dev/null || echo "$$TRANSFER_RESP"; \
+		exit 1; \
+	fi
+
+merge-amulets: extract-contract-blobs
+	@if [ -z "$(APP_USER_API_URL)" ] || [ -z "$(APP_USER_JWT)" ] || [ -z "$(PARTY_APP_USER)" ] || [ -z "$(SPLICE_PACKAGE_ID)" ]; then \
+		echo "Error: APP_USER_API_URL, APP_USER_JWT, PARTY_APP_USER, and SPLICE_PACKAGE_ID must be set in .env"; \
+		exit 1; \
+	fi; \
+	if [ ! -f contract-blobs.env ]; then \
+		echo "Error: contract-blobs.env not found"; \
+		exit 1; \
+	fi; \
+	source contract-blobs.env; \
+	echo "Using contracts from contract-blobs.env:"; \
+	echo "  AmuletRules: $$AMULET_RULES_CID"; \
+	echo "  OpenMiningRound: $$OPEN_MINING_ROUND_CID"; \
+	echo ""; \
+	echo "Finding all amulets for $(PARTY_APP_USER)..."; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		$(APP_USER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$(PARTY_APP_USER)" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	AMULETS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("Splice.Amulet:Amulet")) and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("LockedAmulet") | not))]' 2>/dev/null); \
+	if [ "$$AMULETS" = "[]" ] || [ -z "$$AMULETS" ] || [ "$$AMULETS" = "null" ]; then \
+		echo "No Amulet contracts found for party $(PARTY_APP_USER)"; \
+		exit 1; \
+	fi; \
+	AMULET_COUNT=$$(echo "$$AMULETS" | jq 'length'); \
+	echo "Found $$AMULET_COUNT amulet(s)"; \
+	if [ "$$AMULET_COUNT" -eq 1 ]; then \
+		echo "Only one amulet found, nothing to merge"; \
+		exit 0; \
+	fi; \
+	AMULET_CIDS=$$(echo "$$AMULETS" | jq -r '[.[] | .contractEntry.JsActiveContract.createdEvent.contractId] | join(" ")'); \
+	TOTAL_AMOUNT=$$(echo "$$AMULETS" | jq '[.[] | .contractEntry.JsActiveContract.createdEvent.createArgument.amount.initialAmount | tonumber] | add'); \
+	echo "Total amount: $$TOTAL_AMOUNT CC"; \
+	echo "Merging $$AMULET_COUNT amulets into one..."; \
+	echo ""; \
+	echo "Building disclosed contracts array..."; \
+	DISCLOSED_CONTRACTS="[]"; \
+	if [ -n "$$AMULET_RULES_BLOB" ] && [ -n "$$SYNCHRONIZER_ID" ]; then \
+		DISCLOSED_CONTRACTS=$$(echo "$$DISCLOSED_CONTRACTS" | jq --arg sync "$$SYNCHRONIZER_ID" '. + [{"templateId": "$(SPLICE_PACKAGE_ID):Splice.AmuletRules:AmuletRules", "contractId": "'"$$AMULET_RULES_CID"'", "createdEventBlob": "'"$$AMULET_RULES_BLOB"'", "synchronizerId": $$sync}]'); \
+	fi; \
+	if [ -n "$$OPEN_MINING_ROUND_BLOB" ] && [ -n "$$SYNCHRONIZER_ID" ]; then \
+		DISCLOSED_CONTRACTS=$$(echo "$$DISCLOSED_CONTRACTS" | jq --arg sync "$$SYNCHRONIZER_ID" '. + [{"templateId": "$(SPLICE_PACKAGE_ID):Splice.Round:OpenMiningRound", "contractId": "'"$$OPEN_MINING_ROUND_CID"'", "createdEventBlob": "'"$$OPEN_MINING_ROUND_BLOB"'", "synchronizerId": $$sync}]'); \
+	fi; \
+	echo "  Disclosed contracts: $$(echo "$$DISCLOSED_CONTRACTS" | jq 'length') contracts"; \
+	INPUT_ARRAY="[]"; \
+	for CID in $$AMULET_CIDS; do \
+		INPUT_ARRAY=$$(echo "$$INPUT_ARRAY" | jq '. + [{"tag": "InputAmulet", "value": "'$$CID'"}]'); \
+	done; \
+	TRANSFER_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_USER_API_URL)v2/commands/submit-and-wait-for-transaction" \
+		-d "$$(jq -nc \
+			--arg open_round "$$OPEN_MINING_ROUND_CID" \
+			--arg party "$(PARTY_APP_USER)" \
+			--arg total "$$TOTAL_AMOUNT" \
+			--arg amulet_rules_cid "$$AMULET_RULES_CID" \
+			--arg sync_id "$$SYNCHRONIZER_ID" \
+			--argjson inputs "$$INPUT_ARRAY" \
+			--argjson disclosed "$$DISCLOSED_CONTRACTS" \
+			'{commands: {commands: [{ExerciseCommand: {templateId: "$(SPLICE_PACKAGE_ID):Splice.AmuletRules:AmuletRules", contractId: $$amulet_rules_cid, choice: "AmuletRules_Transfer", choiceArgument: {transfer: {sender: $$party, provider: $$party, inputs: $$inputs, outputs: [{receiver: $$party, amount: $$total, receiverFeeRatio: 0.0, lock: null}], beneficiaries: null}, context: {openMiningRound: $$open_round, issuingMiningRounds: [], validatorRights: [], featuredAppRight: null}, expectedDso: "DSO::122075d227a0482dc186fa09a3ddc4e0b2046d1ce9fdf4ec7375bd698b362525632e"}}}], actAs: [$$party], readAs: [], disclosedContracts: $$disclosed, domainId: $$sync_id, workflowId: null, commandId: "merge-\(now)", deduplicationPeriod: null, submissionId: null, minLedgerTimeAbs: null, minLedgerTimeRel: null, applicationId: "hash-merge"}}')"); \
+	if echo "$$TRANSFER_RESP" | jq -e '.error' >/dev/null 2>&1; then \
+		echo "❌ Error merging amulets:"; \
+		echo "$$TRANSFER_RESP" | jq '.' 2>/dev/null || echo "$$TRANSFER_RESP"; \
+		exit 1; \
+	fi; \
+	if echo "$$TRANSFER_RESP" | jq -e '.transaction' >/dev/null 2>&1; then \
+		echo "✅ Amulets merged successfully!"; \
+		echo ""; \
+		MERGED_AMULET=$$(echo "$$TRANSFER_RESP" | jq -r '.transaction.events[]? | select(.CreatedEvent?) | .CreatedEvent | select(.templateId | contains("Splice.Amulet:Amulet")) | "  Contract ID: \(.contractId)\n  Amount: \(.createArgument.amount.initialAmount) CC"' 2>/dev/null); \
+		if [ -n "$$MERGED_AMULET" ]; then \
+			echo "Merged amulet:"; \
+			echo "$$MERGED_AMULET"; \
+		else \
+			echo "Transaction completed but no merged Amulet contract found in response."; \
 			echo "Run 'make find-amulets' to see your updated amulets."; \
 		fi; \
 	else \
