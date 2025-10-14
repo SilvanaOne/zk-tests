@@ -3,6 +3,7 @@ mod addmapelement;
 mod contract;
 mod keccak;
 mod merkle;
+mod reserve;
 mod root;
 mod sha256;
 mod sha256n;
@@ -66,6 +67,8 @@ enum Commands {
         /// New value to update to
         value2: i64,
     },
+    /// Create ProofOfReserves and prove reserves with all user amulets
+    Reserve,
 }
 
 #[tokio::main]
@@ -88,6 +91,7 @@ async fn main() -> Result<()> {
         Commands::Root { pairs } => root::handle_root(pairs).await?,
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
         Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
+        Commands::Reserve => reserve::handle_reserve().await?,
     }
 
     Ok(())

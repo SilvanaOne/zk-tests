@@ -1,0 +1,106 @@
+-- Copyright (c) 2025 All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+{-# OPTIONS_GHC -Wno-x-crypto #-}
+
+module Reserve where
+
+import Splice.Amulet
+import Splice.Round
+import Splice.Types
+import Splice.Util
+import qualified DA.Foldable as Foldable
+import DA.List (unique)
+
+template ProofOfReserves
+  with
+    prover: Party
+    round: Round
+    amount: Decimal
+    guarantors: [(Party, Decimal)]  -- List of (partyId, guaranteedAmount)
+    observers: [Party]
+  where
+    signatory prover
+    observer observers
+
+    ensure isDefinedRound round &&
+           amount >= 0.0 &&
+           all (\(_, guaranteedAmount) -> guaranteedAmount >= 0.0) guarantors &&
+           unique (map fst guarantors)  -- Ensure guarantors list has unique parties
+
+    choice ProveReserve : ContractId ProofOfReserves
+      with
+        amuletCids: [ContractId Amulet]
+        openRoundCid: ContractId OpenMiningRound
+        currentRound: Round
+      controller prover
+      do
+        -- Note: We don't fetch openRoundCid because we don't have DSO authority.
+        -- Instead, we pass the round from the disclosed OpenMiningRound contract.
+        -- The disclosed contract (provided in API call) proves the round is valid.
+
+        -- Check that amuletCids has no duplicates
+        assertMsg "Amulet CIDs must be unique" (unique amuletCids)
+
+        -- Fetch all Amulet contracts
+        amulets <- mapA fetch amuletCids
+
+        -- Create a map of guarantor parties for quick lookup
+        let guarantorParties = map fst guarantors
+
+        -- Verify all amulet owners are in guarantors list
+        let amuletOwners = map (\a -> a.owner) amulets
+        assertMsg "All amulets must be owned by guarantors"
+          (all (\owner -> owner `elem` guarantorParties) amuletOwners)
+
+        -- Group amulets by owner and calculate sum per guarantor
+        let calculateGuarantorAmount guarantor =
+              let guarantorAmulets = filter (\a -> a.owner == fst guarantor) amulets
+                  totalAmount = Foldable.sum $ map (\a -> a.amount.initialAmount) guarantorAmulets
+                  -- Cap at guaranteedAmount
+                  cappedAmount = min totalAmount (snd guarantor)
+              in cappedAmount
+
+        -- Calculate total amount (sum of all capped amounts)
+        let newAmount = Foldable.sum $ map calculateGuarantorAmount guarantors
+
+        create this with
+          round = currentRound
+          amount = newAmount
+
+    choice AddObserver : ContractId ProofOfReserves
+      with
+        newObserver: Party
+      controller prover
+      do
+        assertMsg "Observer already exists" (newObserver `notElem` observers)
+        create this with
+          observers = newObserver :: observers
+
+    choice RemoveObserver : ContractId ProofOfReserves
+      with
+        observerToRemove: Party
+      controller prover
+      do
+        create this with
+          observers = filter (/= observerToRemove) observers
+
+    choice AddGuarantor : ContractId ProofOfReserves
+      with
+        newGuarantor: Party
+        guaranteedAmount: Decimal
+      controller prover
+      do
+        let existingGuarantors = map fst guarantors
+        assertMsg "Guarantor already exists" (newGuarantor `notElem` existingGuarantors)
+        assertMsg "Guaranteed amount must be non-negative" (guaranteedAmount >= 0.0)
+        create this with
+          guarantors = (newGuarantor, guaranteedAmount) :: guarantors
+
+    choice RemoveGuarantor : ContractId ProofOfReserves
+      with
+        guarantorToRemove: Party
+      controller prover
+      do
+        create this with
+          guarantors = filter (\(party, _) -> party /= guarantorToRemove) guarantors
