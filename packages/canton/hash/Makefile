@@ -3,7 +3,7 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v8-0.0.1.dar
+DAR := .daml/dist/hash-v9-0.0.1.dar
 
 .PHONY: help build clean upload parties parties-provider updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic
 
@@ -26,8 +26,8 @@ help:
 	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to both user and provider nodes"
 	@echo "  make packages-user             - List packages on app-user node"
 	@echo "  make packages-provider         - List packages on app-provider node"
-	@echo "  make package-status-user       - Get hash-v6 package status on app-user"
-	@echo "  make package-status-provider   - Get hash-v6 package status on app-provider"
+	@echo "  make package-status-user       - Get hash-v9 package status on app-user"
+	@echo "  make package-status-provider   - Get hash-v9 package status on app-provider"
 	@echo "  make vetting-status-user       - Check vetting status for both parties (from app-user)"
 	@echo "  make vetting-status-provider   - Check vetting status for both parties (from app-provider)"
 	@echo ""
@@ -162,7 +162,7 @@ get-update:
 # Inspect DAR package ID
 inspect:
 	@echo "Inspecting DAR: $(DAR)"
-	@daml damlc inspect-dar $(DAR) | grep "hash-v8-0.0.1" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
+	@daml damlc inspect-dar $(DAR) | grep "hash-v9-0.0.1" | tail -1 | awk '{print "Package ID: " $$NF}' | tr -d '"'
 
 # List packages on app-user
 packages-user:
@@ -214,12 +214,12 @@ vetting-status-user:
 		echo "Error: Required environment variables not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Checking vetting status for hash-v6 with both parties from app-user perspective..."
+	@echo "Checking vetting status for hash-v9 with both parties from app-user perspective..."
 	@echo "Parties: $(PARTY_APP_USER), $(PARTY_APP_PROVIDER)"
 	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
 	@echo ""
 	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
-		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v6&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v9&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch vetting status"
 
 # Check vetting status from app-provider perspective
@@ -228,12 +228,12 @@ vetting-status-provider:
 		echo "Error: Required environment variables not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Checking vetting status for hash-v6 with both parties from app-provider perspective..."
+	@echo "Checking vetting status for hash-v9 with both parties from app-provider perspective..."
 	@echo "Parties: $(PARTY_APP_USER), $(PARTY_APP_PROVIDER)"
 	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
 	@echo ""
 	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
-		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v6&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v9&parties=$(PARTY_APP_USER)&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch vetting status"
 
 # Check vetting for app_user party only
@@ -242,12 +242,12 @@ vetting-status-user-only:
 		echo "Error: Required environment variables not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Checking vetting status for hash-v8 with app_user party only..."
+	@echo "Checking vetting status for hash-v9 with app_user party only..."
 	@echo "Party: $(PARTY_APP_USER)"
 	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
 	@echo ""
 	@curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
-		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v8&parties=$(PARTY_APP_USER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		"$(APP_USER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v9&parties=$(PARTY_APP_USER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch vetting status"
 
 # Check vetting for app_provider party only
@@ -256,12 +256,12 @@ vetting-status-provider-only:
 		echo "Error: Required environment variables not set in .env"; \
 		exit 1; \
 	fi
-	@echo "Checking vetting status for hash-v8 with app_provider party only..."
+	@echo "Checking vetting status for hash-v9 with app_provider party only..."
 	@echo "Party: $(PARTY_APP_PROVIDER)"
 	@echo "Synchronizer: $(SYNCHRONIZER_ID)"
 	@echo ""
 	@curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
-		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v8&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
+		"$(APP_PROVIDER_API_URL)v2/interactive-submission/preferred-package-version?package-name=hash-v9&parties=$(PARTY_APP_PROVIDER)&synchronizer-id=$(SYNCHRONIZER_ID)" | jq '.' 2>/dev/null || \
 		echo "Error: Unable to fetch vetting status"
 
 traffic:

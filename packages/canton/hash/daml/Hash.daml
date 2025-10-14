@@ -25,8 +25,7 @@ template Hash
     root : Text        -- hex-encoded merkle map root
     root_time : Optional Time   -- timestamp when root was last updated
   where
-    signatory owner
-    observer provider
+    signatory owner, provider
 
     -- Hash-specific choices (not related to IndexedMerkleMap)
     choice Add : HashId
