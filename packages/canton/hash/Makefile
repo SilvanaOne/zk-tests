@@ -9,7 +9,7 @@ PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens find-rewards find-markers
+.PHONY: help build clean upload parties parties-provider create-party updates get-update get-update-provider inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens find-rewards find-markers
 
 help:
 	@echo "Hash - Helper Commands"
@@ -43,8 +43,9 @@ help:
 	@echo "  make create-party [PARTY_HINT=<name>] - Create a party on app-user"
 	@echo ""
 	@echo "Ledger Updates:"
-	@echo "  make updates [OFFSET=n]        - Show last 100 updates from app-user"
-	@echo "  make get-update UPDATE_ID=<id> - Get details of a specific update"
+	@echo "  make updates [OFFSET=n]                 - Show last 100 updates from app-user"
+	@echo "  make get-update UPDATE_ID=<id>          - Get details of a specific update (user view)"
+	@echo "  make get-update-provider UPDATE_ID=<id> - Get details of a specific update (provider view)"
 	@echo ""
 	@echo "Traffic Monitoring:"
 	@echo "  make traffic                   - Show current traffic status for user participant"
@@ -201,6 +202,23 @@ get-update:
 		-H "Content-Type: application/json" \
 		-X POST $(APP_USER_API_URL)v2/updates/update-by-id \
 		-d '{"actAs": ["$(PARTY_APP_USER)"], "updateId": "$(UPDATE_ID)", "updateFormat": {"includeTransactions": {"eventFormat": {"filtersByParty": {"$(PARTY_APP_USER)": {}}, "verbose": true}, "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"}}}'); \
+	echo "$$RESP" | jq '.' 2>/dev/null || echo "$$RESP"
+
+# Get update by ID from provider perspective (POST method)
+get-update-provider:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(UPDATE_ID)" ]; then \
+		echo "Error: UPDATE_ID not specified. Usage: make get-update-provider UPDATE_ID=<id>"; \
+		exit 1; \
+	fi; \
+	echo "Fetching update $(UPDATE_ID) from provider perspective..."; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST $(APP_PROVIDER_API_URL)v2/updates/update-by-id \
+		-d '{"actAs": ["$(PARTY_APP_PROVIDER)"], "updateId": "$(UPDATE_ID)", "updateFormat": {"includeTransactions": {"eventFormat": {"filtersByParty": {"$(PARTY_APP_PROVIDER)": {}}, "verbose": true}, "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"}}}'); \
 	echo "$$RESP" | jq '.' 2>/dev/null || echo "$$RESP"
 
 # Inspect DAR package ID

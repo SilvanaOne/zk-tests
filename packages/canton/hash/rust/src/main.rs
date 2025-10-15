@@ -1,5 +1,7 @@
 mod add;
 mod addmapelement;
+mod claim;
+mod context;
 mod contract;
 mod keccak;
 mod merkle;
@@ -85,6 +87,8 @@ enum Commands {
     },
     /// Create TokenProofOfReserves and prove TestToken reserves
     TokenReserve,
+    /// Claim all AppRewardCoupons for the provider
+    Claim,
 }
 
 #[tokio::main]
@@ -110,6 +114,7 @@ async fn main() -> Result<()> {
         Commands::Reserve => reserve::handle_reserve().await?,
         Commands::Mint { ledger, party, amount } => mint::handle_mint(ledger, party, amount).await?,
         Commands::TokenReserve => token_reserve::handle_token_reserve().await?,
+        Commands::Claim => claim::handle_claim().await?,
     }
 
     Ok(())
