@@ -9,7 +9,7 @@ PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens
+.PHONY: help build clean upload parties parties-provider create-party updates get-update inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens find-rewards find-markers
 
 help:
 	@echo "Hash - Helper Commands"
@@ -56,6 +56,10 @@ help:
 	@echo "  make find-amulets [PARTY=<party>] - Find Amulet contracts for party (defaults to PARTY_APP_USER)"
 	@echo "  make split-amulets              - Split largest amulet into 5x 10 CC + remainder"
 	@echo "  make merge-amulets              - Merge all amulets into a single amulet"
+	@echo ""
+	@echo "Rewards:"
+	@echo "  make find-rewards               - Find FeaturedAppActivityMarkers and AppRewardCoupons for provider"
+	@echo "  make find-markers               - Find FeaturedAppActivityMarkers for provider (detailed view)"
 
 build:
 	@daml build
@@ -701,3 +705,148 @@ tokens:
 	echo "Total Supply: $$TOTAL TestToken"; \
 	echo "HOLDER: $$HOLDER_TOTAL ($$HOLDER_COUNT contracts)"; \
 	echo "BANK: $$BANK_TOTAL ($$BANK_COUNT contracts)"
+
+# Find FeaturedAppActivityMarkers and AppRewardCoupons for app provider
+find-rewards:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	PARTY=$${PARTY_APP_PROVIDER}; \
+	if [ -z "$$PARTY" ]; then \
+		echo "Error: PARTY_APP_PROVIDER not set in .env"; \
+		exit 1; \
+	fi; \
+	echo "=== Rewards for Provider: $$PARTY ==="; \
+	echo ""; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		$(APP_PROVIDER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	echo "Querying active contracts at offset $$LEDGER_END..."; \
+	echo ""; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_PROVIDER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$PARTY" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	MARKERS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("FeaturedAppActivityMarker")))]' 2>/dev/null); \
+	REWARDS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("AppRewardCoupon")))]' 2>/dev/null); \
+	echo "## FeaturedAppActivityMarkers"; \
+	echo ""; \
+	if [ "$$MARKERS" != "[]" ] && [ -n "$$MARKERS" ] && [ "$$MARKERS" != "null" ]; then \
+		MARKER_COUNT=$$(echo "$$MARKERS" | jq 'length'); \
+		echo "Found $$MARKER_COUNT activity marker(s):"; \
+		echo ""; \
+		echo "$$MARKERS" | jq -r '.[] | "  Contract ID: \(.contractEntry.JsActiveContract.createdEvent.contractId)\n  Provider: \(.contractEntry.JsActiveContract.createdEvent.createArgument.provider // "N/A")\n  Beneficiary: \(.contractEntry.JsActiveContract.createdEvent.createArgument.beneficiary // "N/A")\n  Weight: \(.contractEntry.JsActiveContract.createdEvent.createArgument.weight // "N/A")\n"' 2>/dev/null; \
+		MARKER_CIDS=$$(echo "$$MARKERS" | jq -r '[.[] | .contractEntry.JsActiveContract.createdEvent.contractId] | join(",")' 2>/dev/null); \
+		if [ -n "$$MARKER_CIDS" ] && [ "$$MARKER_CIDS" != "null" ]; then \
+			echo "FEATURED_APP_ACTIVITY_MARKER_CIDS=$$MARKER_CIDS"; \
+			echo ""; \
+		fi; \
+	else \
+		echo "No FeaturedAppActivityMarker contracts found"; \
+		echo ""; \
+		echo "Activity markers are created when:"; \
+		echo "  1. ProveTokenReserves is executed with a FeaturedAppRight"; \
+		echo "  2. Featured app transactions occur"; \
+		echo ""; \
+		echo "These markers are automatically converted to AppRewardCoupons by DSO automation."; \
+		echo ""; \
+	fi; \
+	echo "## AppRewardCoupons"; \
+	echo ""; \
+	if [ "$$REWARDS" != "[]" ] && [ -n "$$REWARDS" ] && [ "$$REWARDS" != "null" ]; then \
+		REWARD_COUNT=$$(echo "$$REWARDS" | jq 'length'); \
+		echo "Found $$REWARD_COUNT reward coupon(s):"; \
+		echo ""; \
+		echo "$$REWARDS" | jq -r '.[] | "  Contract ID: \(.contractEntry.JsActiveContract.createdEvent.contractId)\n  Amount: \(.contractEntry.JsActiveContract.createdEvent.createArgument.amount // "N/A") CC\n  Round: \(.contractEntry.JsActiveContract.createdEvent.createArgument.round.number // "N/A")\n  Featured: \(.contractEntry.JsActiveContract.createdEvent.createArgument.featured // false)\n  Provider: \(.contractEntry.JsActiveContract.createdEvent.createArgument.provider // "N/A")\n  Beneficiary: \(.contractEntry.JsActiveContract.createdEvent.createArgument.beneficiary // "N/A")\n"' 2>/dev/null; \
+		COUPON_CIDS=$$(echo "$$REWARDS" | jq -r '[.[] | .contractEntry.JsActiveContract.createdEvent.contractId] | join(",")' 2>/dev/null); \
+		if [ -n "$$COUPON_CIDS" ] && [ "$$COUPON_CIDS" != "null" ]; then \
+			echo "APP_REWARD_COUPON_CIDS=$$COUPON_CIDS"; \
+			echo ""; \
+		fi; \
+		TOTAL_REWARDS=$$(echo "$$REWARDS" | jq '[.[] | (.contractEntry.JsActiveContract.createdEvent.createArgument.amount // "0" | tonumber)] | add // 0' 2>/dev/null); \
+		echo "Total Rewards Available: $$TOTAL_REWARDS CC"; \
+		echo ""; \
+		echo "To redeem these rewards:"; \
+		echo "  1. Wait for an IssuingMiningRound to open"; \
+		echo "  2. Exercise the coupon's Mint choice to convert to Canton Coin"; \
+		echo ""; \
+	else \
+		echo "No AppRewardCoupon contracts found"; \
+		echo ""; \
+		echo "AppRewardCoupons are created by DSO automation from:"; \
+		echo "  1. FeaturedAppActivityMarkers (converted periodically)"; \
+		echo "  2. Featured app payments and transfers"; \
+		echo ""; \
+		echo "Check back after activity markers have been converted by the SV automation."; \
+		echo ""; \
+	fi
+
+# Find FeaturedAppActivityMarkers for app provider (detailed view)
+find-markers:
+	@if [ -z "$(APP_PROVIDER_API_URL)" ] || [ -z "$(APP_PROVIDER_JWT)" ]; then \
+		echo "Error: APP_PROVIDER_API_URL or APP_PROVIDER_JWT not set in .env"; \
+		exit 1; \
+	fi; \
+	PARTY=$${PARTY_APP_PROVIDER}; \
+	if [ -z "$$PARTY" ]; then \
+		echo "Error: PARTY_APP_PROVIDER not set in .env"; \
+		exit 1; \
+	fi; \
+	echo "=== FeaturedAppActivityMarkers for Provider ==="; \
+	echo ""; \
+	echo "Provider: $$PARTY"; \
+	echo ""; \
+	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		$(APP_PROVIDER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
+	if [ -z "$$LEDGER_END" ] || [ "$$LEDGER_END" = "null" ]; then \
+		echo "Error: Unable to get ledger end offset"; \
+		exit 1; \
+	fi; \
+	echo "Querying active contracts at offset $$LEDGER_END..."; \
+	echo ""; \
+	RESP=$$(curl -s -H "Authorization: Bearer $(APP_PROVIDER_JWT)" \
+		-H "Content-Type: application/json" \
+		-X POST "$(APP_PROVIDER_API_URL)v2/state/active-contracts?limit=500" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$PARTY" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	MARKERS=$$(echo "$$RESP" | jq '[.[] | select(.contractEntry? and .contractEntry.JsActiveContract? and (.contractEntry.JsActiveContract.createdEvent.templateId | contains("FeaturedAppActivityMarker")))]' 2>/dev/null); \
+	if [ "$$MARKERS" != "[]" ] && [ -n "$$MARKERS" ] && [ "$$MARKERS" != "null" ]; then \
+		MARKER_COUNT=$$(echo "$$MARKERS" | jq 'length'); \
+		echo "Found $$MARKER_COUNT activity marker(s):"; \
+		echo ""; \
+		echo "$$MARKERS" | jq -r '.[] | "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nContract ID:\n  \(.contractEntry.JsActiveContract.createdEvent.contractId)\n\nDSO: \(.contractEntry.JsActiveContract.createdEvent.createArgument.dso // "N/A")\nProvider: \(.contractEntry.JsActiveContract.createdEvent.createArgument.provider // "N/A")\nBeneficiary: \(.contractEntry.JsActiveContract.createdEvent.createArgument.beneficiary // "N/A")\nWeight: \(.contractEntry.JsActiveContract.createdEvent.createArgument.weight // "N/A")\n\nTemplate: \(.contractEntry.JsActiveContract.createdEvent.templateId)\nCreated At: \(.contractEntry.JsActiveContract.createdEvent.createdAt // "N/A")\n"' 2>/dev/null; \
+		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+		echo ""; \
+		MARKER_CIDS=$$(echo "$$MARKERS" | jq -r '[.[] | .contractEntry.JsActiveContract.createdEvent.contractId] | join(",")' 2>/dev/null); \
+		if [ -n "$$MARKER_CIDS" ] && [ "$$MARKER_CIDS" != "null" ]; then \
+			echo "Export variable for scripting:"; \
+			echo "  FEATURED_APP_ACTIVITY_MARKER_CIDS=$$MARKER_CIDS"; \
+			echo ""; \
+		fi; \
+		TOTAL_WEIGHT=$$(echo "$$MARKERS" | jq '[.[] | (.contractEntry.JsActiveContract.createdEvent.createArgument.weight // "0" | tonumber)] | add // 0' 2>/dev/null); \
+		echo "Summary:"; \
+		echo "  Total Markers: $$MARKER_COUNT"; \
+		echo "  Total Weight: $$TOTAL_WEIGHT"; \
+		echo ""; \
+		echo "These markers will be automatically converted to AppRewardCoupons by DSO automation."; \
+		echo "The conversion happens periodically (typically every few rounds)."; \
+		echo ""; \
+		echo "Once converted, use 'make find-rewards' to see your AppRewardCoupons."; \
+	else \
+		echo "No FeaturedAppActivityMarker contracts found"; \
+		echo ""; \
+		echo "Activity markers are created when:"; \
+		echo "  1. ProveTokenReserves is executed with a FeaturedAppRight"; \
+		echo "  2. Featured app transactions occur with activity tracking"; \
+		echo ""; \
+		echo "Example: Run 'cargo run -- token-reserve' to create a proof and activity marker."; \
+		echo ""; \
+		echo "After creation, markers are automatically converted to AppRewardCoupons by"; \
+		echo "the DSO automation (usually within a few mining rounds)."; \
+		echo ""; \
+	fi
