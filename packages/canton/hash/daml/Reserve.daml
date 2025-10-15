@@ -8,7 +8,7 @@ module Reserve where
 import Splice.Amulet
 import Splice.Round
 import Splice.Types
-import Splice.Util
+import Splice.Util ()
 import qualified DA.Foldable as Foldable
 import DA.List (unique)
 

@@ -4,35 +4,35 @@ use std::fs::File;
 use std::io::Write;
 use tracing::{info, debug};
 
-/// Create a TestTokenFactory contract
-async fn create_factory(
+/// Create a TestTokenBurnMintFactory contract
+async fn create_burn_mint_factory(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
-    party_app_user: &str,
+    admin: &str,
+    instrument_id: &str,
     package_id: &str,
     synchronizer_id: &str,
 ) -> Result<String> {
-    let cmdid = format!("create-factory-{}", chrono::Utc::now().timestamp());
-    let template_id = format!("{}:TestToken:TestTokenFactory", package_id);
+    let cmdid = format!("create-burnmint-factory-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:TestToken:TestTokenBurnMintFactory", package_id);
 
-    info!("Creating TestTokenFactory contract");
+    info!("Creating TestTokenBurnMintFactory contract");
 
     let create_payload = json!({
         "commands": [{
             "CreateCommand": {
                 "templateId": template_id,
                 "createArguments": {
-                    "issuer": party_app_user,
-                    "instrumentAdmin": party_app_user,
-                    "instrumentId": "TestToken"
+                    "admin": admin,
+                    "instrumentId": instrument_id
                 }
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app_user],
+        "actAs": [admin],
         "readAs": [],
-        "workflowId": "TestTokenFactory",
+        "workflowId": "TestTokenBurnMintFactory",
         "synchronizerId": synchronizer_id
     });
 
@@ -50,7 +50,7 @@ async fn create_factory(
 
     if !create_status.is_success() {
         return Err(anyhow::anyhow!(
-            "Failed to create TestTokenFactory: HTTP {} - {}",
+            "Failed to create TestTokenBurnMintFactory: HTTP {} - {}",
             create_status,
             create_text
         ));
@@ -62,17 +62,17 @@ async fn create_factory(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("No updateId in create response"))?;
 
-    info!("TestTokenFactory created, updateId: {}", create_update_id);
+    info!("TestTokenBurnMintFactory created, updateId: {}", create_update_id);
 
     // Get the contract ID from the update
     let update_payload = json!({
-        "actAs": [party_app_user],
+        "actAs": [admin],
         "updateId": create_update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        party_app_user: {
+                        admin: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -86,7 +86,7 @@ async fn create_factory(
                     },
                     "verbose": true
                 },
-                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+                "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"
             }
         }
     });
@@ -120,7 +120,7 @@ async fn create_factory(
         for event in events {
             if let Some(created) = event.get("CreatedEvent") {
                 if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
-                    if template.contains(":TestToken:TestTokenFactory") {
+                    if template.contains(":TestToken:TestTokenBurnMintFactory") {
                         factory_cid = created.pointer("/contractId").and_then(|v| v.as_str()).map(String::from);
                         break;
                     }
@@ -130,29 +130,33 @@ async fn create_factory(
     }
 
     let cid = factory_cid
-        .ok_or_else(|| anyhow::anyhow!("Could not find TestTokenFactory contract in create update"))?;
+        .ok_or_else(|| anyhow::anyhow!("Could not find TestTokenBurnMintFactory contract in create update"))?;
 
-    info!("TestTokenFactory contract ID: {}", cid);
+    info!("TestTokenBurnMintFactory contract ID: {}", cid);
 
     Ok(cid)
 }
 
-/// Mint tokens by exercising the Mint choice
+/// Mint tokens using BurnMintFactory_BurnMint choice (burn [] -> mint outputs)
 async fn mint_tokens(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
-    party_app_user: &str,
+    admin: &str,
     receiver: &str,
     amount: &str,
     package_id: &str,
     factory_cid: &str,
+    instrument_id: &str,
     synchronizer_id: &str,
 ) -> Result<(String, serde_json::Value)> {
-    let cmdid = format!("mint-tokens-{}", chrono::Utc::now().timestamp_millis());
-    let template_id = format!("{}:TestToken:TestTokenFactory", package_id);
+    let cmdid = format!("burnmint-tokens-{}", chrono::Utc::now().timestamp_millis());
+    let template_id = format!("{}:TestToken:TestTokenBurnMintFactory", package_id);
 
-    info!("Minting {} tokens for {}", amount, receiver);
+    info!("Minting {} tokens for {} using BurnMintFactory", amount, receiver);
+
+    // Build extra actors list (empty since we'll use actAs properly)
+    let extra_actors: Vec<String> = vec![];
 
     let payload = json!({
         "commands": [{
@@ -162,12 +166,14 @@ async fn mint_tokens(
                 "choice": "Mint",
                 "choiceArgument": {
                     "receiver": receiver,
-                    "amount": amount
+                    "amount": amount,
+                    "extraActors": extra_actors
                 }
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app_user, receiver],
+        "actAs": [admin, receiver],
+        "readAs": [],
         "workflowId": "MintTestToken",
         "synchronizerId": synchronizer_id
     });
@@ -192,23 +198,23 @@ async fn mint_tokens(
         ));
     }
 
-    let json: serde_json::Value = serde_json::from_str(&text)?;
-    let update_id = json
+    let response_json: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = response_json
         .get("updateId")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
+        .ok_or_else(|| anyhow::anyhow!("No updateId in mint response"))?;
 
     info!("Tokens minted, updateId: {}", update_id);
 
-    // Fetch the full update
+    // Get the contract ID from the update
     let update_payload = json!({
-        "actAs": [party_app_user],
+        "actAs": [admin],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        party_app_user: {
+                        admin: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -222,7 +228,7 @@ async fn mint_tokens(
                     },
                     "verbose": true
                 },
-                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+                "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"
             }
         }
     });
@@ -234,7 +240,17 @@ async fn mint_tokens(
         .send()
         .await?;
 
+    let update_status = update_response.status();
     let update_text = update_response.text().await?;
+
+    if !update_status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch mint update: HTTP {} - {}",
+            update_status,
+            update_text
+        ));
+    }
+
     let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
 
     // Extract TestToken contract ID
@@ -263,8 +279,53 @@ async fn mint_tokens(
     Ok((cid, update_json))
 }
 
-pub async fn handle_mint() -> Result<()> {
-    info!("Minting TestToken");
+/// Print all updates from the ledger for debugging
+async fn print_all_updates(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+) -> Result<()> {
+    println!("\n=== Fetching All Ledger Updates ===");
+
+    let payload = json!({
+        "beginExclusive": "0",
+        "endInclusive": "100",
+        "actAs": [party],
+        "verbose": true,
+        "filter": {
+            "filtersByParty": {
+                party: {}
+            }
+        }
+    });
+
+    let response = client
+        .post(&format!("{}v2/updates", api_url))
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch updates: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let updates: serde_json::Value = serde_json::from_str(&text)?;
+    println!("{}", serde_json::to_string_pretty(&updates)?);
+
+    Ok(())
+}
+
+pub async fn handle_mint(print_ledger: bool) -> Result<()> {
+    info!("Minting TestToken using BurnMintFactory");
 
     // Get environment variables
     let party_app_user = std::env::var("PARTY_APP_USER")
@@ -285,20 +346,28 @@ pub async fn handle_mint() -> Result<()> {
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set in environment"))?;
 
+    let instrument_id = "TestToken";
+
     // Create HTTP client
     let client = crate::url::create_client_with_localhost_resolution()?;
 
-    // Create TestTokenFactory
-    let factory_cid = create_factory(
+    // Print all ledger updates if requested
+    if print_ledger {
+        print_all_updates(&client, &api_url, &jwt, &party_app_user).await?;
+    }
+
+    // Create TestTokenBurnMintFactory
+    let factory_cid = create_burn_mint_factory(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        instrument_id,
         &package_id,
         &synchronizer_id,
     ).await?;
 
-    println!("\n=== TestTokenFactory Created ===");
+    println!("\n=== TestTokenBurnMintFactory Created ===");
     println!("Factory Contract ID: {}", factory_cid);
 
     // Mint 10000 tokens to PARTY_APP_USER
@@ -311,6 +380,7 @@ pub async fn handle_mint() -> Result<()> {
         "10000.0",
         &package_id,
         &factory_cid,
+        instrument_id,
         &synchronizer_id,
     ).await?;
 
@@ -330,6 +400,7 @@ pub async fn handle_mint() -> Result<()> {
         "1000000.0",
         &package_id,
         &factory_cid,
+        instrument_id,
         &synchronizer_id,
     ).await?;
 
@@ -341,31 +412,28 @@ pub async fn handle_mint() -> Result<()> {
 
     // Write mint.env file with metadata
     let env_content = format!(
-        "# TestToken Mint Metadata - Generated at {}\n\
+        "# TestToken Mint Metadata - Generated at {} using BurnMintFactory\n\
         # Package ID\n\
         HASH_PACKAGE_ID={}\n\n\
         # Synchronizer ID\n\
         SYNCHRONIZER_ID={}\n\n\
-        # Factory Contract\n\
+        # BurnMint Factory Contract\n\
         FACTORY_CONTRACT_ID={}\n\
-        FACTORY_TEMPLATE_ID={}:TestToken:TestTokenFactory\n\n\
+        FACTORY_TEMPLATE_ID={}:TestToken:TestTokenBurnMintFactory\n\n\
         # PARTY_APP_USER Token (10000 tokens)\n\
         APP_USER_TOKEN_CONTRACT_ID={}\n\
         APP_USER_TOKEN_TEMPLATE_ID={}:TestToken:TestToken\n\
         APP_USER_TOKEN_AMOUNT=10000.0\n\
         APP_USER_TOKEN_OWNER={}\n\
         APP_USER_TOKEN_ISSUER={}\n\
-        APP_USER_TOKEN_INSTRUMENT_ID=TestToken\n\n\
+        APP_USER_TOKEN_INSTRUMENT_ID={}\n\n\
         # PARTY_BANK Token (1000000 tokens)\n\
         BANK_TOKEN_CONTRACT_ID={}\n\
         BANK_TOKEN_TEMPLATE_ID={}:TestToken:TestToken\n\
         BANK_TOKEN_AMOUNT=1000000.0\n\
         BANK_TOKEN_OWNER={}\n\
         BANK_TOKEN_ISSUER={}\n\
-        BANK_TOKEN_INSTRUMENT_ID=TestToken\n\n\
-        # Parties\n\
-        PARTY_APP_USER={}\n\
-        PARTY_BANK={}\n",
+        BANK_TOKEN_INSTRUMENT_ID={}\n",
         chrono::Utc::now().to_rfc3339(),
         package_id,
         synchronizer_id,
@@ -375,21 +443,20 @@ pub async fn handle_mint() -> Result<()> {
         package_id,
         party_app_user,
         party_app_user,
+        instrument_id,
         bank_token_cid,
         package_id,
         party_bank,
         party_app_user,
-        party_app_user,
-        party_bank,
+        instrument_id,
     );
 
-    let mut file = File::create("mint.env")?;
+    let mut file = File::create("./mint.env")?;
     file.write_all(env_content.as_bytes())?;
 
     println!("\n=== mint.env file written successfully ===");
     println!("Location: ./mint.env");
 
-    // Print summary
     println!("\n=== Mint Summary ===");
     println!("Factory CID: {}", factory_cid);
     println!("APP_USER Token CID: {} (10000.0 tokens)", app_user_token_cid);

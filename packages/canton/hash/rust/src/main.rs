@@ -72,7 +72,11 @@ enum Commands {
     /// Create ProofOfReserves and prove reserves with all user amulets
     Reserve,
     /// Mint TestToken to PARTY_APP_USER and PARTY_BANK
-    Mint,
+    Mint {
+        /// Print all ledger updates during mint
+        #[arg(short, long)]
+        ledger: bool,
+    },
     /// Create TokenProofOfReserves and prove TestToken reserves
     TokenReserve,
 }
@@ -98,7 +102,7 @@ async fn main() -> Result<()> {
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
         Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
         Commands::Reserve => reserve::handle_reserve().await?,
-        Commands::Mint => mint::handle_mint().await?,
+        Commands::Mint { ledger } => mint::handle_mint(ledger).await?,
         Commands::TokenReserve => token_reserve::handle_token_reserve().await?,
     }
 

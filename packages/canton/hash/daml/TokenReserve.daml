@@ -9,7 +9,7 @@
 module TokenReserve where
 
 import Splice.Api.Token.HoldingV1 qualified as Token.Holding
-import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
+import Splice.Api.Token.MetadataV1 qualified as Token.Metadata ()
 import Splice.Round
 import Splice.Types
 import qualified DA.Foldable as Foldable
