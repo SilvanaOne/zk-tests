@@ -25,8 +25,6 @@ template TestToken
   with
     owner : Party
       -- ^ The party that owns this token holding.
-    issuer : Party
-      -- ^ The party that issued this token.
     instrumentAdmin : Party
       -- ^ The registry/admin party administering this instrument (per CIP-56).
     amount : Decimal
@@ -36,8 +34,7 @@ template TestToken
     metadata : TextMap.TextMap Text
       -- ^ Additional metadata for this holding.
   where
-    signatory owner
-    observer issuer, instrumentAdmin
+    signatory owner, instrumentAdmin
 
     ensure amount > 0.0
 
@@ -141,7 +138,6 @@ template TestTokenTransferInstruction
         -- Create receiver holding
         receiverCid <- create TestToken with
           owner = transfer.receiver
-          issuer = transfer.sender  -- Preserve issuer
           instrumentAdmin = transfer.instrumentId.admin
           amount = transfer.amount
           instrumentId = transfer.instrumentId.id
@@ -152,7 +148,6 @@ template TestTokenTransferInstruction
           then do
             changeCid <- create TestToken with
               owner = transfer.sender
-              issuer = transfer.sender
               instrumentAdmin = transfer.instrumentId.admin
               amount = totalInput - transfer.amount
               instrumentId = transfer.instrumentId.id
@@ -226,7 +221,6 @@ template TestTokenMintRequest
       do
         create TestToken with
           owner = receiver
-          issuer = admin
           instrumentAdmin = admin
           amount
           instrumentId
@@ -319,7 +313,6 @@ template TestTokenBurnMintFactory
         outputCids <- mapA (\output -> do
           cid <- create TestToken with
             owner = output.owner
-            issuer = admin
             instrumentAdmin = admin
             amount = output.amount
             instrumentId = instrumentId
