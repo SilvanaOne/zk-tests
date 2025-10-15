@@ -1,6 +1,8 @@
 use anyhow::Result;
 use serde_json::json;
 use tracing::{info, debug, warn};
+use crypto_bigint::U256;
+use indexed_merkle_map::{Field, IndexedMerkleMap};
 
 /// InstrumentId as defined in Token Standard
 #[derive(Debug, Clone)]
@@ -132,6 +134,7 @@ async fn create_token_proof_of_reserves(
     instrument_id: &InstrumentId,
     package_id: &str,
     synchronizer_id: &str,
+    initial_root: &str,
 ) -> Result<(String, serde_json::Value)> {
     let cmdid = format!("create-token-proof-{}", chrono::Utc::now().timestamp());
     let template_id = format!("{}:TokenReserve:TokenProofOfReserves", package_id);
@@ -159,6 +162,7 @@ async fn create_token_proof_of_reserves(
                     },
                     "amount": "0.0",
                     "amountHex": "00000000000000000000000000000000",
+                    "root": initial_root,
                     "instrumentId": {
                         "admin": instrument_id.admin,
                         "id": instrument_id.id
@@ -280,6 +284,7 @@ async fn exercise_prove_token_reserves(
     open_round_blob: &str,
     open_round_template_id: &str,
     synchronizer_id: &str,
+    witness_json: &serde_json::Value,
 ) -> Result<serde_json::Value> {
     let cmdid = format!("prove-token-reserves-{}", chrono::Utc::now().timestamp());
     let template_id = format!("{}:TokenReserve:TokenProofOfReserves", package_id);
@@ -310,7 +315,8 @@ async fn exercise_prove_token_reserves(
                 "choice": "ProveTokenReserves",
                 "choiceArgument": {
                     "holdingCids": holding_cids,
-                    "openRoundCid": open_round_cid
+                    "openRoundCid": open_round_cid,
+                    "witness": witness_json
                 }
             }
         }],
@@ -520,7 +526,42 @@ pub async fn handle_token_reserve() -> Result<()> {
         (party_bank.clone(), "10000000.0".to_string())
     ];
 
-    // Create TokenProofOfReserves contract
+    // Calculate total amount (sum of guarantor caps, will be verified on-chain)
+    let total_amount = "1010000.0"; // 10000 + 1000000
+
+    // Generate Merkle witness for (round → amountHex)
+    info!("Generating Merkle witness for (round → amountHex)...");
+    let mut map = IndexedMerkleMap::new(32);
+
+    // Convert round number to Field (key)
+    let round_key = Field::from_u256(U256::from_u64(round_number as u64));
+
+    // Encode amount to fixed-point hex and convert to Field (value)
+    let amount_hex = encode_decimal_to_fixed_hex(total_amount)?;
+    info!("Amount hex (16-byte): {}", amount_hex);
+
+    // Pad to 32 bytes for Field
+    let amount_hex_32 = format!("{:0>64}", amount_hex);
+    let amount_field = hex_to_field(&amount_hex_32)?;
+
+    // Generate witness
+    let witness = map
+        .insert_and_generate_witness(round_key, amount_field, true)?
+        .ok_or_else(|| anyhow::anyhow!("Failed to generate Merkle witness"))?;
+
+    info!("Witness generated:");
+    info!("  Old root: {}", hex::encode(witness.old_root.as_bytes()));
+    info!("  New root: {}", hex::encode(witness.new_root.as_bytes()));
+    info!("  Key (round): {}", hex::encode(witness.key.as_bytes()));
+    info!("  Value (amountHex): {}", hex::encode(witness.value.as_bytes()));
+
+    // Convert witness to Daml JSON
+    let witness_json = convert_witness_to_daml_json(&witness)?;
+
+    // Get the old root (initial empty map root) for the contract
+    let initial_root = hex::encode(witness.old_root.as_bytes());
+
+    // Create TokenProofOfReserves contract with the old root
     let (proof_cid, create_update) = create_token_proof_of_reserves(
         &client,
         &api_url,
@@ -530,6 +571,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &instrument_id,
         &token_reserve_package_id,
         &synchronizer_id,
+        &initial_root,
     ).await?;
 
     println!("\n=== Create TokenProofOfReserves Update ===");
@@ -551,6 +593,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &open_round_blob,
         &open_round_template_id,
         &synchronizer_id,
+        &witness_json,
     ).await?;
 
     // Print full update JSON
@@ -594,4 +637,91 @@ pub async fn handle_token_reserve() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Convert hex string to Field (32-byte)
+fn hex_to_field(hex_str: &str) -> Result<Field> {
+    // Remove 0x prefix if present
+    let hex_clean = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+
+    // Pad to 64 chars (32 bytes) if shorter
+    let hex_padded = if hex_clean.len() < 64 {
+        format!("{:0>64}", hex_clean)
+    } else if hex_clean.len() > 64 {
+        return Err(anyhow::anyhow!("Hex string too long: {} chars", hex_clean.len()));
+    } else {
+        hex_clean.to_string()
+    };
+
+    let bytes = hex::decode(&hex_padded)?;
+    let mut field_bytes = [0u8; 32];
+    field_bytes.copy_from_slice(&bytes);
+
+    Ok(Field::from_bytes(field_bytes))
+}
+
+/// Encode decimal to fixed-point hex (16 bytes)
+/// Using scale=10 (10 decimal places)
+fn encode_decimal_to_fixed_hex(decimal_str: &str) -> Result<String> {
+    // Parse decimal string
+    let parts: Vec<&str> = decimal_str.split('.').collect();
+    let (int_part, frac_part) = match parts.len() {
+        1 => (parts[0], ""),
+        2 => (parts[0], parts[1]),
+        _ => return Err(anyhow::anyhow!("Invalid decimal format")),
+    };
+
+    // Pad or truncate fractional part to exactly 10 digits
+    let frac_padded = if frac_part.len() < 10 {
+        format!("{:0<10}", frac_part)
+    } else {
+        frac_part[..10].to_string()
+    };
+
+    // Combine integer and fractional parts
+    let combined = format!("{}{}", int_part, frac_padded);
+
+    // Parse as u128
+    let value: u128 = combined.parse()?;
+
+    // Convert to 16-byte big-endian
+    let bytes = value.to_be_bytes();
+
+    Ok(hex::encode(&bytes))
+}
+
+/// Convert witness to Daml JSON format
+fn convert_witness_to_daml_json(witness: &indexed_merkle_map::InsertWitness) -> Result<serde_json::Value> {
+    let field_to_hex = |f: &Field| hex::encode(f.as_bytes());
+    let hash_to_hex = |h: &indexed_merkle_map::Hash| hex::encode(h.as_bytes());
+
+    let leaf_to_json = |leaf: &indexed_merkle_map::Leaf| {
+        json!({
+            "key": field_to_hex(&leaf.key),
+            "value": field_to_hex(&leaf.value),
+            "nextKey": field_to_hex(&leaf.next_key),
+            "index": leaf.index
+        })
+    };
+
+    let proof_to_json = |proof: &indexed_merkle_map::MerkleProof| {
+        json!({
+            "siblings": proof.siblings.iter().map(hash_to_hex).collect::<Vec<_>>(),
+            "pathIndices": proof.path_indices.clone()
+        })
+    };
+
+    Ok(json!({
+        "oldRoot": hash_to_hex(&witness.old_root),
+        "newRoot": hash_to_hex(&witness.new_root),
+        "key": field_to_hex(&witness.key),
+        "value": field_to_hex(&witness.value),
+        "newLeafIndex": witness.new_leaf_index,
+        "treeLength": witness.tree_length,
+        "lowLeaf": leaf_to_json(&witness.non_membership_proof.low_leaf),
+        "lowLeafProof": proof_to_json(&witness.low_leaf_proof_before),
+        "updatedLowLeaf": leaf_to_json(&witness.updated_low_leaf),
+        "newLeaf": leaf_to_json(&witness.new_leaf),
+        "newLeafProofAfter": proof_to_json(&witness.new_leaf_proof_after)
+    }))
 }

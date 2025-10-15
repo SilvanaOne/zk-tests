@@ -13,9 +13,11 @@ import Splice.Api.Token.MetadataV1 qualified as Token.Metadata ()
 import Splice.Round
 import Splice.Types
 import qualified DA.Foldable as Foldable
-import DA.List (unique)
+import DA.List (unique, replicate)
 import DA.Crypto.Text (BytesHex)
-import FixedPointHex (encodeDecimalToFixedHex)
+import FixedPointHex (encodeDecimalToFixedHex, decodeFixedHexToDecimal)
+import Silvana (InsertWitness, verifyInsertWitness, intToHex8Bytes)
+import qualified DA.Text as T
 
 -- | A proof of reserves contract for token holdings.
 --
@@ -32,6 +34,8 @@ template TokenProofOfReserves
       -- ^ The total proven reserve amount (sum of capped guarantor amounts).
     amountHex : BytesHex
       -- ^ The proven amount in 16-byte fixed-point hex representation (scale=10).
+    root : Text
+      -- ^ Merkle map root committing to (round → amount) mappings (hex-encoded 32-byte hash).
     instrumentId : Token.Holding.InstrumentId
       -- ^ The token instrument being proven.
     guarantors : [(Party, Decimal)]
@@ -55,11 +59,14 @@ template TokenProofOfReserves
       -- 2. All holdings are unlocked
       -- 3. All holding owners are guarantors
       -- 4. Calculates capped amounts per guarantor
+      -- 5. Verifies Merkle witness for (round → amount) mapping
       with
         holdingCids : [ContractId Token.Holding.Holding]
           -- ^ List of Holding contract IDs to prove.
         openRoundCid : ContractId OpenMiningRound
           -- ^ OpenMiningRound contract for round verification.
+        witness : InsertWitness
+          -- ^ Merkle insertion witness for adding (round → amountHex) to map.
       controller prover :: map fst guarantors
       do
         -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
@@ -101,10 +108,30 @@ template TokenProofOfReserves
         let newAmount = Foldable.sum $ map calculateGuarantorAmount guarantors
             newAmountHex = encodeDecimalToFixedHex newAmount
 
+        -- Verify witness
+        assertMsg "Old root does not match current state" (witness.oldRoot == root)
+        assertMsg "Insert witness verification failed" (verifyInsertWitness witness)
+
+        -- Convert round number to hex Field (32 bytes, left-padded with zeros)
+        let roundNumber = openMiningRound.round.number
+            -- intToHex8Bytes gives 16 hex chars (8 bytes), pad to 64 chars (32 bytes)
+            roundHex8 = intToHex8Bytes roundNumber
+            roundKeyHex = T.implode (replicate 48 "0") <> roundHex8
+
+        -- Verify witness key matches round number
+        assertMsg "Witness key must match round number" (witness.key == roundKeyHex)
+
+        -- Verify witness value matches calculated amountHex
+        -- Convert amountHex (16-byte) to 32-byte by padding with zeros on left
+        let amountHex32 = T.implode (replicate 32 "0") <> newAmountHex
+
+        assertMsg "Witness value must match calculated amountHex" (witness.value == amountHex32)
+
         create this with
           round = openMiningRound.round
           amount = newAmount
           amountHex = newAmountHex
+          root = witness.newRoot
 
     choice AddObserver : ContractId TokenProofOfReserves
       -- ^ Add a new observer to the proof contract.
