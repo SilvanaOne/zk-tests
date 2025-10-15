@@ -131,6 +131,7 @@ async fn create_token_proof_request(
     jwt: &str,
     owner: &str,
     provider: &str,
+    proof_id: &str,
     guarantors: Vec<(String, String)>, // [(party, amount)]
     instrument_id: &InstrumentId,
     package_id: &str,
@@ -159,6 +160,7 @@ async fn create_token_proof_request(
                 "createArguments": {
                     "owner": owner,
                     "provider": provider,
+                    "proofId": proof_id,
                     "round": {
                         "number": 0
                     },
@@ -177,7 +179,7 @@ async fn create_token_proof_request(
         "commandId": cmdid,
         "actAs": [owner],
         "readAs": [],
-        "workflowId": "TokenProofOfReserves",
+        "workflowId": format!("TokenProofOfReserves-{}", proof_id),
         "synchronizerId": synchronizer_id
     });
 
@@ -280,6 +282,7 @@ async fn accept_token_proof_request(
     provider: &str,
     package_id: &str,
     request_cid: &str,
+    proof_id: &str,
     synchronizer_id: &str,
 ) -> Result<(String, serde_json::Value)> {
     let cmdid = format!("accept-token-proof-request-{}", chrono::Utc::now().timestamp());
@@ -299,7 +302,7 @@ async fn accept_token_proof_request(
         "commandId": cmdid,
         "actAs": [provider],
         "readAs": [],
-        "workflowId": "TokenProofOfReserves",
+        "workflowId": format!("TokenProofOfReserves-{}", proof_id),
         "synchronizerId": synchronizer_id
     });
 
@@ -403,6 +406,7 @@ async fn exercise_prove_token_reserves(
     guarantors: &[(String, String)],
     package_id: &str,
     proof_cid: &str,
+    proof_id: &str,
     holding_cids: Vec<String>,
     open_round_cid: &str,
     open_round_blob: &str,
@@ -447,7 +451,7 @@ async fn exercise_prove_token_reserves(
         "disclosedContracts": disclosed_contracts,
         "commandId": cmdid,
         "actAs": act_as_parties,
-        "workflowId": "TokenProofOfReserves",
+        "workflowId": format!("TokenProofOfReserves-{}", proof_id),
         "synchronizerId": synchronizer_id
     });
 
@@ -694,6 +698,10 @@ pub async fn handle_token_reserve() -> Result<()> {
     // Get the old root (initial empty map root) for the contract
     let initial_root = hex::encode(witness.old_root.as_bytes());
 
+    // Generate unique proof ID (UUID)
+    let proof_id = uuid::Uuid::new_v4().to_string();
+    info!("Generated proof ID: {}", proof_id);
+
     // Step 1: Create TokenProofOfReservesRequest (owner proposes)
     info!("Creating TokenProofOfReservesRequest via propose-accept workflow...");
     let (request_cid, create_update) = create_token_proof_request(
@@ -702,6 +710,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &jwt,
         &party_app_user,
         &party_app_provider,
+        &proof_id,
         guarantors.clone(),
         &instrument_id,
         &token_reserve_package_id,
@@ -721,6 +730,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &party_app_provider,
         &token_reserve_package_id,
         &request_cid,
+        &proof_id,
         &synchronizer_id,
     ).await?;
 
@@ -737,6 +747,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &guarantors,
         &token_reserve_package_id,
         &proof_cid,
+        &proof_id,
         all_holding_cids.clone(),
         &open_round_cid,
         &open_round_blob,

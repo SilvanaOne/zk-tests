@@ -30,6 +30,8 @@ template TokenProofOfReserves
       -- ^ The account owner (signatory, typically on app-user node).
     provider : Party
       -- ^ The provider party (signatory, typically on app-provider node).
+    proofId : Text
+      -- ^ Unique identifier for this proof (UUID, set once and never changes).
     round : Round
       -- ^ The round when reserves were proven.
     amount : Decimal

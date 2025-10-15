@@ -12,6 +12,8 @@ template TokenProofOfReservesRequest
       -- ^ The account owner (signatory, on app-user node)
     provider : Party
       -- ^ The provider party (observer, on app-provider node)
+    proofId : Text
+      -- ^ Unique identifier for this proof (UUID).
     round : Round
       -- ^ The round when reserves were proven.
     amount : Decimal
@@ -38,6 +40,7 @@ template TokenProofOfReservesRequest
         create TR.TokenProofOfReserves with
           owner
           provider
+          proofId
           round
           amount
           amountHex
