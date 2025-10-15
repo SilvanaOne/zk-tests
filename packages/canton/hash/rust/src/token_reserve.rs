@@ -158,6 +158,7 @@ async fn create_token_proof_of_reserves(
                         "number": 0
                     },
                     "amount": "0.0",
+                    "amountHex": "00000000000000000000000000000000",
                     "instrumentId": {
                         "admin": instrument_id.admin,
                         "id": instrument_id.id

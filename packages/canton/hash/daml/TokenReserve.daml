@@ -14,6 +14,8 @@ import Splice.Round
 import Splice.Types
 import qualified DA.Foldable as Foldable
 import DA.List (unique)
+import DA.Crypto.Text (BytesHex)
+import FixedPointHex (encodeDecimalToFixedHex)
 
 -- | A proof of reserves contract for token holdings.
 --
@@ -28,6 +30,8 @@ template TokenProofOfReserves
       -- ^ The round when reserves were proven.
     amount : Decimal
       -- ^ The total proven reserve amount (sum of capped guarantor amounts).
+    amountHex : BytesHex
+      -- ^ The proven amount in 16-byte fixed-point hex representation (scale=10).
     instrumentId : Token.Holding.InstrumentId
       -- ^ The token instrument being proven.
     guarantors : [(Party, Decimal)]
@@ -95,10 +99,12 @@ template TokenProofOfReserves
 
         -- Calculate total proven amount (sum of all capped amounts)
         let newAmount = Foldable.sum $ map calculateGuarantorAmount guarantors
+            newAmountHex = encodeDecimalToFixedHex newAmount
 
         create this with
           round = openMiningRound.round
           amount = newAmount
+          amountHex = newAmountHex
 
     choice AddObserver : ContractId TokenProofOfReserves
       -- ^ Add a new observer to the proof contract.

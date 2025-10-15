@@ -1,0 +1,222 @@
+module FixedPointHex where
+
+import DA.Text as Text
+import qualified DA.List as L
+import qualified DA.Foldable as Foldable
+import DA.Crypto.Text (BytesHex, packHexBytes)
+
+scale : Int
+scale = 10
+
+-- Convert Decimal to its normalized string with exactly scale fractional digits
+normalizeDecimalText : Decimal -> Text
+normalizeDecimalText d =
+  let s = show d
+      parts = Text.splitOn "." s
+  in case parts of
+       [i] -> i <> "." <> Text.implode (L.replicate scale "0")
+       [i, f] ->
+         let fPadded = f <> Text.implode (L.replicate (scale - Text.length f) "0")
+         in i <> "." <> Text.take scale fPadded
+       _ -> error ("Invalid decimal text: " <> s)
+
+-- Decimal must be >= 0
+encodeDecimalToFixedHex : Decimal -> BytesHex
+encodeDecimalToFixedHex d =
+  let s = normalizeDecimalText d
+      isNeg = case Text.stripPrefix "-" s of
+                 Some _ -> True
+                 None -> False
+  in if isNeg then error "encodeDecimalToFixedHex: negative not supported"
+     else
+       let noDot = Text.replace "." "" s
+           trimmed = stripLeadingZeros noDot
+           bytes = decimalStringToBytesBE trimmed
+           hex = bytesToHex bytes
+       in case packHexBytes hex 16 of
+            Some h -> h
+            None -> error "Unexpected packHexBytes failure"
+
+-- Decode fixed 16-byte hex back to Decimal
+-- Expects hex to be valid BytesHex (any length); it will be padded/truncated to 16 bytes first
+decodeFixedHexToDecimal : BytesHex -> Decimal
+decodeFixedHexToDecimal hexIn =
+  let hex = case packHexBytes hexIn 16 of
+              Some h -> h
+              None -> error "Invalid hex input"
+      bytes = hexToBytes hex
+      decStr = bytesToDecimalString bytes
+      (i, f) = splitScale decStr
+      s = i <> "." <> f
+  in case Text.parseDecimal s of
+       Some d -> d
+       None -> error ("Failed to parse decimal from: " <> s)
+
+-- Split a decimal digits-only string into integer and fractional parts with fixed scale
+splitScale : Text -> (Text, Text)
+splitScale digits =
+  let n = Text.length digits
+  in if n <= scale
+       then ("0", Text.implode (L.replicate (scale - n) "0") <> digits)
+       else (Text.substring 0 (n - scale) digits, Text.substring (n - scale) scale digits)
+
+-- Remove leading zeros, keep single zero if all zeros
+stripLeadingZeros : Text -> Text
+stripLeadingZeros t =
+  let e = Text.explode t
+      e' = L.dropWhile (=="0") e
+  in case e' of
+       [] -> "0"
+       _ -> Text.implode e'
+
+-- Convert decimal digits string (no sign, no dot) to big-endian byte list via repeated division by 256
+decimalStringToBytesBE : Text -> [Int]
+decimalStringToBytesBE t =
+  let res = decimalStringToBytesBE_loop [] (stripLeadingZeros t)
+  in case res of
+       [] -> [0]
+       _ -> res
+
+decimalStringToBytesBE_loop : [Int] -> Text -> [Int]
+decimalStringToBytesBE_loop acc cur =
+  if cur == "0" then acc
+  else
+    let (q, r) = divDecBySmall cur 256
+    in decimalStringToBytesBE_loop (r :: acc) q
+
+-- Divide a non-negative decimal string by a small int (<=256), return (quotient, remainder)
+divDecBySmall : Text -> Int -> (Text, Int)
+divDecBySmall digits divisor =
+  divDecBySmall_go (Text.explode digits) 0 "" divisor
+
+divDecBySmall_go : [Text] -> Int -> Text -> Int -> (Text, Int)
+divDecBySmall_go ds carry q divisor =
+  case ds of
+    [] -> (if q == "" then "0" else q, carry)
+    x::xs ->
+      let d = codepointToDigit x
+          val = carry * 10 + d
+          qd = val / divisor
+          rem = val % divisor
+          q' = if q == "" && qd == 0 then q else q <> show qd
+      in divDecBySmall_go xs rem q' divisor
+
+-- Convert a codepoint text (single char) '0'..'9' to Int
+codepointToDigit : Text -> Int
+codepointToDigit c =
+  case c of
+    "0" -> 0; "1" -> 1; "2" -> 2; "3" -> 3; "4" -> 4; "5" -> 5; "6" -> 6; "7" -> 7; "8" -> 8; "9" -> 9
+    _ -> error ("Non-digit: " <> c)
+
+-- Convert bytes (big-endian) to hex
+bytesToHex : [Int] -> BytesHex
+bytesToHex bs = Text.implode (L.concatMap byteToHexPair bs)
+
+byteToHexPair : Int -> [Text]
+byteToHexPair b =
+  let hi = (b / 16) % 16
+      lo = b % 16
+  in [nibbleToHex hi, nibbleToHex lo]
+
+nibbleToHex : Int -> Text
+nibbleToHex n = case n of
+  0 -> "0"; 1 -> "1"; 2 -> "2"; 3 -> "3"; 4 -> "4"; 5 -> "5"; 6 -> "6"; 7 -> "7"; 8 -> "8"; 9 -> "9"
+  10 -> "a"; 11 -> "b"; 12 -> "c"; 13 -> "d"; 14 -> "e"; 15 -> "f"
+  _ -> error ("Invalid nibble: " <> show n)
+
+-- Hex (even-length, lowercase) to bytes
+hexToBytes : BytesHex -> [Int]
+hexToBytes hex =
+  let l = Text.length hex
+  in if l % 2 /= 0 then error "hexToBytes: odd length" else
+     hexToBytes_go 0 [] l hex
+
+hexToBytes_go : Int -> [Int] -> Int -> BytesHex -> [Int]
+hexToBytes_go i acc l hex =
+  if i >= l then L.reverse acc else
+    let h = Text.substring i 2 hex
+        b = hexByteToInt h
+    in hexToBytes_go (i+2) (b :: acc) l hex
+
+hexByteToInt : BytesHex -> Int
+hexByteToInt h = (hexCharToNibble (Text.substring 0 1 h)) * 16 + hexCharToNibble (Text.substring 1 1 h)
+
+hexCharToNibble : Text -> Int
+hexCharToNibble c = case c of
+  "0" -> 0; "1" -> 1; "2" -> 2; "3" -> 3; "4" -> 4; "5" -> 5; "6" -> 6; "7" -> 7; "8" -> 8; "9" -> 9
+  "a" -> 10; "b" -> 11; "c" -> 12; "d" -> 13; "e" -> 14; "f" -> 15
+  "A" -> 10; "B" -> 11; "C" -> 12; "D" -> 13; "E" -> 14; "F" -> 15
+  _ -> error ("Invalid hex char: " <> c)
+
+-- Convert big-endian bytes to decimal digits string via repeated multiply-add
+bytesToDecimalString : [Int] -> Text
+bytesToDecimalString bs =
+  let go acc b = addSmall (mulSmall acc 256) b
+      res = Foldable.foldl go "0" bs
+  in stripLeadingZeros res
+
+-- Multiply decimal string by small int
+mulSmall : Text -> Int -> Text
+mulSmall digits m =
+  let res = mulSmall_go (L.reverse (Text.explode digits)) 0 [] m
+  in stripLeadingZeros (Text.implode res)
+
+mulSmall_go : [Text] -> Int -> [Text] -> Int -> [Text]
+mulSmall_go ds carry acc m =
+  case ds of
+    [] -> if carry == 0 then acc else show carry :: acc
+    x::xs ->
+      let d = codepointToDigit x
+          prod = d * m + carry
+          carry' = prod / 10
+          digit = prod % 10
+      in mulSmall_go xs carry' (show digit :: acc) m
+
+-- Add small int to decimal string
+addSmall : Text -> Int -> Text
+addSmall digits a =
+  let res = addSmall_go (L.reverse (Text.explode digits)) a []
+  in stripLeadingZeros (Text.implode res)
+
+addSmall_go : [Text] -> Int -> [Text] -> [Text]
+addSmall_go ds carry acc =
+  case ds of
+    [] -> if carry == 0 then acc else show carry :: acc
+    x::xs ->
+      let d = codepointToDigit x
+          sum = d + carry
+          carry' = sum / 10
+          digit = sum % 10
+      in addSmall_go xs carry' (show digit :: acc)
+
+-- Add two same-width big-endian byte arrays modulo 256^(len)
+addBytesBEFixed : [Int] -> [Int] -> [Int]
+addBytesBEFixed a b =
+  let al = L.reverse a
+      bl = L.reverse b
+  in addBytesBEFixed_go al bl 0 []
+
+addBytesBEFixed_go : [Int] -> [Int] -> Int -> [Int] -> [Int]
+addBytesBEFixed_go xs ys carry acc =
+  case (xs, ys) of
+    ([], []) -> acc
+    (xh::xt, yh::yt) ->
+      let s = xh + yh + carry
+          byte = s % 256
+          carry' = s / 256
+      in addBytesBEFixed_go xt yt carry' (byte :: acc)
+    _ -> error "Mismatched lengths"
+
+-- Add two hex numbers after padding to a given byte width
+addFixedHex : BytesHex -> BytesHex -> Int -> BytesHex
+addFixedHex hx1 hx2 width =
+  let p1 = case packHexBytes hx1 width of
+             Some h -> h
+             None -> error "pack failed"
+      p2 = case packHexBytes hx2 width of
+             Some h -> h
+             None -> error "pack failed"
+      b1 = hexToBytes p1
+      b2 = hexToBytes p2
+      sumB = addBytesBEFixed b1 b2
+  in bytesToHex sumB
