@@ -1,0 +1,59 @@
+module TokenProofOfReservesRequest where
+
+import TokenReserve qualified as TR
+import Splice.Api.Token.HoldingV1 qualified as Token.Holding
+import Splice.Types (Round)
+
+-- | Request template for creating a TokenProofOfReserves contract with cross-node observer.
+-- Follows the Propose-Accept pattern for multi-party contracts.
+template TokenProofOfReservesRequest
+  with
+    owner : Party
+      -- ^ The account owner (signatory, on app-user node)
+    provider : Party
+      -- ^ The provider party (observer, on app-provider node)
+    round : Round
+      -- ^ The round when reserves were proven.
+    amount : Decimal
+      -- ^ The total proven reserve amount.
+    amountHex : Text
+      -- ^ The proven amount in hex representation.
+    root : Text
+      -- ^ Merkle map root (hex-encoded 32-byte hash).
+    instrumentId : Token.Holding.InstrumentId
+      -- ^ The token instrument being proven.
+    guarantors : [(Party, Decimal)]
+      -- ^ List of (guarantor party, guaranteed cap amount).
+    observers : [Party]
+      -- ^ Parties that can observe this proof.
+  where
+    signatory owner
+    observer provider
+
+    choice Accept : ContractId TR.TokenProofOfReserves
+      -- ^ Accept the request and create the TokenProofOfReserves contract.
+      controller provider
+      do
+        -- Provider accepts and creates the actual TokenProofOfReserves contract
+        create TR.TokenProofOfReserves with
+          owner
+          provider
+          round
+          amount
+          amountHex
+          root
+          instrumentId
+          guarantors
+          observers
+
+    choice Decline : ()
+      -- ^ Decline the request.
+      controller provider
+      do
+        pure ()
+
+    choice Withdraw : ()
+      -- ^ Withdraw the request.
+      controller owner
+      do
+        pure ()

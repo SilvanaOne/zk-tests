@@ -124,22 +124,23 @@ async fn find_holdings(
     Ok(holding_cids)
 }
 
-/// Create TokenProofOfReserves contract
-async fn create_token_proof_of_reserves(
+/// Create TokenProofOfReservesRequest
+async fn create_token_proof_request(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,
-    prover: &str,
+    owner: &str,
+    provider: &str,
     guarantors: Vec<(String, String)>, // [(party, amount)]
     instrument_id: &InstrumentId,
     package_id: &str,
     synchronizer_id: &str,
     initial_root: &str,
 ) -> Result<(String, serde_json::Value)> {
-    let cmdid = format!("create-token-proof-{}", chrono::Utc::now().timestamp());
-    let template_id = format!("{}:TokenReserve:TokenProofOfReserves", package_id);
+    let cmdid = format!("create-token-proof-request-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:TokenProofOfReservesRequest:TokenProofOfReservesRequest", package_id);
 
-    info!("Creating TokenProofOfReserves contract with {} guarantors", guarantors.len());
+    info!("Creating TokenProofOfReservesRequest with {} guarantors", guarantors.len());
 
     let guarantors_arg: Vec<serde_json::Value> = guarantors
         .iter()
@@ -156,7 +157,8 @@ async fn create_token_proof_of_reserves(
             "CreateCommand": {
                 "templateId": template_id,
                 "createArguments": {
-                    "prover": prover,
+                    "owner": owner,
+                    "provider": provider,
                     "round": {
                         "number": 0
                     },
@@ -173,7 +175,7 @@ async fn create_token_proof_of_reserves(
             }
         }],
         "commandId": cmdid,
-        "actAs": [prover],
+        "actAs": [owner],
         "readAs": [],
         "workflowId": "TokenProofOfReserves",
         "synchronizerId": synchronizer_id
@@ -205,17 +207,139 @@ async fn create_token_proof_of_reserves(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
 
-    info!("TokenProofOfReserves created, updateId: {}", update_id);
+    info!("TokenProofOfReservesRequest created, updateId: {}", update_id);
 
     // Fetch the full update
     let update_payload = json!({
-        "actAs": [prover],
+        "actAs": [owner],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        prover: {
+                        owner: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    },
+                    "verbose": true
+                },
+                "transactionShape": "TRANSACTION_SHAPE_ACS_DELTA"
+            }
+        }
+    });
+
+    let update_response = client
+        .post(&format!("{}v2/updates/update-by-id", api_url))
+        .bearer_auth(jwt)
+        .json(&update_payload)
+        .send()
+        .await?;
+
+    let update_text = update_response.text().await?;
+    let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
+
+    // Extract request contract ID
+    let mut request_cid = None;
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(":TokenProofOfReservesRequest:TokenProofOfReservesRequest") {
+                        request_cid = created.pointer("/contractId").and_then(|v| v.as_str()).map(String::from);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    let cid = request_cid
+        .ok_or_else(|| anyhow::anyhow!("Could not find TokenProofOfReservesRequest contract in create update"))?;
+
+    info!("TokenProofOfReservesRequest contract ID: {}", cid);
+
+    Ok((cid, update_json))
+}
+
+/// Accept TokenProofOfReservesRequest and create the actual TokenProofOfReserves contract
+async fn accept_token_proof_request(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    provider: &str,
+    package_id: &str,
+    request_cid: &str,
+    synchronizer_id: &str,
+) -> Result<(String, serde_json::Value)> {
+    let cmdid = format!("accept-token-proof-request-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:TokenProofOfReservesRequest:TokenProofOfReservesRequest", package_id);
+
+    info!("Accepting TokenProofOfReservesRequest");
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": request_cid,
+                "choice": "Accept",
+                "choiceArgument": {}
+            }
+        }],
+        "commandId": cmdid,
+        "actAs": [provider],
+        "readAs": [],
+        "workflowId": "TokenProofOfReserves",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("Accept payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", api_url))
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to accept TokenProofOfReservesRequest: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("No updateId in response"))?;
+
+    info!("TokenProofOfReservesRequest accepted, updateId: {}", update_id);
+
+    // Fetch the full update to get the TokenProofOfReserves contract ID
+    let update_payload = json!({
+        "actAs": [provider],
+        "updateId": update_id,
+        "updateFormat": {
+            "includeTransactions": {
+                "eventFormat": {
+                    "filtersByParty": {
+                        provider: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -244,8 +368,8 @@ async fn create_token_proof_of_reserves(
     let update_text = update_response.text().await?;
     let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
 
-    // Extract contract ID
-    let mut contract_cid = None;
+    // Extract TokenProofOfReserves contract ID
+    let mut proof_cid = None;
     if let Some(events) = update_json
         .pointer("/update/Transaction/value/events")
         .and_then(|v| v.as_array())
@@ -254,7 +378,7 @@ async fn create_token_proof_of_reserves(
             if let Some(created) = event.get("CreatedEvent") {
                 if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
                     if template.contains(":TokenReserve:TokenProofOfReserves") {
-                        contract_cid = created.pointer("/contractId").and_then(|v| v.as_str()).map(String::from);
+                        proof_cid = created.pointer("/contractId").and_then(|v| v.as_str()).map(String::from);
                         break;
                     }
                 }
@@ -262,8 +386,8 @@ async fn create_token_proof_of_reserves(
         }
     }
 
-    let cid = contract_cid
-        .ok_or_else(|| anyhow::anyhow!("Could not find TokenProofOfReserves contract in create update"))?;
+    let cid = proof_cid
+        .ok_or_else(|| anyhow::anyhow!("Could not find TokenProofOfReserves contract in accept update"))?;
 
     info!("TokenProofOfReserves contract ID: {}", cid);
 
@@ -407,6 +531,9 @@ pub async fn handle_token_reserve() -> Result<()> {
     let party_app_user = std::env::var("PARTY_APP_USER")
         .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set in environment"))?;
 
+    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set in environment"))?;
+
     let party_bank = std::env::var("PARTY_BANK")
         .map_err(|_| anyhow::anyhow!("PARTY_BANK not set in environment"))?;
 
@@ -415,6 +542,12 @@ pub async fn handle_token_reserve() -> Result<()> {
 
     let jwt = std::env::var("APP_USER_JWT")
         .map_err(|_| anyhow::anyhow!("APP_USER_JWT not set in environment"))?;
+
+    let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set in environment"))?;
+
+    let provider_jwt = std::env::var("APP_PROVIDER_JWT")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set in environment"))?;
 
     let token_reserve_package_id = std::env::var("HASH_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("HASH_PACKAGE_ID not set in environment"))?;
@@ -561,12 +694,14 @@ pub async fn handle_token_reserve() -> Result<()> {
     // Get the old root (initial empty map root) for the contract
     let initial_root = hex::encode(witness.old_root.as_bytes());
 
-    // Create TokenProofOfReserves contract with the old root
-    let (proof_cid, create_update) = create_token_proof_of_reserves(
+    // Step 1: Create TokenProofOfReservesRequest (owner proposes)
+    info!("Creating TokenProofOfReservesRequest via propose-accept workflow...");
+    let (request_cid, create_update) = create_token_proof_request(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
+        &party_app_provider,
         guarantors.clone(),
         &instrument_id,
         &token_reserve_package_id,
@@ -574,9 +709,23 @@ pub async fn handle_token_reserve() -> Result<()> {
         &initial_root,
     ).await?;
 
-    println!("\n=== Create TokenProofOfReserves Update ===");
+    println!("\n=== TokenProofOfReservesRequest Creation ===");
     println!("{}", serde_json::to_string_pretty(&create_update)?);
+    println!("\nRequest contract ID: {}", request_cid);
 
+    // Step 2: Accept the request (provider accepts)
+    let (proof_cid, accept_update) = accept_token_proof_request(
+        &client,
+        &provider_api_url,
+        &provider_jwt,
+        &party_app_provider,
+        &token_reserve_package_id,
+        &request_cid,
+        &synchronizer_id,
+    ).await?;
+
+    println!("\n=== TokenProofOfReservesRequest Acceptance ===");
+    println!("{}", serde_json::to_string_pretty(&accept_update)?);
     println!("\nTokenProofOfReserves contract created: {}", proof_cid);
 
     // Exercise ProveTokenReserves choice

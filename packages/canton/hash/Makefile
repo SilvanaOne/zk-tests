@@ -3,7 +3,7 @@
 include .env
 export
 
-DAR := .daml/dist/hash-v30-0.0.1.dar
+DAR := .daml/dist/hash-v31-0.0.1.dar
 # Extract package name from DAR filename (e.g., hash-v15-0.0.1.dar -> hash-v15-0.0.1)
 PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)

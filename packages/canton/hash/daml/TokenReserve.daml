@@ -13,9 +13,9 @@ import Splice.Api.Token.MetadataV1 qualified as Token.Metadata ()
 import Splice.Round
 import Splice.Types
 import qualified DA.Foldable as Foldable
-import DA.List (unique, replicate)
+import DA.List (unique)
 import DA.Crypto.Text (BytesHex)
-import FixedPointHex (encodeDecimalToFixedHex, decodeFixedHexToDecimal)
+import FixedPointHex (encodeDecimalToFixedHex)
 import Silvana (InsertWitness, verifyInsertWitness, intToHex8Bytes)
 import qualified DA.Text as T
 
@@ -26,8 +26,10 @@ import qualified DA.Text as T
 -- amount is the sum of capped amounts per guarantor.
 template TokenProofOfReserves
   with
-    prover : Party
-      -- ^ The party proving the reserves.
+    owner : Party
+      -- ^ The account owner (signatory, typically on app-user node).
+    provider : Party
+      -- ^ The provider party (signatory, typically on app-provider node).
     round : Round
       -- ^ The round when reserves were proven.
     amount : Decimal
@@ -43,7 +45,7 @@ template TokenProofOfReserves
     observers : [Party]
       -- ^ Parties that can observe this proof.
   where
-    signatory prover
+    signatory owner, provider
     observer observers
 
     ensure isDefinedRound round &&
@@ -67,10 +69,10 @@ template TokenProofOfReserves
           -- ^ OpenMiningRound contract for round verification.
         witness : InsertWitness
           -- ^ Merkle insertion witness for adding (round → amountHex) to map.
-      controller prover :: map fst guarantors
+      controller owner :: map fst guarantors
       do
         -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
-        openMiningRound <- exercise openRoundCid OpenMiningRound_Fetch with p = prover
+        openMiningRound <- exercise openRoundCid OpenMiningRound_Fetch with p = owner
         -- Validate no duplicate holdings
         assertMsg "Holding CIDs must be unique" (unique holdingCids)
 
@@ -138,7 +140,7 @@ template TokenProofOfReserves
       with
         newObserver : Party
           -- ^ The party to add as observer.
-      controller prover
+      controller owner
       do
         assertMsg "Observer already exists" (newObserver `notElem` observers)
         create this with observers = newObserver :: observers
@@ -148,7 +150,7 @@ template TokenProofOfReserves
       with
         observerToRemove : Party
           -- ^ The party to remove from observers.
-      controller prover
+      controller owner
       do
         create this with
           observers = filter (/= observerToRemove) observers
@@ -160,7 +162,7 @@ template TokenProofOfReserves
           -- ^ The party to add as guarantor.
         guaranteedAmount : Decimal
           -- ^ The cap amount for this guarantor.
-      controller prover
+      controller owner
       do
         let existingGuarantors = map fst guarantors
         assertMsg "Guarantor already exists" (newGuarantor `notElem` existingGuarantors)
@@ -173,7 +175,7 @@ template TokenProofOfReserves
       with
         guarantorToRemove : Party
           -- ^ The party to remove from guarantors.
-      controller prover
+      controller owner
       do
         create this with
           guarantors = filter (\(p, _) -> p /= guarantorToRemove) guarantors
