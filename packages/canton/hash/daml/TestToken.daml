@@ -196,6 +196,55 @@ template TestTokenTransferInstruction
           meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
+-- Mint Request (Propose-Accept Pattern)
+----------------------------------------------------------------------------------------------------
+
+-- | A mint request following the propose-accept pattern.
+-- This allows the admin to propose minting tokens to a receiver,
+-- who must explicitly accept to receive the tokens.
+template TestTokenMintRequest
+  with
+    admin : Party
+      -- ^ The admin proposing the mint.
+    receiver : Party
+      -- ^ The party who will receive the tokens if they accept.
+    amount : Decimal
+      -- ^ The amount of tokens to mint.
+    instrumentId : Text
+      -- ^ The instrument ID for the token.
+    metadata : TextMap.TextMap Text
+      -- ^ Metadata for the minted token.
+  where
+    signatory admin
+    observer receiver
+
+    ensure amount > 0.0
+
+    choice Accept : ContractId TestToken
+      -- ^ Accept the mint request and create the token.
+      controller receiver
+      do
+        create TestToken with
+          owner = receiver
+          issuer = admin
+          instrumentAdmin = admin
+          amount
+          instrumentId
+          metadata
+
+    choice Reject : ()
+      -- ^ Reject the mint request.
+      controller receiver
+      do
+        pure ()
+
+    choice Withdraw : ()
+      -- ^ Withdraw the mint request.
+      controller admin
+      do
+        pure ()
+
+----------------------------------------------------------------------------------------------------
 -- Burn/Mint Factory
 ----------------------------------------------------------------------------------------------------
 
@@ -209,7 +258,26 @@ template TestTokenBurnMintFactory
   where
     signatory admin
 
-    -- Template choice wrapper for HTTP API compatibility
+    -- Propose mint using propose-accept pattern (only requires admin authorization)
+    nonconsuming choice ProposeMint : ContractId TestTokenMintRequest
+      with
+        receiver : Party
+        amount : Decimal
+      controller admin
+      do
+        create TestTokenMintRequest with
+          admin
+          receiver
+          amount
+          instrumentId
+          metadata = TextMap.fromList
+            [ ("example.com/instrument-id", instrumentId)
+            , ("example.com/symbol", "TEST")
+            , ("example.com/name", "Test Token")
+            , ("example.com/decimals", "10")
+            ]
+
+    -- Template choice wrapper for HTTP API compatibility (direct mint, requires receiver authorization)
     nonconsuming choice Mint : Token.BurnMint.BurnMintFactory_BurnMintResult
       with
         receiver : Party
