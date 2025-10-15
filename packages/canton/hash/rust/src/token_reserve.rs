@@ -82,16 +82,16 @@ async fn find_holdings(
                         continue;
                     }
 
-                    // Check instrument ID in create argument
+                    // Check instrument ID in create argument (issuer field was removed)
                     let arg_instrument_id = created
                         .pointer("/createArgument/instrumentId")
                         .and_then(|v| v.as_str());
-                    let arg_issuer = created
-                        .pointer("/createArgument/issuer")
+                    let arg_instrument_admin = created
+                        .pointer("/createArgument/instrumentAdmin")
                         .and_then(|v| v.as_str());
 
                     if arg_instrument_id == Some(&instrument_id.id)
-                        && arg_issuer == Some(&instrument_id.admin)
+                        && arg_instrument_admin == Some(&instrument_id.admin)
                     {
                         if let Some(cid) = created.get("contractId").and_then(|v| v.as_str()) {
                             let amount = created
@@ -412,9 +412,8 @@ pub async fn handle_token_reserve() -> Result<()> {
     let token_reserve_package_id = std::env::var("HASH_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("HASH_PACKAGE_ID not set in environment"))?;
 
-    // Get the TestToken package ID from mint.env (different from TokenReserve package)
-    // This is the package ID used when the tokens were originally minted
-    let test_token_package_id = "2a9fcc2db3620ccf9a5b1fa39448b7f656e5faae51820b4c4c2e3904d7b6704d";
+    // Note: We no longer need a separate test_token_package_id since we use token_reserve_package_id
+    // which is the same as HASH_PACKAGE_ID (both TestToken and TokenReserve are in the same package)
 
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set in environment"))?;
@@ -422,27 +421,56 @@ pub async fn handle_token_reserve() -> Result<()> {
     // Create HTTP client
     let client = crate::url::create_client_with_localhost_resolution()?;
 
-    // Define the instrument we're proving reserves for (TestToken)
+    let party_holder = std::env::var("PARTY_HOLDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_HOLDER not set in environment"))?;
+
+    // Read instrument ID from mint.env - this is the actual UUID-based instrumentId used for the tokens
+    let instrument_id_str = std::env::var("INSTRUMENT_ID")
+        .map_err(|_| anyhow::anyhow!("INSTRUMENT_ID not set in environment. Run 'cargo run -- mint' first."))?;
+
+    // Define the instrument we're proving reserves for - use the actual instrumentId from mint.env
     let instrument_id = InstrumentId {
         admin: party_app_user.clone(),
-        id: "TestToken".to_string(),
+        id: instrument_id_str.clone(),
     };
 
-    // Get the specific token contract IDs from mint.env
-    let app_user_token_cid = std::env::var("APP_USER_TOKEN_CONTRACT_ID")
-        .map_err(|_| anyhow::anyhow!("APP_USER_TOKEN_CONTRACT_ID not set in environment"))?;
+    println!("\nFinding tokens for instrument: {}", instrument_id_str);
+    println!("  HOLDER party: {}", party_holder);
+    println!("  BANK party: {}", party_bank);
 
-    let bank_token_cid = std::env::var("BANK_TOKEN_CONTRACT_ID")
-        .map_err(|_| anyhow::anyhow!("BANK_TOKEN_CONTRACT_ID not set in environment"))?;
+    let template_id = format!("{}:TestToken:TestToken", token_reserve_package_id);
 
-    println!("\nProving reserves for specific tokens from mint.env:");
-    println!("  APP_USER token: {}", app_user_token_cid);
-    println!("  BANK token: {}", bank_token_cid);
+    // Find HOLDER holdings
+    let holder_holdings = find_holdings(
+        &client,
+        &api_url,
+        &jwt,
+        &party_holder,
+        &instrument_id,
+        &template_id,
+    ).await?;
 
-    // Use only the specific tokens from mint.env
-    let all_holding_cids = vec![app_user_token_cid, bank_token_cid];
+    // Find BANK holdings
+    let bank_holdings = find_holdings(
+        &client,
+        &api_url,
+        &jwt,
+        &party_bank,
+        &instrument_id,
+        &template_id,
+    ).await?;
 
-    println!("\nTotal holdings to prove: {}", all_holding_cids.len());
+    // Combine all holdings
+    let holder_count = holder_holdings.len();
+    let bank_count = bank_holdings.len();
+    let mut all_holding_cids = holder_holdings;
+    all_holding_cids.extend(bank_holdings);
+
+    println!("Found {} holdings to prove ({} HOLDER + {} BANK)",
+        all_holding_cids.len(),
+        holder_count,
+        bank_count
+    );
 
     // Fetch OpenMiningRound from Scan API
     info!("Fetching OpenMiningRound from Scan API...");
@@ -485,9 +513,9 @@ pub async fn handle_token_reserve() -> Result<()> {
     info!("OpenMiningRound CID: {}", open_round_cid);
     info!("Current round number: {}", round_number);
 
-    // Define guarantors with caps
+    // Define guarantors with caps (these should match the parties that own the holdings)
     let guarantors = vec![
-        (party_app_user.clone(), "1000000.0".to_string()),
+        (party_holder.clone(), "1000000.0".to_string()),
         (party_bank.clone(), "10000000.0".to_string())
     ];
 

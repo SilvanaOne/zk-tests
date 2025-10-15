@@ -3,6 +3,7 @@ use serde_json::json;
 use std::fs::File;
 use std::io::Write;
 use tracing::{info, debug};
+use uuid::Uuid;
 
 /// Create a TestTokenBurnMintFactory contract
 async fn create_burn_mint_factory(
@@ -408,6 +409,8 @@ async fn accept_mint_request(
 
 /// Mint tokens using BurnMintFactory_BurnMint choice (burn [] -> mint outputs)
 /// This is the direct mint method that requires both admin and receiver authorization.
+/// Currently unused - we use propose-accept pattern for all mints.
+#[allow(dead_code)]
 async fn mint_tokens(
     client: &reqwest::Client,
     api_url: &str,
@@ -417,7 +420,7 @@ async fn mint_tokens(
     amount: &str,
     package_id: &str,
     factory_cid: &str,
-    instrument_id: &str,
+    _instrument_id: &str,
     synchronizer_id: &str,
 ) -> Result<(String, serde_json::Value)> {
     let cmdid = format!("burnmint-tokens-{}", chrono::Utc::now().timestamp_millis());
@@ -594,15 +597,84 @@ async fn print_all_updates(
     Ok(())
 }
 
-pub async fn handle_mint(print_ledger: bool) -> Result<()> {
-    info!("Minting TestToken using BurnMintFactory");
+/// Mint tokens to a party using existing factory from mint.env
+async fn mint_to_party_from_env(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    admin: &str,
+    receiver: &str,
+    amount: &str,
+    package_id: &str,
+    synchronizer_id: &str,
+) -> Result<()> {
+    info!("Minting {} tokens to {} using existing factory from mint.env", amount, receiver);
 
+    // Read mint.env to get factory contract ID
+    let env_path = std::path::Path::new("./mint.env");
+    if !env_path.exists() {
+        return Err(anyhow::anyhow!(
+            "mint.env not found. Please run 'cargo run -- mint' first to create the factory."
+        ));
+    }
+
+    let env_content = std::fs::read_to_string(env_path)?;
+
+    // Parse factory contract ID from mint.env
+    let factory_cid = env_content
+        .lines()
+        .find(|line| line.starts_with("FACTORY_CONTRACT_ID="))
+        .and_then(|line| line.strip_prefix("FACTORY_CONTRACT_ID="))
+        .ok_or_else(|| anyhow::anyhow!("FACTORY_CONTRACT_ID not found in mint.env"))?
+        .trim()
+        .to_string();
+
+    info!("Using factory contract: {}", factory_cid);
+
+    println!("\n=== Proposing Mint {} TestToken to {} ===", amount, receiver);
+
+    // Propose mint using propose-accept pattern
+    let request_cid = propose_mint_tokens(
+        client,
+        api_url,
+        jwt,
+        admin,
+        receiver,
+        amount,
+        package_id,
+        &factory_cid,
+        synchronizer_id,
+    ).await?;
+
+    println!("TestTokenMintRequest Contract ID: {}", request_cid);
+    println!("Mint request proposed successfully. Now {} needs to accept it.", receiver);
+
+    println!("\n=== Accepting Mint Request as {} ===", receiver);
+    let (token_cid, update) = accept_mint_request(
+        client,
+        api_url,
+        jwt,
+        receiver,
+        package_id,
+        &request_cid,
+        synchronizer_id,
+    ).await?;
+
+    println!("\n=== Mint Update ===");
+    println!("{}", serde_json::to_string_pretty(&update)?);
+
+    println!("\n=== Successfully Minted {} TestToken to {} ===", amount, receiver);
+    println!("Token Contract ID: {}", token_cid);
+    println!("\nThis creates a new holding contract that adds to existing holdings.");
+    println!("To see total balance, run: make tokens");
+
+    Ok(())
+}
+
+pub async fn handle_mint(print_ledger: bool, party: Option<String>, amount: Option<String>) -> Result<()> {
     // Get environment variables
     let party_app_user = std::env::var("PARTY_APP_USER")
         .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set in environment"))?;
-
-    let party_bank = std::env::var("PARTY_BANK")
-        .map_err(|_| anyhow::anyhow!("PARTY_BANK not set in environment"))?;
 
     let api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set in environment"))?;
@@ -616,7 +688,8 @@ pub async fn handle_mint(print_ledger: bool) -> Result<()> {
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set in environment"))?;
 
-    let instrument_id = "TestToken";
+    // Generate random instrumentId
+    let instrument_id = format!("TestToken-{}", Uuid::new_v4());
 
     // Create HTTP client
     let client = crate::url::create_client_with_localhost_resolution()?;
@@ -626,13 +699,33 @@ pub async fn handle_mint(print_ledger: bool) -> Result<()> {
         print_all_updates(&client, &api_url, &jwt, &party_app_user).await?;
     }
 
+    // If --party and --amount are provided, mint to that party using existing factory
+    if let (Some(target_party), Some(mint_amount)) = (party, amount) {
+        return mint_to_party_from_env(
+            &client,
+            &api_url,
+            &jwt,
+            &party_app_user,
+            &target_party,
+            &mint_amount,
+            &package_id,
+            &synchronizer_id,
+        ).await;
+    }
+
+    // Otherwise, perform full initial mint setup
+    info!("Minting TestToken using BurnMintFactory");
+
+    let party_bank = std::env::var("PARTY_BANK")
+        .map_err(|_| anyhow::anyhow!("PARTY_BANK not set in environment"))?;
+
     // Create TestTokenBurnMintFactory
     let factory_cid = create_burn_mint_factory(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
-        instrument_id,
+        &instrument_id,
         &package_id,
         &synchronizer_id,
     ).await?;
@@ -640,25 +733,42 @@ pub async fn handle_mint(print_ledger: bool) -> Result<()> {
     println!("\n=== TestTokenBurnMintFactory Created ===");
     println!("Factory Contract ID: {}", factory_cid);
 
-    // Mint 10000 tokens to PARTY_APP_USER
-    let (app_user_token_cid, app_user_update) = mint_tokens(
+    let party_holder = std::env::var("PARTY_HOLDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_HOLDER not set in environment"))?;
+
+    // Mint 10000 tokens to PARTY_HOLDER using propose-accept pattern
+    println!("\n=== Proposing Mint 10000 TestToken to PARTY_HOLDER (propose-accept pattern) ===");
+    let holder_request_cid = propose_mint_tokens(
         &client,
         &api_url,
         &jwt,
         &party_app_user,
-        &party_app_user,
+        &party_holder,
         "10000.0",
         &package_id,
         &factory_cid,
-        instrument_id,
         &synchronizer_id,
     ).await?;
 
-    println!("\n=== Mint 10000 TestToken to PARTY_APP_USER Update ===");
-    println!("{}", serde_json::to_string_pretty(&app_user_update)?);
+    println!("TestTokenMintRequest Contract ID: {}", holder_request_cid);
+    println!("Mint request proposed successfully. Now PARTY_HOLDER needs to accept it.");
 
-    println!("\n=== Minted 10000 TestToken to PARTY_APP_USER ===");
-    println!("Token Contract ID: {}", app_user_token_cid);
+    println!("\n=== Accepting Mint Request as PARTY_HOLDER ===");
+    let (holder_token_cid, holder_update) = accept_mint_request(
+        &client,
+        &api_url,
+        &jwt,
+        &party_holder,
+        &package_id,
+        &holder_request_cid,
+        &synchronizer_id,
+    ).await?;
+
+    println!("\n=== Mint 10000 TestToken to PARTY_HOLDER Update ===");
+    println!("{}", serde_json::to_string_pretty(&holder_update)?);
+
+    println!("\n=== Minted 10000 TestToken to PARTY_HOLDER (via propose-accept) ===");
+    println!("Token Contract ID: {}", holder_token_cid);
 
     // Mint 1000000 tokens to PARTY_BANK using propose-accept pattern
     println!("\n=== Proposing Mint 1000000 TestToken to PARTY_BANK (propose-accept pattern) ===");
@@ -696,47 +806,18 @@ pub async fn handle_mint(print_ledger: bool) -> Result<()> {
     println!("\n=== Minted 1000000 TestToken to PARTY_BANK (via propose-accept) ===");
     println!("Token Contract ID: {}", bank_token_cid);
 
-    // Write mint.env file with metadata
+    // Write mint.env file with minimal metadata (only what's needed for subsequent mints)
     let env_content = format!(
-        "# TestToken Mint Metadata - Generated at {} using propose-accept pattern\n\
-        # Package ID\n\
-        HASH_PACKAGE_ID={}\n\n\
-        # Synchronizer ID\n\
-        SYNCHRONIZER_ID={}\n\n\
+        "# TestToken Mint Metadata - Generated at {}\n\
+        # Instrument ID (unique identifier for this token)\n\
+        INSTRUMENT_ID={}\n\n\
         # BurnMint Factory Contract\n\
         FACTORY_CONTRACT_ID={}\n\
-        FACTORY_TEMPLATE_ID={}:TestToken:TestTokenBurnMintFactory\n\n\
-        # PARTY_APP_USER Token (10000 tokens - direct mint)\n\
-        APP_USER_TOKEN_CONTRACT_ID={}\n\
-        APP_USER_TOKEN_TEMPLATE_ID={}:TestToken:TestToken\n\
-        APP_USER_TOKEN_AMOUNT=10000.0\n\
-        APP_USER_TOKEN_OWNER={}\n\
-        APP_USER_TOKEN_ISSUER={}\n\
-        APP_USER_TOKEN_INSTRUMENT_ID={}\n\n\
-        # PARTY_BANK Token (1000000 tokens - propose-accept pattern)\n\
-        BANK_REQUEST_CONTRACT_ID={}\n\
-        BANK_TOKEN_CONTRACT_ID={}\n\
-        BANK_TOKEN_TEMPLATE_ID={}:TestToken:TestToken\n\
-        BANK_TOKEN_AMOUNT=1000000.0\n\
-        BANK_TOKEN_OWNER={}\n\
-        BANK_TOKEN_ISSUER={}\n\
-        BANK_TOKEN_INSTRUMENT_ID={}\n",
+        FACTORY_TEMPLATE_ID={}:TestToken:TestTokenBurnMintFactory\n",
         chrono::Utc::now().to_rfc3339(),
-        package_id,
-        synchronizer_id,
+        instrument_id,
         factory_cid,
         package_id,
-        app_user_token_cid,
-        package_id,
-        party_app_user,
-        party_app_user,
-        instrument_id,
-        bank_request_cid,
-        bank_token_cid,
-        package_id,
-        party_bank,
-        party_app_user,
-        instrument_id,
     );
 
     let mut file = File::create("./mint.env")?;
@@ -747,7 +828,7 @@ pub async fn handle_mint(print_ledger: bool) -> Result<()> {
 
     println!("\n=== Mint Summary ===");
     println!("Factory CID: {}", factory_cid);
-    println!("APP_USER Token CID: {} (10000.0 tokens)", app_user_token_cid);
+    println!("HOLDER Token CID: {} (10000.0 tokens)", holder_token_cid);
     println!("BANK Token CID: {} (1000000.0 tokens)", bank_token_cid);
     println!("\nAll metadata written to mint.env");
 

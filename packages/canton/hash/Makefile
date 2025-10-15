@@ -644,8 +644,8 @@ tokens:
 	fi; \
 	echo "=== TestToken Balances ==="; \
 	echo ""; \
-	echo "Package ID: $$HASH_PACKAGE_ID"; \
-	echo "Instrument ID: $$APP_USER_TOKEN_INSTRUMENT_ID"; \
+	echo "Package ID: $(HASH_PACKAGE_ID)"; \
+	echo "Instrument ID: $$INSTRUMENT_ID"; \
 	echo ""; \
 	LEDGER_END=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
 		$(APP_USER_API_URL)v2/state/ledger-end | jq -r '.offset // empty'); \
@@ -654,50 +654,50 @@ tokens:
 		exit 1; \
 	fi; \
 	echo "Querying holdings via Holding interface at offset $$LEDGER_END..."; \
-	INTERFACE_ID="$$HASH_PACKAGE_ID:TestToken:TestToken"; \
+	INTERFACE_ID="$(HASH_PACKAGE_ID):TestToken:TestToken"; \
 	echo ""; \
-	echo "Fetching PARTY_APP_USER tokens..."; \
-	APP_USER_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
+	echo "Fetching PARTY_HOLDER tokens..."; \
+	HOLDER_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
 		-H "Content-Type: application/json" \
-		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
-		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$APP_USER_TOKEN_OWNER" --arg template "$$INTERFACE_ID" \
-			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {templateFilters: [{templateId: $$template, includeCreatedEventBlob: true}]}}}, verbose: true}')"); \
-	APP_USER_TOKENS=$$(echo "$$APP_USER_RESP" | jq '[.[] | select(.contractEntry.JsActiveContract.createdEvent.templateId == "'$$INTERFACE_ID'")]'); \
-	APP_USER_COUNT=$$(echo "$$APP_USER_TOKENS" | jq 'length'); \
-	APP_USER_TOTAL=$$(echo "$$APP_USER_TOKENS" | jq '[.[].contractEntry.JsActiveContract.createdEvent.createArgument.amount | tonumber] | add // 0'); \
-	echo "✅ PARTY_APP_USER Holdings:"; \
-	echo "  Owner: $$APP_USER_TOKEN_OWNER"; \
-	echo "  Token Count: $$APP_USER_COUNT"; \
-	echo "  Total Balance: $$APP_USER_TOTAL"; \
-	echo "  Instrument: $$APP_USER_TOKEN_INSTRUMENT_ID"; \
-	if [ "$$APP_USER_COUNT" -gt 0 ]; then \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$(PARTY_HOLDER)" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	HOLDER_TOKENS=$$(echo "$$HOLDER_RESP" | jq --arg inst_id "$$INSTRUMENT_ID" --arg owner "$(PARTY_HOLDER)" --arg template "$$INTERFACE_ID" '[.[] | select((.contractEntry.JsActiveContract.createdEvent.templateId // .createdEvent.templateId) == $$template) | select((.contractEntry.JsActiveContract.createdEvent.createArgument.instrumentId // .createdEvent.createArgument.instrumentId) == $$inst_id) | select((.contractEntry.JsActiveContract.createdEvent.createArgument.owner // .createdEvent.createArgument.owner) == $$owner)]' 2>/dev/null || echo "[]"); \
+	HOLDER_COUNT=$$(echo "$$HOLDER_TOKENS" | jq 'length' 2>/dev/null || echo "0"); \
+	HOLDER_TOTAL=$$(echo "$$HOLDER_TOKENS" | jq '[.[] | ((.contractEntry.JsActiveContract.createdEvent.createArgument.amount // .createdEvent.createArgument.amount) | tonumber)] | add // 0' 2>/dev/null || echo "0"); \
+	echo "✅ PARTY_HOLDER Holdings:"; \
+	echo "  Owner: $(PARTY_HOLDER)"; \
+	echo "  Token Count: $$HOLDER_COUNT"; \
+	echo "  Total Balance: $$HOLDER_TOTAL"; \
+	echo "  Instrument: $$INSTRUMENT_ID"; \
+	if [ $$HOLDER_COUNT -gt 0 ]; then \
 		echo ""; \
 		echo "  Contracts:"; \
-		echo "$$APP_USER_TOKENS" | jq -r '.[] | "    - CID: " + .contractEntry.JsActiveContract.createdEvent.contractId + " | Amount: " + .contractEntry.JsActiveContract.createdEvent.createArgument.amount'; \
+		echo "$$HOLDER_TOKENS" | jq -r '.[] | "    - CID: " + ((.contractEntry.JsActiveContract.createdEvent.contractId // .createdEvent.contractId)) + " | Amount: " + ((.contractEntry.JsActiveContract.createdEvent.createArgument.amount // .createdEvent.createArgument.amount))'; \
 	fi; \
 	echo ""; \
 	echo "Fetching PARTY_BANK tokens..."; \
 	BANK_RESP=$$(curl -s -H "Authorization: Bearer $(APP_USER_JWT)" \
 		-H "Content-Type: application/json" \
-		-X POST "$(APP_USER_API_URL)v2/state/active-contracts?limit=500" \
-		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$$BANK_TOKEN_OWNER" --arg template "$$INTERFACE_ID" \
-			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {templateFilters: [{templateId: $$template, includeCreatedEventBlob: true}]}}}, verbose: true}')"); \
-	BANK_TOKENS=$$(echo "$$BANK_RESP" | jq '[.[] | select(.contractEntry.JsActiveContract.createdEvent.templateId == "'$$INTERFACE_ID'")]'); \
-	BANK_COUNT=$$(echo "$$BANK_TOKENS" | jq 'length'); \
-	BANK_TOTAL=$$(echo "$$BANK_TOKENS" | jq '[.[].contractEntry.JsActiveContract.createdEvent.createArgument.amount | tonumber] | add // 0'); \
+		-X POST "$(APP_USER_API_URL)v2/state/active-contracts" \
+		-d "$$(jq -nc --arg offset "$$LEDGER_END" --arg party "$(PARTY_BANK)" \
+			'{activeAtOffset: ($$offset | tonumber), filter: {filtersByParty: {($$party): {}}}, verbose: true}')"); \
+	BANK_TOKENS=$$(echo "$$BANK_RESP" | jq --arg inst_id "$$INSTRUMENT_ID" --arg owner "$(PARTY_BANK)" --arg template "$$INTERFACE_ID" '[.[] | select((.contractEntry.JsActiveContract.createdEvent.templateId // .createdEvent.templateId) == $$template) | select((.contractEntry.JsActiveContract.createdEvent.createArgument.instrumentId // .createdEvent.createArgument.instrumentId) == $$inst_id) | select((.contractEntry.JsActiveContract.createdEvent.createArgument.owner // .createdEvent.createArgument.owner) == $$owner)]' 2>/dev/null || echo "[]"); \
+	BANK_COUNT=$$(echo "$$BANK_TOKENS" | jq 'length' 2>/dev/null || echo "0"); \
+	BANK_TOTAL=$$(echo "$$BANK_TOKENS" | jq '[.[] | ((.contractEntry.JsActiveContract.createdEvent.createArgument.amount // .createdEvent.createArgument.amount) | tonumber)] | add // 0' 2>/dev/null || echo "0"); \
 	echo "✅ PARTY_BANK Holdings:"; \
-	echo "  Owner: $$BANK_TOKEN_OWNER"; \
+	echo "  Owner: $(PARTY_BANK)"; \
 	echo "  Token Count: $$BANK_COUNT"; \
 	echo "  Total Balance: $$BANK_TOTAL"; \
-	echo "  Instrument: $$BANK_TOKEN_INSTRUMENT_ID"; \
-	if [ "$$BANK_COUNT" -gt 0 ]; then \
+	echo "  Instrument: $$INSTRUMENT_ID"; \
+	if [ $$BANK_COUNT -gt 0 ]; then \
 		echo ""; \
 		echo "  Contracts:"; \
-		echo "$$BANK_TOKENS" | jq -r '.[] | "    - CID: " + .contractEntry.JsActiveContract.createdEvent.contractId + " | Amount: " + .contractEntry.JsActiveContract.createdEvent.createArgument.amount'; \
+		echo "$$BANK_TOKENS" | jq -r '.[] | "    - CID: " + ((.contractEntry.JsActiveContract.createdEvent.contractId // .createdEvent.contractId)) + " | Amount: " + ((.contractEntry.JsActiveContract.createdEvent.createArgument.amount // .createdEvent.createArgument.amount))'; \
 	fi; \
 	echo ""; \
 	echo "=== Summary ==="; \
-	TOTAL=$$(echo "$$APP_USER_TOTAL + $$BANK_TOTAL" | bc); \
+	TOTAL=$$(echo "$$HOLDER_TOTAL + $$BANK_TOTAL" | bc); \
 	echo "Total Supply: $$TOTAL TestToken"; \
-	echo "APP_USER: $$APP_USER_TOTAL ($$APP_USER_COUNT contracts)"; \
+	echo "HOLDER: $$HOLDER_TOTAL ($$HOLDER_COUNT contracts)"; \
 	echo "BANK: $$BANK_TOTAL ($$BANK_COUNT contracts)"

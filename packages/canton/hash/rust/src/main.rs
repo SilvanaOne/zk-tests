@@ -71,11 +71,17 @@ enum Commands {
     },
     /// Create ProofOfReserves and prove reserves with all user amulets
     Reserve,
-    /// Mint TestToken to PARTY_APP_USER and PARTY_BANK
+    /// Mint TestToken to PARTY_APP_USER and PARTY_BANK, or to a specific party if --party is provided
     Mint {
         /// Print all ledger updates during mint
         #[arg(short, long)]
         ledger: bool,
+        /// Party to mint tokens to (optional, uses existing factory from mint.env)
+        #[arg(short, long)]
+        party: Option<String>,
+        /// Amount of tokens to mint (optional, requires --party)
+        #[arg(short, long)]
+        amount: Option<String>,
     },
     /// Create TokenProofOfReserves and prove TestToken reserves
     TokenReserve,
@@ -102,7 +108,7 @@ async fn main() -> Result<()> {
         Commands::AddMapElement { key, value } => addmapelement::handle_addmapelement(key, value).await?,
         Commands::UpdateMapElement { key, value1, value2 } => updatemapelement::handle_updatemapelement(key, value1, value2).await?,
         Commands::Reserve => reserve::handle_reserve().await?,
-        Commands::Mint { ledger } => mint::handle_mint(ledger).await?,
+        Commands::Mint { ledger, party, amount } => mint::handle_mint(ledger, party, amount).await?,
         Commands::TokenReserve => token_reserve::handle_token_reserve().await?,
     }
 
