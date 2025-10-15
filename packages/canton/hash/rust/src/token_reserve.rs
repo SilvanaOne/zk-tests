@@ -397,6 +397,86 @@ async fn accept_token_proof_request(
     Ok((cid, update_json))
 }
 
+/// Fetch FeaturedAppRight contract ID, blob, and template ID from Scan API
+async fn fetch_featured_app_right(
+    client: &reqwest::Client,
+    scan_api_url: &str,
+    provider_party: &str,
+    splice_package_id: &str,
+) -> Result<Option<(String, String, String)>> {
+    info!("Fetching FeaturedAppRight from Scan API for provider: {}", provider_party);
+
+    let featured_url = format!("{}v0/featured-apps", scan_api_url);
+    let featured: serde_json::Value = client
+        .get(&featured_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let featured_apps = featured
+        .get("featured_apps")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // Extract provider hint from party (e.g., "app_provider::..." -> "app_provider")
+    let provider_hint = provider_party.split("::").next().unwrap_or(provider_party);
+
+    for entry in featured_apps.iter() {
+        let provider = entry
+            .pointer("/payload/provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if provider.contains(provider_hint) {
+            let cid = entry
+                .pointer("/contract_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let blob = entry
+                .pointer("/created_event_blob")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let template_id = entry
+                .pointer("/template_id")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| format!("{}:Splice.Amulet:FeaturedAppRight", splice_package_id));
+
+            if let (Some(c), Some(b)) = (cid, blob) {
+                info!("Found FeaturedAppRight CID: {}", c);
+                return Ok(Some((c, b, template_id)));
+            }
+        }
+    }
+
+    // If no match by hint, use first available
+    if let Some(first) = featured_apps.get(0) {
+        let cid = first
+            .pointer("/contract_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let blob = first
+            .pointer("/created_event_blob")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let template_id = first
+            .pointer("/template_id")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| format!("{}:Splice.Amulet:FeaturedAppRight", splice_package_id));
+
+        if let (Some(c), Some(b)) = (cid, blob) {
+            info!("Using first FeaturedAppRight CID: {}", c);
+            return Ok(Some((c, b, template_id)));
+        }
+    }
+
+    warn!("No FeaturedAppRight found");
+    Ok(None)
+}
+
 /// Exercise ProveTokenReserves choice
 async fn exercise_prove_token_reserves(
     client: &reqwest::Client,
@@ -413,6 +493,7 @@ async fn exercise_prove_token_reserves(
     open_round_template_id: &str,
     synchronizer_id: &str,
     witness_json: &serde_json::Value,
+    featured_app_right: Option<(String, String, String)>, // (cid, blob, template_id)
 ) -> Result<serde_json::Value> {
     let cmdid = format!("prove-token-reserves-{}", chrono::Utc::now().timestamp());
     let template_id = format!("{}:TokenReserve:TokenProofOfReserves", package_id);
@@ -421,8 +502,8 @@ async fn exercise_prove_token_reserves(
 
     let guarantor_parties: Vec<String> = guarantors.iter().map(|(p, _)| p.clone()).collect();
 
-    // Build disclosedContracts array with OpenMiningRound
-    let disclosed_contracts = vec![
+    // Build disclosedContracts array with OpenMiningRound and optionally FeaturedAppRight
+    let mut disclosed_contracts = vec![
         json!({
             "contractId": open_round_cid,
             "createdEventBlob": open_round_blob,
@@ -430,6 +511,19 @@ async fn exercise_prove_token_reserves(
             "templateId": open_round_template_id
         })
     ];
+
+    // Add FeaturedAppRight to disclosed contracts if provided
+    let featured_app_right_cid = if let Some((cid, blob, template_id)) = featured_app_right {
+        disclosed_contracts.push(json!({
+            "contractId": cid.clone(),
+            "createdEventBlob": blob,
+            "synchronizerId": synchronizer_id,
+            "templateId": template_id
+        }));
+        Some(cid)
+    } else {
+        None
+    };
 
     // Build actAs list with prover and all guarantors
     let mut act_as_parties = vec![prover.to_string()];
@@ -444,7 +538,8 @@ async fn exercise_prove_token_reserves(
                 "choiceArgument": {
                     "holdingCids": holding_cids,
                     "openRoundCid": open_round_cid,
-                    "witness": witness_json
+                    "witness": witness_json,
+                    "featuredAppRightCid": featured_app_right_cid.clone()
                 }
             }
         }],
@@ -555,6 +650,9 @@ pub async fn handle_token_reserve() -> Result<()> {
 
     let token_reserve_package_id = std::env::var("HASH_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("HASH_PACKAGE_ID not set in environment"))?;
+
+    let splice_package_id = std::env::var("SPLICE_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("SPLICE_PACKAGE_ID not set in environment"))?;
 
     // Note: We no longer need a separate test_token_package_id since we use token_reserve_package_id
     // which is the same as HASH_PACKAGE_ID (both TestToken and TokenReserve are in the same package)
@@ -738,6 +836,21 @@ pub async fn handle_token_reserve() -> Result<()> {
     println!("{}", serde_json::to_string_pretty(&accept_update)?);
     println!("\nTokenProofOfReserves contract created: {}", proof_cid);
 
+    // Fetch FeaturedAppRight for activity marker
+    info!("Fetching FeaturedAppRight for provider: {}", party_app_provider);
+    let featured_app_right = fetch_featured_app_right(
+        &client,
+        &scan_api_url,
+        &party_app_provider,
+        &splice_package_id,
+    ).await?;
+
+    if let Some((ref cid, _, _)) = featured_app_right {
+        println!("\nFeaturedAppRight CID: {}", cid);
+    } else {
+        println!("\nNo FeaturedAppRight found - activity marker will not be created");
+    }
+
     // Exercise ProveTokenReserves choice
     let result_json = exercise_prove_token_reserves(
         &client,
@@ -754,6 +867,7 @@ pub async fn handle_token_reserve() -> Result<()> {
         &open_round_template_id,
         &synchronizer_id,
         &witness_json,
+        featured_app_right,
     ).await?;
 
     // Print full update JSON

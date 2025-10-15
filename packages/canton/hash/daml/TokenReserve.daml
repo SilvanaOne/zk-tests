@@ -10,6 +10,7 @@ module TokenReserve where
 
 import Splice.Api.Token.HoldingV1 qualified as Token.Holding
 import Splice.Api.Token.MetadataV1 qualified as Token.Metadata ()
+import Splice.Api.FeaturedAppRightV1 qualified as FeaturedAppRight
 import Splice.Round
 import Splice.Types
 import qualified DA.Foldable as Foldable
@@ -55,7 +56,7 @@ template TokenProofOfReserves
            all (\(_, cap) -> cap >= 0.0) guarantors &&
            unique (map fst guarantors)
 
-    choice ProveTokenReserves : ContractId TokenProofOfReserves
+    choice ProveTokenReserves : (ContractId TokenProofOfReserves, [ContractId FeaturedAppRight.FeaturedAppActivityMarker])
       -- ^ Prove reserves by providing holding contract IDs and OpenMiningRound.
       --
       -- This choice validates that:
@@ -64,6 +65,7 @@ template TokenProofOfReserves
       -- 3. All holding owners are guarantors
       -- 4. Calculates capped amounts per guarantor
       -- 5. Verifies Merkle witness for (round → amount) mapping
+      -- 6. Creates an activity marker for featured app rewards (weight 1.0 to provider)
       with
         holdingCids : [ContractId Token.Holding.Holding]
           -- ^ List of Holding contract IDs to prove.
@@ -71,6 +73,8 @@ template TokenProofOfReserves
           -- ^ OpenMiningRound contract for round verification.
         witness : InsertWitness
           -- ^ Merkle insertion witness for adding (round → amountHex) to map.
+        featuredAppRightCid : Optional (ContractId FeaturedAppRight.FeaturedAppRight)
+          -- ^ Optional FeaturedAppRight contract for creating activity marker.
       controller owner :: map fst guarantors
       do
         -- Fetch OpenMiningRound using its non-consuming choice to verify it exists on-chain
@@ -131,11 +135,23 @@ template TokenProofOfReserves
 
         assertMsg "Witness value must match calculated amountHex" (witness.value == amountHex32)
 
-        create this with
+        -- Create activity marker if FeaturedAppRight is provided
+        markerCids <- case featuredAppRightCid of
+          Some rightCid -> do
+            result <- exercise rightCid FeaturedAppRight.FeaturedAppRight_CreateActivityMarker with
+              beneficiaries = [FeaturedAppRight.AppRewardBeneficiary with
+                beneficiary = provider
+                weight = 1.0]
+            return result.activityMarkerCids
+          None -> return []
+
+        proofCid <- create this with
           round = openMiningRound.round
           amount = newAmount
           amountHex = newAmountHex
           root = witness.newRoot
+
+        return (proofCid, markerCids)
 
     choice AddObserver : ContractId TokenProofOfReserves
       -- ^ Add a new observer to the proof contract.
