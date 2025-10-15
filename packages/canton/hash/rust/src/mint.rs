@@ -24,6 +24,7 @@ async fn create_factory(
                 "templateId": template_id,
                 "createArguments": {
                     "issuer": party_app_user,
+                    "instrumentAdmin": party_app_user,
                     "instrumentId": "TestToken"
                 }
             }
