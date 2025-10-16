@@ -3,8 +3,10 @@
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 use anyhow::{anyhow, Context, Result};
+use rust_decimal::Decimal;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::str::FromStr;
 use tracing::{debug, info};
 
 /// Handle the claim command - find and claim all AppRewardCoupons
@@ -58,12 +60,15 @@ pub async fn handle_claim() -> Result<()> {
     }
 
     println!("Found {} AppRewardCoupon(s) to claim:", coupons.len());
-    let mut total_amount = 0.0;
     for coupon in &coupons {
-        println!("  • Round {}: {:.10} CC (CID: {})",
-            coupon.round, coupon.amount, &coupon.contract_id[..16]);
-        total_amount += coupon.amount;
+        println!("  • Round {}: {} CC (CID: {})",
+            coupon.round, coupon.amount, coupon.contract_id);
     }
+
+    // Calculate total using string-based decimal addition
+    let total_amount: f64 = coupons.iter()
+        .filter_map(|c| c.amount.parse::<f64>().ok())
+        .sum();
     println!("  Total: {:.10} CC\n", total_amount);
 
     // Step 2: Find IssuingMiningRound contracts for each coupon's round
@@ -84,37 +89,106 @@ pub async fn handle_claim() -> Result<()> {
         "Fetched IssuingMiningRound contracts"
     );
 
-    // Separate coupons with available IssuingMiningRounds vs those without
+    let now = chrono::Utc::now();
+
+    // Separate coupons into three categories:
+    // 1. Ready to claim (round exists and has opened)
+    // 2. Not yet open (round exists but opensAt is in the future)
+    // 3. Missing round (no IssuingMiningRound found)
+
     let coupons_with_rounds: Vec<_> = coupons.iter()
-        .filter(|c| issuing_rounds.contains_key(&c.round))
+        .filter(|c| {
+            if let Some(round) = issuing_rounds.get(&c.round) {
+                round.opens_at <= now
+            } else {
+                false
+            }
+        })
         .cloned()
+        .collect();
+
+    let coupons_not_open: Vec<_> = coupons.iter()
+        .filter(|c| {
+            if let Some(round) = issuing_rounds.get(&c.round) {
+                round.opens_at > now
+            } else {
+                false
+            }
+        })
         .collect();
 
     let coupons_without_rounds: Vec<_> = coupons.iter()
         .filter(|c| !issuing_rounds.contains_key(&c.round))
         .collect();
 
+    if !coupons_not_open.is_empty() {
+        let not_open_rounds: Vec<_> = coupons_not_open.iter()
+            .map(|c| c.round)
+            .collect();
+        let not_open_amount = coupons_not_open.iter()
+            .try_fold(Decimal::ZERO, |acc, c| {
+                Decimal::from_str(&c.amount).map(|amt| acc + amt)
+            })
+            .unwrap_or(Decimal::ZERO);
+
+        println!("\n⏰ Skipping {} coupon(s) from rounds {:?} (IssuingMiningRound not yet open)",
+                 coupons_not_open.len(), not_open_rounds);
+        println!("   Amount: {} CC", not_open_amount);
+
+        // Show when each round will open
+        let mut unique_rounds: Vec<_> = not_open_rounds.iter().copied().collect();
+        unique_rounds.sort();
+        unique_rounds.dedup();
+        for round in unique_rounds {
+            if let Some(issuing_round) = issuing_rounds.get(&round) {
+                let time_until_open = issuing_round.opens_at.signed_duration_since(now);
+                let total_seconds = time_until_open.num_seconds();
+                let minutes = total_seconds / 60;
+                let seconds = total_seconds % 60;
+
+                println!("   Round {} opens at: {} (in {} minutes {} seconds)",
+                    round,
+                    issuing_round.opens_at.to_rfc3339(),
+                    minutes,
+                    seconds
+                );
+            }
+        }
+    }
+
     if !coupons_without_rounds.is_empty() {
         let missing_rounds: Vec<_> = coupons_without_rounds.iter()
             .map(|c| c.round)
             .collect();
-        let missing_amount: f64 = coupons_without_rounds.iter()
-            .map(|c| c.amount)
-            .sum();
+        let missing_amount = coupons_without_rounds.iter()
+            .try_fold(Decimal::ZERO, |acc, c| {
+                Decimal::from_str(&c.amount).map(|amt| acc + amt)
+            })
+            .unwrap_or(Decimal::ZERO);
 
         println!("\n⚠️  Skipping {} coupon(s) from rounds {:?} (no IssuingMiningRound found)",
                  coupons_without_rounds.len(), missing_rounds);
-        println!("   Amount: {:.10} CC", missing_amount);
+        println!("   Amount: {} CC", missing_amount);
     }
 
     if coupons_with_rounds.is_empty() {
-        return Err(anyhow!(
-            "No rewards can be claimed. All coupons require IssuingMiningRounds that do not exist."
-        ));
+        if !coupons_not_open.is_empty() {
+            return Err(anyhow!(
+                "No rewards can be claimed yet. All coupons are waiting for their IssuingMiningRounds to open."
+            ));
+        } else {
+            return Err(anyhow!(
+                "No rewards can be claimed. All coupons require IssuingMiningRounds that do not exist."
+            ));
+        }
     }
 
-    let total_attempt_amount: f64 = coupons_with_rounds.iter().map(|c| c.amount).sum();
-    println!("\n✅ Attempting to claim {} coupon(s) ({:.10} CC)",
+    let total_attempt_amount = coupons_with_rounds.iter()
+        .try_fold(Decimal::ZERO, |acc, c| {
+            Decimal::from_str(&c.amount).map(|amt| acc + amt)
+        })
+        .unwrap_or(Decimal::ZERO);
+    println!("\n✅ Attempting to claim {} coupon(s) ({} CC)",
              coupons_with_rounds.len(), total_attempt_amount);
 
     // Step 3: Build and execute the transfer to claim rewards
@@ -147,6 +221,11 @@ pub async fn handle_claim() -> Result<()> {
                     println!("    {}. {}", idx + 1, cid);
                 }
             }
+
+            println!("\n📄 Full Update JSON:");
+            println!("{}", serde_json::to_string_pretty(&claim_result.full_response)
+                .unwrap_or_else(|_| "Failed to serialize response".to_string()));
+
             Ok(())
         }
         Err(e) => {
@@ -184,7 +263,7 @@ pub async fn handle_claim() -> Result<()> {
 #[derive(Debug, Clone)]
 struct RewardCoupon {
     contract_id: String,
-    amount: f64,
+    amount: String,
     round: i64,
 }
 
@@ -193,6 +272,7 @@ struct RewardCoupon {
 struct IssuingRound {
     contract_id: String,
     created_event_blob: String,
+    opens_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Result of claim transfer execution
@@ -200,6 +280,7 @@ struct IssuingRound {
 struct ClaimResult {
     update_id: String,
     created_amulets: Option<Vec<String>>,
+    full_response: Value,
 }
 
 /// Find all AppRewardCoupon contracts for the provider
@@ -295,10 +376,37 @@ async fn find_app_reward_coupons(
                         .or_else(|| created_event.get("createArgument"))
                         .ok_or_else(|| anyhow!("Missing create arguments"))?;
 
+                    // Check that the beneficiary field matches our provider party
+                    // AppRewardCoupons have a beneficiary field that indicates who can claim them
+                    let coupon_beneficiary = args.get("beneficiary")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+
+                    let coupon_provider = args.get("provider")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+
+                    debug!(
+                        beneficiary = %coupon_beneficiary,
+                        provider = %coupon_provider,
+                        expected = %provider_party,
+                        "Checking coupon ownership"
+                    );
+
+                    // Filter by beneficiary - only claim coupons where we are the beneficiary
+                    if coupon_beneficiary != provider_party {
+                        debug!(
+                            beneficiary = %coupon_beneficiary,
+                            expected = %provider_party,
+                            "Skipping coupon - wrong beneficiary"
+                        );
+                        continue;  // Skip coupons that don't belong to this provider
+                    }
+
                     let amount = args.get("amount")
                         .and_then(|v| v.as_str())
-                        .and_then(|s| s.parse::<f64>().ok())
-                        .ok_or_else(|| anyhow!("Missing or invalid amount"))?;
+                        .ok_or_else(|| anyhow!("Missing amount"))?
+                        .to_string();
 
                     let round_obj = args.get("round")
                         .ok_or_else(|| anyhow!("Missing round"))?;
@@ -372,6 +480,14 @@ async fn find_issuing_rounds(
                     .and_then(|s| s.parse::<i64>().ok())
                     .ok_or_else(|| anyhow!("Missing or invalid round number"))?;
 
+                let opens_at_str = contract.pointer("/payload/opensAt")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing opensAt"))?;
+
+                let opens_at = chrono::DateTime::parse_from_rfc3339(opens_at_str)
+                    .context("Failed to parse opensAt timestamp")?
+                    .with_timezone(&chrono::Utc);
+
                 // Track all found rounds and their full JSON
                 all_found_rounds.push(round);
                 all_contracts_json.push(json!({
@@ -386,6 +502,7 @@ async fn find_issuing_rounds(
                     issuing_rounds.insert(round, IssuingRound {
                         contract_id,
                         created_event_blob: blob,
+                        opens_at,
                     });
                 }
             }
@@ -431,13 +548,17 @@ async fn execute_claim_transfer(
         }));
     }
 
-    // Calculate total amount to receive
-    let total_amount: f64 = coupons.iter().map(|c| c.amount).sum();
+    // Calculate total amount to receive using Decimal for precision
+    let total_amount = coupons.iter()
+        .try_fold(Decimal::ZERO, |acc, c| {
+            Decimal::from_str(&c.amount).map(|amt| acc + amt)
+        })
+        .context("Failed to parse coupon amounts as decimals")?;
 
     // Build transfer outputs - single output to provider
     let transfer_outputs = vec![json!({
         "receiver": provider_party,
-        "amount": format!("{}", total_amount),
+        "amount": total_amount.to_string(),
         "receiverFeeRatio": "0.0"
     })];
 
@@ -587,6 +708,7 @@ async fn execute_claim_transfer(
     Ok(ClaimResult {
         update_id,
         created_amulets,
+        full_response: response,
     })
 }
 

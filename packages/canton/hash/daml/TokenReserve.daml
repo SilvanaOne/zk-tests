@@ -139,9 +139,14 @@ template TokenProofOfReserves
         markerCids <- case featuredAppRightCid of
           Some rightCid -> do
             result <- exercise rightCid FeaturedAppRight.FeaturedAppRight_CreateActivityMarker with
-              beneficiaries = [FeaturedAppRight.AppRewardBeneficiary with
-                beneficiary = provider
-                weight = 1.0]
+              beneficiaries =
+                [ FeaturedAppRight.AppRewardBeneficiary with
+                    beneficiary = provider
+                    weight = 0.8
+                , FeaturedAppRight.AppRewardBeneficiary with
+                    beneficiary = owner
+                    weight = 0.2
+                ]
             return result.activityMarkerCids
           None -> return []
 
