@@ -1,0 +1,192 @@
+-- Copyright (c) 2025 Silvana. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+-- | Shared test utilities for TestToken CIP-56 compliance tests.
+module TestUtils where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.Time
+import DA.TextMap qualified as TextMap
+import DA.Optional (isSome, fromSome)
+
+import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
+import Splice.Api.Token.HoldingV1 qualified as Token.Holding
+import Splice.Api.Token.TransferInstructionV1 qualified as Token.Transfer
+import Splice.Api.Token.BurnMintV1 qualified as Token.BurnMint
+import Splice.Api.Token.AllocationV1 qualified as Token.Allocation
+import Splice.Api.Token.AllocationInstructionV1 qualified as Token.AllocInstruction
+
+import TestToken
+
+----------------------------------------------------------------------------------------------------
+-- Party Setup
+----------------------------------------------------------------------------------------------------
+
+-- | Test parties used across all test modules.
+data TestParties = TestParties
+  with
+    admin : Party
+      -- ^ The admin/registry party managing the token
+    alice : Party
+      -- ^ First test user
+    bob : Party
+      -- ^ Second test user
+    charlie : Party
+      -- ^ Third test user (for multi-party tests)
+    executor : Party
+      -- ^ Settlement executor for DVP tests
+  deriving (Eq, Show)
+
+-- | Allocate all test parties with unique names for each test run.
+-- Uses allocateParty to avoid conflicts in the simulated ledger.
+setupParties : Script TestParties
+setupParties = do
+  admin <- allocateParty "admin"
+  alice <- allocateParty "alice"
+  bob <- allocateParty "bob"
+  charlie <- allocateParty "charlie"
+  executor <- allocateParty "executor"
+  return TestParties{..}
+
+----------------------------------------------------------------------------------------------------
+-- Factory Setup
+----------------------------------------------------------------------------------------------------
+
+-- | All factory contracts for TestToken operations.
+data TestFactories = TestFactories
+  with
+    transferFactoryCid : ContractId TestTokenTransferFactory
+    burnMintFactoryCid : ContractId TestTokenBurnMintFactory
+    lockFactoryCid : ContractId TestTokenLockFactory
+    allocationFactoryCid : ContractId TestTokenAllocationFactory
+  deriving (Eq, Show)
+
+-- | Create all factory contracts.
+setupFactories : Party -> Text -> Script TestFactories
+setupFactories admin instrumentId = do
+  transferFactoryCid <- submit admin $ createCmd TestTokenTransferFactory with
+    admin
+
+  burnMintFactoryCid <- submit admin $ createCmd TestTokenBurnMintFactory with
+    admin
+    instrumentId
+
+  lockFactoryCid <- submit admin $ createCmd TestTokenLockFactory with
+    admin
+    instrumentId
+
+  allocationFactoryCid <- submit admin $ createCmd TestTokenAllocationFactory with
+    admin
+
+  return TestFactories{..}
+
+----------------------------------------------------------------------------------------------------
+-- Token Minting Utilities
+----------------------------------------------------------------------------------------------------
+
+-- | Mint tokens directly to a party (bypasses propose-accept pattern for testing).
+mintTokens : Party -> Party -> Decimal -> Text -> Script (ContractId TestToken)
+mintTokens admin receiver amount instrumentId = do
+  submitMulti [admin, receiver] [] $ createCmd TestToken with
+    owner = receiver
+    instrumentAdmin = admin
+    amount
+    instrumentId
+    lock = None
+    metadata = TextMap.fromList
+      [ ("test/minted-for", "test-setup")
+      , ("test/receiver", show receiver)
+      ]
+
+-- | Mint multiple token holdings for a party.
+mintTokensMultiple : Party -> Party -> [Decimal] -> Text -> Script [ContractId TestToken]
+mintTokensMultiple admin receiver amounts instrumentId =
+  mapA (\amt -> mintTokens admin receiver amt instrumentId) amounts
+
+----------------------------------------------------------------------------------------------------
+-- Assertion Utilities
+----------------------------------------------------------------------------------------------------
+
+-- | Query a holding via interface and verify its amount.
+assertHoldingAmount : Party -> ContractId Token.Holding.Holding -> Decimal -> Script ()
+assertHoldingAmount party holdingCid expectedAmount = do
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding party holdingCid
+  holdingView.amount === expectedAmount
+
+-- | Query a holding and verify it is locked.
+assertHoldingLocked : Party -> ContractId Token.Holding.Holding -> Script ()
+assertHoldingLocked party holdingCid = do
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding party holdingCid
+  assert (isSome holdingView.lock)
+
+-- | Query a holding and verify it is unlocked.
+assertHoldingUnlocked : Party -> ContractId Token.Holding.Holding -> Script ()
+assertHoldingUnlocked party holdingCid = do
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding party holdingCid
+  assert (not $ isSome holdingView.lock)
+
+-- | Verify a holding has specific metadata key.
+assertMetadataKey : Party -> ContractId Token.Holding.Holding -> Text -> Script ()
+assertMetadataKey party holdingCid key = do
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding party holdingCid
+  assert (TextMap.member key holdingView.meta.values)
+
+-- | Calculate total balance for a party.
+getTotalBalance : Party -> Text -> Script Decimal
+getTotalBalance party instrumentId = do
+  holdings <- query @TestToken party
+  let relevantHoldings = filter (\(_, h) -> h.owner == party && h.instrumentId == instrumentId) holdings
+  return $ sum $ map (\(_, h) -> h.amount) relevantHoldings
+
+-- | Verify total balance for a party.
+assertBalance : Party -> Text -> Decimal -> Script ()
+assertBalance party instrumentId expectedBalance = do
+  actualBalance <- getTotalBalance party instrumentId
+  actualBalance === expectedBalance
+
+----------------------------------------------------------------------------------------------------
+-- Time Utilities
+----------------------------------------------------------------------------------------------------
+
+-- | Get current ledger time.
+getCurrentTime : Script Time
+getCurrentTime = getTime
+
+-- | Add days to a time.
+addDays : Time -> Int -> Time
+addDays t n = t `addRelTime` (days n)
+
+-- | Add hours to a time.
+addHours : Time -> Int -> Time
+addHours t n = t `addRelTime` (hours n)
+
+----------------------------------------------------------------------------------------------------
+-- Metadata Utilities
+----------------------------------------------------------------------------------------------------
+
+-- | Create empty metadata.
+emptyMetadata : Token.Metadata.Metadata
+emptyMetadata = Token.Metadata.Metadata with values = TextMap.empty
+
+-- | Create test metadata with correlation ID.
+testMetadata : Text -> Token.Metadata.Metadata
+testMetadata correlationId = Token.Metadata.Metadata with
+  values = TextMap.fromList
+    [ ("test/correlation-id", correlationId)
+    , ("test/created-at", "test-time")
+    ]
+
+----------------------------------------------------------------------------------------------------
+-- Constants
+----------------------------------------------------------------------------------------------------
+
+-- | Default instrument ID for tests.
+defaultInstrumentId : Text
+defaultInstrumentId = "TEST"
+
+-- | Default instrument admin.
+instrumentIdFor : Party -> Token.Holding.InstrumentId
+instrumentIdFor admin = Token.Holding.InstrumentId with
+  admin
+  id = defaultInstrumentId

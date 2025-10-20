@@ -9,7 +9,7 @@ PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version (e.g., hash-v15-0.0.1 -> hash-v15)
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload parties parties-provider create-party updates get-update get-update-provider inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens find-rewards find-markers
+.PHONY: help build clean test test-build localnet-test upload parties parties-provider create-party updates get-update get-update-provider inspect packages-user packages-provider package-status-user package-status-provider vetting-status-user vetting-status-provider traffic get-package decode-package find-amulets split-amulets merge-amulets extract-contract-blobs tokens find-rewards find-markers
 
 help:
 	@echo "Hash - Helper Commands"
@@ -25,6 +25,11 @@ help:
 	@echo "  make build         - Build the hash DAR"
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  make inspect       - Show DAR package ID"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test-build    - Build the CIP-56 compliance test suite"
+	@echo "  make test          - Build and run all CIP-56 compliance tests (simulated ledger)"
+	@echo "  make localnet-test - Build and run all tests against Canton localnet"
 	@echo ""
 	@echo "Package Management:"
 	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to both user and provider nodes"
@@ -67,6 +72,54 @@ build:
 
 clean:
 	@rm -rf .daml/dist
+
+# Build the test suite
+test-build:
+	@echo "Building TestToken test suite..."
+	@cd tests && daml build
+
+# Run all CIP-56 compliance tests (simulated ledger - no Canton node required)
+# Note: IDE ledger has limitations with multi-party submissions (submitMulti)
+test: build test-build
+	@echo "========================================="
+	@echo "TestToken CIP-56 Compliance Test Suite"
+	@echo "========================================="
+	@echo ""
+	@cd tests && daml script \
+		--dar .daml/dist/hash-tests-0.0.1.dar \
+		--script-name Main:main \
+		--ide-ledger \
+		--static-time
+	@echo ""
+	@echo "✅ All tests completed successfully!"
+
+# Run all CIP-56 compliance tests against Canton localnet
+# Requires: localnet must be running (see Tests/canton/splice-node/docker-compose/localnet)
+localnet-test: build test-build
+	@echo "========================================="
+	@echo "TestToken CIP-56 Compliance Test Suite"
+	@echo "       (Canton Localnet)"
+	@echo "========================================="
+	@echo ""
+	@echo "Checking localnet connection..."
+	@curl -f -s -m 2 http://canton.localhost:2901/ready > /dev/null || \
+		(echo "❌ Error: Canton localnet is not running or not reachable at canton.localhost:2901" && \
+		 echo "   Start localnet first: cd Tests/canton/splice-node/docker-compose/localnet && docker-compose up" && \
+		 exit 1)
+	@echo "✅ Localnet is running"
+	@echo ""
+	@echo "Creating JWT token file..."
+	@echo "$(APP_USER_JWT)" > .daml/jwt-token.txt
+	@cd tests && daml script \
+		--dar .daml/dist/hash-tests-0.0.1.dar \
+		--script-name Main:main \
+		--ledger-host canton.localhost \
+		--ledger-port 2901 \
+		--access-token-file ../.daml/jwt-token.txt \
+		--application-id hash-tests
+	@rm -f .daml/jwt-token.txt
+	@echo ""
+	@echo "✅ All localnet tests completed successfully!"
 
 # Upload DAR to both app-user and app-provider nodes
 upload:

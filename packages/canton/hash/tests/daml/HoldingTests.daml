@@ -1,0 +1,373 @@
+-- Copyright (c) 2025 Silvana. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+-- | Tests for Holdings API (CIP-56 Section: Holdings API)
+-- Verifies HoldingV1 interface implementation and lock management.
+module HoldingTests where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.Time
+import DA.TextMap qualified as TextMap
+import DA.Optional (isSome, isNone)
+
+import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
+import Splice.Api.Token.HoldingV1 qualified as Token.Holding
+
+import TestToken
+import TestUtils
+
+----------------------------------------------------------------------------------------------------
+-- Test: Basic Holding Creation
+----------------------------------------------------------------------------------------------------
+
+testBasicHoldingCreation : Script ()
+testBasicHoldingCreation = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Create a basic token holding
+  tokenCid <- mintTokens admin alice 100.0 defaultInstrumentId
+
+  -- Query via interface
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding alice (toInterfaceContractId tokenCid)
+
+  -- Verify view data
+  holdingView.owner === alice
+  holdingView.instrumentId.admin === admin
+  holdingView.instrumentId.id === defaultInstrumentId
+  holdingView.amount === 100.0
+  assert (isNone holdingView.lock)
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Holding View Data
+----------------------------------------------------------------------------------------------------
+
+testHoldingViewData : Script ()
+testHoldingViewData = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Create holding with metadata
+  tokenCid <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 50.0
+    instrumentId = defaultInstrumentId
+    lock = None
+    metadata = TextMap.fromList
+      [ ("test/purpose", "view-data-test")
+      , ("test/created-by", "test-script")
+      ]
+
+  -- Query and verify all view fields
+  Some holdingView <- queryInterfaceContractId @Token.Holding.Holding alice (toInterfaceContractId tokenCid)
+
+  holdingView.owner === alice
+  holdingView.instrumentId === instrumentIdFor admin
+  holdingView.amount === 50.0
+  assert (isNone holdingView.lock)
+  assert (TextMap.member "test/purpose" holdingView.meta.values)
+  assert (TextMap.member "test/created-by" holdingView.meta.values)
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Amount Validation (Positive Only)
+----------------------------------------------------------------------------------------------------
+
+testAmountValidation : Script ()
+testAmountValidation = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Attempt to create holding with zero amount (should fail)
+  submitMultiMustFail [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 0.0
+    instrumentId = defaultInstrumentId
+    lock = None
+    metadata = TextMap.empty
+
+  -- Attempt to create holding with negative amount (should fail)
+  submitMultiMustFail [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = -10.0
+    instrumentId = defaultInstrumentId
+    lock = None
+    metadata = TextMap.empty
+
+  -- Create holding with positive amount (should succeed)
+  tokenCid <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 0.1
+    instrumentId = defaultInstrumentId
+    lock = None
+    metadata = TextMap.empty
+
+  Some _ <- queryContractId alice tokenCid
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Lock Holder Observers
+----------------------------------------------------------------------------------------------------
+
+testLockHolderObservers : Script ()
+testLockHolderObservers = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  -- Create a locked holding with bob as lock holder
+  let lockInfo = Token.Holding.Lock with
+        holders = [bob]
+        expiresAt = Some (now `addRelTime` days 7)
+        expiresAfter = None
+        context = Some "escrow for settlement"
+
+  tokenCid <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 100.0
+    instrumentId = defaultInstrumentId
+    lock = Some lockInfo
+    metadata = TextMap.empty
+
+  -- Bob (lock holder) should be able to see the locked holding
+  Some holding <- queryContractId bob tokenCid
+  holding.lock === Some lockInfo
+
+  -- Charlie (not a lock holder) should not see it
+  None <- queryContractId charlie tokenCid
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Lock Holding Choice
+----------------------------------------------------------------------------------------------------
+
+testLockHolding : Script ()
+testLockHolding = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  -- Create an unlocked holding
+  tokenCid <- mintTokens admin alice 100.0 defaultInstrumentId
+
+  -- Alice locks the holding
+  let newLock = Token.Holding.Lock with
+        holders = [bob, charlie]
+        expiresAt = Some (now `addRelTime` days 30)
+        expiresAfter = None
+        context = Some "locked for DVP settlement"
+
+  lockedCid <- submit alice $ exerciseCmd tokenCid LockHolding with newLock
+
+  -- Verify holding is locked
+  Some locked <- queryContractId alice lockedCid
+  locked.lock === Some newLock
+
+  -- Verify lock holders can see it
+  Some _ <- queryContractId bob lockedCid
+  Some _ <- queryContractId charlie lockedCid
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Lock Validation (Requires Holders)
+----------------------------------------------------------------------------------------------------
+
+testLockValidation : Script ()
+testLockValidation = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  tokenCid <- mintTokens admin alice 100.0 defaultInstrumentId
+
+  -- Attempt to create lock with empty holders (should fail)
+  let invalidLock = Token.Holding.Lock with
+        holders = []
+        expiresAt = Some (now `addRelTime` days 1)
+        expiresAfter = None
+        context = None
+
+  submitMustFail alice $ exerciseCmd tokenCid LockHolding with newLock = invalidLock
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Unlock Holding (Expired Lock)
+----------------------------------------------------------------------------------------------------
+
+testUnlockHolding : Script ()
+testUnlockHolding = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  -- Create a holding with an expired lock
+  let expiredLock = Token.Holding.Lock with
+        holders = [bob]
+        expiresAt = Some (now `addRelTime` seconds (-10))  -- Already expired
+        expiresAfter = None
+        context = Some "test expired lock"
+
+  tokenCid <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 100.0
+    instrumentId = defaultInstrumentId
+    lock = Some expiredLock
+    metadata = TextMap.empty
+
+  -- Alice unlocks the holding (lock is expired)
+  unlockedCid <- submit alice $ exerciseCmd tokenCid UnlockHolding
+
+  -- Verify holding is unlocked
+  Some unlocked <- queryContractId alice unlockedCid
+  assert (isNone unlocked.lock)
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Unlock Fails for Non-Expired Lock
+----------------------------------------------------------------------------------------------------
+
+testUnlockFailsForNonExpired : Script ()
+testUnlockFailsForNonExpired = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  -- Create a holding with a non-expired lock
+  let futureLock = Token.Holding.Lock with
+        holders = [bob]
+        expiresAt = Some (now `addRelTime` days 30)
+        expiresAfter = None
+        context = Some "not yet expired"
+
+  tokenCid <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 100.0
+    instrumentId = defaultInstrumentId
+    lock = Some futureLock
+    metadata = TextMap.empty
+
+  -- Attempt to unlock (should fail - lock not expired)
+  submitMustFail alice $ exerciseCmd tokenCid UnlockHolding
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Unlock Fails for No Lock
+----------------------------------------------------------------------------------------------------
+
+testUnlockFailsForNoLock : Script ()
+testUnlockFailsForNoLock = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Create an unlocked holding
+  tokenCid <- mintTokens admin alice 100.0 defaultInstrumentId
+
+  -- Attempt to unlock (should fail - no lock to unlock)
+  submitMustFail alice $ exerciseCmd tokenCid UnlockHolding
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Merge Holdings (UTXO Consolidation)
+----------------------------------------------------------------------------------------------------
+
+testMergeHoldings : Script ()
+testMergeHoldings = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Create multiple small holdings for Alice
+  holding1 <- mintTokens admin alice 10.0 defaultInstrumentId
+  holding2 <- mintTokens admin alice 20.0 defaultInstrumentId
+  holding3 <- mintTokens admin alice 30.0 defaultInstrumentId
+
+  -- Alice merges all holdings into one
+  mergedCid <- submit alice $ exerciseCmd holding1 MergeHoldings with
+    otherHoldingCids = [holding2, holding3]
+
+  -- Verify merged amount
+  Some merged <- queryContractId alice mergedCid
+  merged.amount === 60.0
+
+  -- Verify old holdings are archived
+  None <- queryContractId alice holding1
+  None <- queryContractId alice holding2
+  None <- queryContractId alice holding3
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Merge Holdings Validation (Same Owner)
+----------------------------------------------------------------------------------------------------
+
+testMergeHoldingsValidation : Script ()
+testMergeHoldingsValidation = script do
+  parties@TestParties{..} <- setupParties
+
+  -- Create holdings for different owners
+  aliceHolding <- mintTokens admin alice 10.0 defaultInstrumentId
+  bobHolding <- mintTokens admin bob 20.0 defaultInstrumentId
+
+  -- Alice attempts to merge Bob's holding (should fail)
+  submitMustFail alice $ exerciseCmd aliceHolding MergeHoldings with
+    otherHoldingCids = [bobHolding]
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Test: Merge Holdings Fails with Locked Holdings
+----------------------------------------------------------------------------------------------------
+
+testMergeLockedHoldingsFails : Script ()
+testMergeLockedHoldingsFails = script do
+  parties@TestParties{..} <- setupParties
+  now <- getCurrentTime
+
+  -- Create unlocked and locked holdings
+  unlockedHolding <- mintTokens admin alice 10.0 defaultInstrumentId
+
+  let lockInfo = Token.Holding.Lock with
+        holders = [bob]
+        expiresAt = Some (now `addRelTime` days 1)
+        expiresAfter = None
+        context = Some "locked"
+
+  lockedHolding <- submitMulti [admin, alice] [] $ createCmd TestToken with
+    owner = alice
+    instrumentAdmin = admin
+    amount = 20.0
+    instrumentId = defaultInstrumentId
+    lock = Some lockInfo
+    metadata = TextMap.empty
+
+  -- Attempt to merge with locked holding (should fail)
+  submitMustFail alice $ exerciseCmd unlockedHolding MergeHoldings with
+    otherHoldingCids = [lockedHolding]
+
+  return ()
+
+----------------------------------------------------------------------------------------------------
+-- Run All Holding Tests
+----------------------------------------------------------------------------------------------------
+
+runAllHoldingTests : Script ()
+runAllHoldingTests = script do
+  testBasicHoldingCreation
+  testHoldingViewData
+  testAmountValidation
+  testLockHolderObservers
+  testLockHolding
+  testLockValidation
+  testUnlockHolding
+  testUnlockFailsForNonExpired
+  testUnlockFailsForNoLock
+  testMergeHoldings
+  testMergeHoldingsValidation
+  testMergeLockedHoldingsFails
+  return ()
