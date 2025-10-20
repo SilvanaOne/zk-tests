@@ -130,6 +130,59 @@ template TestTokenTransferFactory
         assertMsg "executeBefore must be in the future" (transfer.executeBefore > now)
         assertMsg "requestedAt must be in the past" (transfer.requestedAt <= now)
 
+        -- Handle input holdings if provided (enables contention-based duplicate prevention)
+        changeCids <- if null transfer.inputHoldingCids
+          then
+            -- Empty list: automatic selection mode (holdings will be selected at Accept time)
+            return []
+          else do
+            -- Provided list: explicit UTXO selection mode
+            -- Fetch and validate all input holdings as interface contracts
+            holdingViews <- mapA (\cid -> do
+              holding <- fetch (coerceContractId @Token.Holding.Holding cid)
+              return (view (holding : Token.Holding.Holding))
+              ) transfer.inputHoldingCids
+
+            -- Validate each holding
+            forA_ holdingViews $ \holdingView -> do
+              assertMsg "Input holding owner must be sender"
+                (holdingView.owner == transfer.sender)
+              assertMsg "Input holding instrument mismatch"
+                (holdingView.instrumentId == transfer.instrumentId)
+
+              -- Validate lock status
+              case holdingView.lock of
+                None -> pure ()
+                Some lockInfo -> do
+                  let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
+                        (Some absTime, _) -> now >= absTime
+                        (_, _) -> False
+                  assertMsg ("Cannot use locked holding in transfer. Context: " <> optional "" (\c -> c) lockInfo.context)
+                    isExpired
+
+            -- Calculate total input
+            let totalInput = sum $ map (\v -> v.amount) holdingViews
+
+            -- Validate sufficient funds
+            assertMsg "Insufficient input holdings for transfer amount"
+              (totalInput >= transfer.amount)
+
+            -- Archive input holdings (creates deliberate contention)
+            forA_ transfer.inputHoldingCids archive
+
+            -- Create change holding if needed
+            if totalInput > transfer.amount
+              then do
+                changeCid <- create TestToken with
+                  owner = transfer.sender
+                  instrumentAdmin = admin
+                  amount = totalInput - transfer.amount
+                  instrumentId = instrId.id
+                  lock = None
+                  metadata = transfer.meta.values
+                return [toInterfaceContractId @Token.Holding.Holding changeCid]
+              else return []
+
         -- Create transfer instruction in pending receiver acceptance state
         instrCid <- create TestTokenTransferInstruction with
           transfer
@@ -139,7 +192,7 @@ template TestTokenTransferFactory
         return Token.Transfer.TransferInstructionResult with
           output = Token.Transfer.TransferInstructionResult_Pending with
             transferInstructionCid = toInterfaceContractId @Token.Transfer.TransferInstruction instrCid
-          senderChangeCids = []
+          senderChangeCids = changeCids
           meta = Token.Metadata.emptyMetadata
 
       transferFactory_publicFetchImpl self arg = do
@@ -178,11 +231,13 @@ template TestTokenTransferInstruction
           Token.Transfer.TransferPendingReceiverAcceptance -> pure ()
           _ -> abort "Transfer is not pending receiver acceptance"
 
-        -- Archive input holdings and calculate amounts
-        totalInput <- archiveAndSumHoldings transfer.inputHoldingCids
+        -- Validate that input holdings were provided to the factory
+        -- (If empty, automatic selection would require registry-specific extension via extraArgs)
+        assertMsg "Transfer must specify input holdings (automatic selection not supported in this implementation)"
+          (not $ null transfer.inputHoldingCids)
 
-        -- Validate sufficient funds
-        assertMsg "Insufficient funds in input holdings" (totalInput >= transfer.amount)
+        -- Holdings were already archived by TransferFactory, change already created
+        -- Just create receiver holding to complete the transfer
 
         -- Create receiver holding (without lock - new holdings start unlocked)
         receiverCid <- create TestToken with
@@ -193,23 +248,10 @@ template TestTokenTransferInstruction
           lock = None  -- New holdings from transfers start unlocked
           metadata = transfer.meta.values
 
-        -- Create sender change if needed
-        changeCids <- if totalInput > transfer.amount
-          then do
-            changeCid <- create TestToken with
-              owner = transfer.sender
-              instrumentAdmin = transfer.instrumentId.admin
-              amount = totalInput - transfer.amount
-              instrumentId = transfer.instrumentId.id
-              lock = None  -- Change holdings are unlocked
-              metadata = transfer.meta.values
-            return [toInterfaceContractId @Token.Holding.Holding changeCid]
-          else return []
-
         return Token.Transfer.TransferInstructionResult with
           output = Token.Transfer.TransferInstructionResult_Completed with
             receiverHoldingCids = [toInterfaceContractId @Token.Holding.Holding receiverCid]
-          senderChangeCids = changeCids
+          senderChangeCids = []  -- Change already created by factory
           meta = Token.Metadata.emptyMetadata
 
       transferInstruction_rejectImpl self arg = do
