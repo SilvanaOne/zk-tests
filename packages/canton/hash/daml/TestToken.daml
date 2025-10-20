@@ -15,6 +15,7 @@ import Splice.Api.Token.TransferInstructionV1 qualified as Token.Transfer
 import Splice.Api.Token.BurnMintV1 qualified as Token.BurnMint
 import DA.TextMap qualified as TextMap
 import DA.Foldable (forA_)
+import DA.Time (RelTime)
 
 ----------------------------------------------------------------------------------------------------
 -- Holding Template
@@ -31,10 +32,14 @@ template TestToken
       -- ^ The amount of tokens in this holding.
     instrumentId : Text
       -- ^ The identifier for this token instrument.
+    lock : Optional Token.Holding.Lock
+      -- ^ Optional lock on this holding (for DVP, escrow, etc.).
     metadata : TextMap.TextMap Text
       -- ^ Additional metadata for this holding.
   where
     signatory owner, instrumentAdmin
+    observer (optional [] (\l -> l.holders) lock)
+      -- ^ Lock holders are observers to enable them to see locked holdings
 
     ensure amount > 0.0
 
@@ -46,8 +51,52 @@ template TestToken
           admin = instrumentAdmin
           id = instrumentId
         amount
-        lock = None
+        lock = lock
         meta = Token.Metadata.Metadata with values = metadata
+
+    -- Lock management choices
+
+    -- | Lock this holding with the specified lock parameters.
+    choice LockHolding : ContractId TestToken
+      with
+        newLock : Token.Holding.Lock
+      controller owner
+      do
+        -- Validate lock parameters
+        assertMsg "Lock must have at least one holder" (not $ null newLock.holders)
+        create this with lock = Some newLock
+
+    -- | Unlock this holding if the lock has expired or if authorized.
+    choice UnlockHolding : ContractId TestToken
+      controller owner
+      do
+        case lock of
+          None -> error "No lock to unlock"
+          Some currentLock -> do
+            -- Check if lock is expired
+            now <- getTime
+            let expiryTime = case (currentLock.expiresAt, currentLock.expiresAfter) of
+                  (Some absTime, None) -> absTime
+                  (None, Some _) -> error "Relative expiry not yet supported in unlock"
+                  (Some absTime, Some _) -> absTime  -- Use absolute time if both set
+                  (None, None) -> error "Lock has no expiry"
+
+            assertMsg "Lock has not expired yet" (now >= expiryTime)
+            create this with lock = None
+
+    -- | Update lock parameters (requires authorization from current lock holders).
+    choice UpdateLock : ContractId TestToken
+      with
+        updatedLock : Token.Holding.Lock
+        authorizer : Party
+      controller authorizer
+      do
+        case lock of
+          None -> error "No lock to update"
+          Some currentLock -> do
+            assertMsg "Authorizer must be a current lock holder"
+              (authorizer `elem` currentLock.holders)
+            create this with lock = Some updatedLock
 
 ----------------------------------------------------------------------------------------------------
 -- Transfer Factory
@@ -135,12 +184,13 @@ template TestTokenTransferInstruction
         -- Validate sufficient funds
         assertMsg "Insufficient funds in input holdings" (totalInput >= transfer.amount)
 
-        -- Create receiver holding
+        -- Create receiver holding (without lock - new holdings start unlocked)
         receiverCid <- create TestToken with
           owner = transfer.receiver
           instrumentAdmin = transfer.instrumentId.admin
           amount = transfer.amount
           instrumentId = transfer.instrumentId.id
+          lock = None  -- New holdings from transfers start unlocked
           metadata = transfer.meta.values
 
         -- Create sender change if needed
@@ -151,6 +201,7 @@ template TestTokenTransferInstruction
               instrumentAdmin = transfer.instrumentId.admin
               amount = totalInput - transfer.amount
               instrumentId = transfer.instrumentId.id
+              lock = None  -- Change holdings are unlocked
               metadata = transfer.meta.values
             return [toInterfaceContractId @Token.Holding.Holding changeCid]
           else return []
@@ -207,6 +258,8 @@ template TestTokenMintRequest
       -- ^ The amount of tokens to mint.
     instrumentId : Text
       -- ^ The instrument ID for the token.
+    initialLock : Optional Token.Holding.Lock
+      -- ^ Optional initial lock on the minted tokens.
     metadata : TextMap.TextMap Text
       -- ^ Metadata for the minted token.
   where
@@ -224,6 +277,7 @@ template TestTokenMintRequest
           instrumentAdmin = admin
           amount
           instrumentId
+          lock = initialLock
           metadata
 
     choice Reject : ()
@@ -264,6 +318,7 @@ template TestTokenBurnMintFactory
           receiver
           amount
           instrumentId
+          initialLock = None  -- Default to no lock, can be customized
           metadata = TextMap.fromList
             [ ("example.com/instrument-id", instrumentId)
             , ("example.com/symbol", "TEST")
@@ -309,13 +364,14 @@ template TestTokenBurnMintFactory
         -- Archive all input holdings
         forA_ arg.inputHoldingCids (\cid -> archive cid)
 
-        -- Create output holdings
+        -- Create output holdings (newly minted holdings start unlocked unless specified)
         outputCids <- mapA (\output -> do
           cid <- create TestToken with
             owner = output.owner
             instrumentAdmin = admin
             amount = output.amount
             instrumentId = instrumentId
+            lock = None  -- Newly minted holdings start unlocked
             metadata = TextMap.fromList
               [ ("example.com/instrument-id", instrumentId)
               , ("example.com/symbol", "TEST")
@@ -335,15 +391,125 @@ template TestTokenBurnMintFactory
           meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
+-- Lock Factory
+----------------------------------------------------------------------------------------------------
+
+-- | Factory for managing lock operations on token holdings.
+-- This enables controlled locking for DVP, escrow, and other use cases.
+template TestTokenLockFactory
+  with
+    admin : Party
+      -- ^ The registry admin party.
+    instrumentId : Text
+      -- ^ The instrument ID this factory manages.
+  where
+    signatory admin
+
+    -- | Create a lock on an existing holding.
+    nonconsuming choice CreateLock : ContractId TestToken
+      with
+        holdingCid : ContractId TestToken
+        lockHolders : [Party]
+        expiresAt : Optional Time
+        expiresAfter : Optional RelTime
+        context : Optional Text
+      controller admin
+      do
+        -- Fetch the holding
+        holding <- fetch holdingCid
+
+        -- Ensure holding matches this factory's instrument
+        assertMsg "Instrument ID mismatch" (holding.instrumentId == instrumentId)
+        assertMsg "Instrument admin mismatch" (holding.instrumentAdmin == admin)
+
+        -- Ensure holding is not already locked
+        case holding.lock of
+          Some _ -> error "Holding is already locked"
+          None -> pure ()
+
+        -- Create the lock
+        let newLock = Token.Holding.Lock with
+              holders = lockHolders
+              expiresAt = expiresAt
+              expiresAfter = expiresAfter
+              context = context
+
+        -- Archive old holding and create locked version
+        archive holdingCid
+        create holding with lock = Some newLock
+
+    -- | Release an expired lock.
+    nonconsuming choice ReleaseExpiredLock : ContractId TestToken
+      with
+        holdingCid : ContractId TestToken
+      controller admin
+      do
+        -- Fetch the holding
+        holding <- fetch holdingCid
+
+        -- Ensure holding matches this factory's instrument
+        assertMsg "Instrument ID mismatch" (holding.instrumentId == instrumentId)
+        assertMsg "Instrument admin mismatch" (holding.instrumentAdmin == admin)
+
+        -- Check if lock exists and is expired
+        case holding.lock of
+          None -> error "No lock to release"
+          Some lockInfo -> do
+            now <- getTime
+            let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
+                  (Some absTime, _) -> now >= absTime
+                  (_, _) -> False
+
+            assertMsg "Lock has not expired" isExpired
+
+            -- Archive old holding and create unlocked version
+            archive holdingCid
+            create holding with lock = None
+
+    -- | Force unlock by admin (for emergency situations).
+    nonconsuming choice ForceUnlock : ContractId TestToken
+      with
+        holdingCid : ContractId TestToken
+        reason : Text
+      controller admin
+      do
+        -- Fetch the holding
+        holding <- fetch holdingCid
+
+        -- Ensure holding matches this factory's instrument
+        assertMsg "Instrument ID mismatch" (holding.instrumentId == instrumentId)
+        assertMsg "Instrument admin mismatch" (holding.instrumentAdmin == admin)
+
+        -- Archive old holding and create unlocked version with reason in metadata
+        archive holdingCid
+        create holding with
+          lock = None
+          metadata = TextMap.insert "force-unlock-reason" reason holding.metadata
+
+----------------------------------------------------------------------------------------------------
 -- Helper Functions
 ----------------------------------------------------------------------------------------------------
 
--- | Archive holdings and return the total amount.
+-- | Archive holdings and return the total amount, validating locks.
 archiveAndSumHoldings : [ContractId Token.Holding.Holding] -> Update Decimal
 archiveAndSumHoldings cids = do
+  now <- getTime
   amounts <- mapA (\cid -> do
       holding <- fetch cid
       let holdingView = view holding
+
+      -- Check for locks on the holding
+      case holdingView.lock of
+        None -> pure ()  -- No lock, can proceed
+        Some lockInfo -> do
+          -- Check if lock has expired (CIP-56 allows using expired locks)
+          let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
+                (Some absTime, _) -> now >= absTime
+                (_, _) -> False  -- If no absolute expiry, consider not expired
+
+          assertMsg ("Cannot use locked holding (lock not expired). Context: " <> show lockInfo.context)
+            isExpired
+
       archive cid
       return holdingView.amount
     ) cids
