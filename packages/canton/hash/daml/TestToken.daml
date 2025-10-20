@@ -4,15 +4,19 @@
 -- | Production-ready token implementation following Canton Token Standard (CIP-56).
 --
 -- This module implements a complete CIP-56 compliant token with:
--- - Holding interface for balance representation
--- - TransferFactory + TransferInstruction for P2P transfers
--- - BurnMintFactory for issuance and redemption
+-- - HoldingV1: Balance representation with lock support
+-- - TransferFactory + TransferInstruction: P2P transfers (FOP - Free of Payment)
+-- - AllocationFactory + AllocationInstruction + Allocation: DVP settlements (Delivery vs Payment)
+-- - BurnMintFactory: Token issuance and redemption
+-- - LockFactory: Holding lock management for escrow and DVP
 module TestToken where
 
 import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
 import Splice.Api.Token.HoldingV1 qualified as Token.Holding
 import Splice.Api.Token.TransferInstructionV1 qualified as Token.Transfer
 import Splice.Api.Token.BurnMintV1 qualified as Token.BurnMint
+import Splice.Api.Token.AllocationV1 qualified as Token.Allocation
+import Splice.Api.Token.AllocationInstructionV1 qualified as Token.AllocInstruction
 import DA.TextMap qualified as TextMap
 import DA.Map qualified as Map
 import DA.Foldable (forA_)
@@ -563,6 +567,323 @@ template TestTokenLockFactory
         create holding with
           lock = None
           metadata = TextMap.insert "force-unlock-reason" reason holding.metadata
+
+----------------------------------------------------------------------------------------------------
+-- Allocation (DVP Settlement Support)
+----------------------------------------------------------------------------------------------------
+
+-- | Allocation of holdings for atomic DVP (Delivery versus Payment) settlements.
+-- Represents a reserved holding for a specific leg of a multi-party settlement.
+template TestTokenAllocation
+  with
+    admin : Party
+      -- ^ The registry admin party.
+    allocation : Token.Allocation.AllocationSpecification
+      -- ^ The settlement specification for this allocation.
+    holdingCids : [ContractId Token.Holding.Holding]
+      -- ^ The holdings backing this allocation.
+  where
+    signatory admin, allocation.transferLeg.sender
+    observer allocation.settlement.executor, allocation.transferLeg.receiver
+
+    interface instance Token.Allocation.Allocation for TestTokenAllocation where
+      view = Token.Allocation.AllocationView with
+        allocation = allocation
+        holdingCids = holdingCids
+        meta = Token.Metadata.emptyMetadata
+
+      allocation_executeTransferImpl self arg = do
+        let TestTokenAllocation{..} = this
+        -- Validate settlement deadline
+        now <- getTime
+        assertMsg "Settlement deadline has passed"
+          (now < allocation.settlement.settleBefore)
+
+        -- Archive allocated holdings
+        forA_ holdingCids archive
+
+        -- Create receiver holding with settlement metadata
+        receiverCid <- create TestToken with
+          owner = allocation.transferLeg.receiver
+          instrumentAdmin = allocation.transferLeg.instrumentId.admin
+          amount = allocation.transferLeg.amount
+          instrumentId = allocation.transferLeg.instrumentId.id
+          lock = None
+          metadata = TextMap.fromList
+            [ ("splice.lfdecentralizedtrust.org/settlement-id", allocation.settlement.settlementRef.id)
+            , ("splice.lfdecentralizedtrust.org/settlement-executor", show allocation.settlement.executor)
+            ]
+
+        return Token.Allocation.Allocation_ExecuteTransferResult with
+          senderHoldingCids = []  -- No change - exact allocation
+          receiverHoldingCids = [toInterfaceContractId @Token.Holding.Holding receiverCid]
+          meta = Token.Metadata.emptyMetadata
+
+      allocation_cancelImpl self arg = do
+        let TestTokenAllocation{..} = this
+        -- Return allocated holdings to sender
+        -- Fetch holdings to get their amounts
+        holdingViews <- mapA (\cid -> do
+          holding <- fetch (coerceContractId @Token.Holding.Holding cid)
+          return (view (holding : Token.Holding.Holding))
+          ) holdingCids
+
+        -- Archive old holdings
+        forA_ holdingCids archive
+
+        -- Recreate holdings for sender
+        senderCids <- mapA (\holdingView -> do
+          cid <- create TestToken with
+            owner = allocation.transferLeg.sender
+            instrumentAdmin = allocation.transferLeg.instrumentId.admin
+            amount = holdingView.amount
+            instrumentId = allocation.transferLeg.instrumentId.id
+            lock = None
+            metadata = holdingView.meta.values
+          return (toInterfaceContractId @Token.Holding.Holding cid)
+          ) holdingViews
+
+        return Token.Allocation.Allocation_CancelResult with
+          senderHoldingCids = senderCids
+          meta = Token.Metadata.emptyMetadata
+
+      allocation_withdrawImpl self arg = do
+        let TestTokenAllocation{..} = this
+        -- Sender withdraws allocation - same logic as cancel
+        -- Fetch holdings to get their amounts
+        holdingViews <- mapA (\cid -> do
+          holding <- fetch (coerceContractId @Token.Holding.Holding cid)
+          return (view (holding : Token.Holding.Holding))
+          ) holdingCids
+
+        -- Archive old holdings
+        forA_ holdingCids archive
+
+        -- Recreate holdings for sender
+        senderCids <- mapA (\holdingView -> do
+          cid <- create TestToken with
+            owner = allocation.transferLeg.sender
+            instrumentAdmin = allocation.transferLeg.instrumentId.admin
+            amount = holdingView.amount
+            instrumentId = allocation.transferLeg.instrumentId.id
+            lock = None
+            metadata = holdingView.meta.values
+          return (toInterfaceContractId @Token.Holding.Holding cid)
+          ) holdingViews
+
+        return Token.Allocation.Allocation_WithdrawResult with
+          senderHoldingCids = senderCids
+          meta = Token.Metadata.emptyMetadata
+
+----------------------------------------------------------------------------------------------------
+-- Allocation Instruction (DVP Request Lifecycle)
+----------------------------------------------------------------------------------------------------
+
+-- | Instruction for creating an allocation, tracking the request lifecycle.
+template TestTokenAllocationInstruction
+  with
+    admin : Party
+      -- ^ The registry admin party.
+    allocation : Token.Allocation.AllocationSpecification
+      -- ^ The allocation specification.
+    inputHoldingCids : [ContractId Token.Holding.Holding]
+      -- ^ Holdings to fund the allocation.
+    requestedAt : Time
+      -- ^ When the allocation was requested.
+    pendingActions : Map.Map Party Text
+      -- ^ Pending actions for internal workflows.
+    originalInstructionCid : Optional (ContractId Token.AllocInstruction.AllocationInstruction)
+      -- ^ Original instruction for lineage tracking.
+  where
+    signatory admin, allocation.transferLeg.sender
+    observer allocation.settlement.executor, allocation.transferLeg.receiver
+
+    interface instance Token.AllocInstruction.AllocationInstruction for TestTokenAllocationInstruction where
+      view = Token.AllocInstruction.AllocationInstructionView with
+        originalInstructionCid = originalInstructionCid
+        allocation = allocation
+        pendingActions = pendingActions
+        requestedAt = requestedAt
+        inputHoldingCids = inputHoldingCids
+        meta = Token.Metadata.emptyMetadata
+
+      allocationInstruction_withdrawImpl self arg = do
+        let TestTokenAllocationInstruction{..} = this
+        -- Sender withdraws instruction - return holdings
+        holdingViews <- mapA (\cid -> do
+          holding <- fetch (coerceContractId @Token.Holding.Holding cid)
+          return (view (holding : Token.Holding.Holding))
+          ) inputHoldingCids
+
+        -- Archive old holdings
+        forA_ inputHoldingCids archive
+
+        -- Recreate holdings for sender
+        senderCids <- mapA (\holdingView -> do
+          cid <- create TestToken with
+            owner = allocation.transferLeg.sender
+            instrumentAdmin = allocation.transferLeg.instrumentId.admin
+            amount = holdingView.amount
+            instrumentId = allocation.transferLeg.instrumentId.id
+            lock = None
+            metadata = holdingView.meta.values
+          return (toInterfaceContractId @Token.Holding.Holding cid)
+          ) holdingViews
+
+        return Token.AllocInstruction.AllocationInstructionResult with
+          output = Token.AllocInstruction.AllocationInstructionResult_Failed
+          senderChangeCids = senderCids
+          meta = Token.Metadata.emptyMetadata
+
+      allocationInstruction_updateImpl self arg = do
+        let TestTokenAllocationInstruction{..} = this
+        -- Admin updates instruction state for internal workflows
+        if null arg.extraActors && Map.null pendingActions
+          then do
+            -- Complete workflow - create allocation
+            allocCid <- create TestTokenAllocation with
+              admin = admin
+              allocation = allocation
+              holdingCids = inputHoldingCids
+
+            return Token.AllocInstruction.AllocationInstructionResult with
+              output = Token.AllocInstruction.AllocationInstructionResult_Completed with
+                allocationCid = toInterfaceContractId @Token.Allocation.Allocation allocCid
+              senderChangeCids = []
+              meta = Token.Metadata.emptyMetadata
+          else do
+            -- Update pending actions
+            let newPendingActions = if null arg.extraActors
+                  then Map.empty
+                  else Map.fromList
+                    [(actor, "Allocation approval required") | actor <- arg.extraActors]
+
+            newInstr <- create this with
+              pendingActions = newPendingActions
+              originalInstructionCid = case originalInstructionCid of
+                Some cid -> Some cid
+                None -> Some (toInterfaceContractId @Token.AllocInstruction.AllocationInstruction self)
+
+            return Token.AllocInstruction.AllocationInstructionResult with
+              output = Token.AllocInstruction.AllocationInstructionResult_Pending with
+                allocationInstructionCid = toInterfaceContractId newInstr
+              senderChangeCids = []
+              meta = Token.Metadata.emptyMetadata
+
+----------------------------------------------------------------------------------------------------
+-- Allocation Factory (DVP Entry Point)
+----------------------------------------------------------------------------------------------------
+
+-- | Factory for creating allocations for DVP settlements.
+template TestTokenAllocationFactory
+  with
+    admin : Party
+      -- ^ The registry admin party.
+  where
+    signatory admin
+
+    interface instance Token.AllocInstruction.AllocationFactory for TestTokenAllocationFactory where
+      view = Token.AllocInstruction.AllocationFactoryView with
+        admin = admin
+        meta = Token.Metadata.emptyMetadata
+
+      allocationFactory_allocateImpl self arg = do
+        -- Validate expectedAdmin matches
+        assertMsg "Expected admin mismatch" (arg.expectedAdmin == admin)
+        assertMsg "Instrument admin mismatch"
+          (arg.allocation.transferLeg.instrumentId.admin == admin)
+
+        -- Validate settlement deadlines
+        assertMsg "allocateBefore must be before settleBefore"
+          (arg.allocation.settlement.allocateBefore < arg.allocation.settlement.settleBefore)
+
+        -- Validate requestedAt is in the past
+        now <- getTime
+        assertMsg "requestedAt must be in the past" (arg.requestedAt <= now)
+
+        if null arg.inputHoldingCids
+          then do
+            -- No holdings provided - create allocation instruction for later funding
+            instrCid <- create TestTokenAllocationInstruction with
+              admin = admin
+              allocation = arg.allocation
+              inputHoldingCids = arg.inputHoldingCids
+              requestedAt = arg.requestedAt
+              pendingActions = Map.fromList
+                [(arg.allocation.transferLeg.sender, "Provide holdings for allocation")]
+              originalInstructionCid = None
+
+            return Token.AllocInstruction.AllocationInstructionResult with
+              output = Token.AllocInstruction.AllocationInstructionResult_Pending with
+                allocationInstructionCid = toInterfaceContractId instrCid
+              senderChangeCids = []
+              meta = Token.Metadata.emptyMetadata
+          else do
+            -- Holdings provided - validate and create allocation directly
+            -- Fetch and validate holdings
+            holdingViews <- mapA (\cid -> do
+              holding <- fetch (coerceContractId @Token.Holding.Holding cid)
+              return (view (holding : Token.Holding.Holding))
+              ) arg.inputHoldingCids
+
+            -- Validate holdings
+            forA_ holdingViews $ \holdingView -> do
+              assertMsg "Input holding owner must be sender"
+                (holdingView.owner == arg.allocation.transferLeg.sender)
+              assertMsg "Input holding instrument mismatch"
+                (holdingView.instrumentId == arg.allocation.transferLeg.instrumentId)
+
+              -- Validate lock status
+              case holdingView.lock of
+                None -> pure ()
+                Some lockInfo -> do
+                  let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
+                        (Some absTime, _) -> now >= absTime
+                        (_, _) -> False
+                  assertMsg ("Cannot allocate locked holding. Context: " <> optional "" (\c -> c) lockInfo.context)
+                    isExpired
+
+            -- Calculate total input
+            let totalInput = sum $ map (\v -> v.amount) holdingViews
+
+            -- Validate sufficient funds
+            assertMsg "Insufficient input holdings for allocation amount"
+              (totalInput >= arg.allocation.transferLeg.amount)
+
+            -- Archive input holdings
+            forA_ arg.inputHoldingCids archive
+
+            -- Create change if needed
+            changeCids <- if totalInput > arg.allocation.transferLeg.amount
+              then do
+                changeCid <- create TestToken with
+                  owner = arg.allocation.transferLeg.sender
+                  instrumentAdmin = admin
+                  amount = totalInput - arg.allocation.transferLeg.amount
+                  instrumentId = arg.allocation.transferLeg.instrumentId.id
+                  lock = None
+                  metadata = TextMap.fromList
+                    [("splice.lfdecentralizedtrust.org/allocation-change", "true")]
+                return [toInterfaceContractId @Token.Holding.Holding changeCid]
+              else return []
+
+            -- Create allocation directly
+            allocCid <- create TestTokenAllocation with
+              admin = admin
+              allocation = arg.allocation
+              holdingCids = arg.inputHoldingCids
+
+            return Token.AllocInstruction.AllocationInstructionResult with
+              output = Token.AllocInstruction.AllocationInstructionResult_Completed with
+                allocationCid = toInterfaceContractId @Token.Allocation.Allocation allocCid
+              senderChangeCids = changeCids
+              meta = Token.Metadata.emptyMetadata
+
+      allocationFactory_publicFetchImpl self arg = do
+        assertMsg "Expected admin mismatch" (arg.expectedAdmin == admin)
+        return Token.AllocInstruction.AllocationFactoryView with
+          admin = admin
+          meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
 -- Helper Functions

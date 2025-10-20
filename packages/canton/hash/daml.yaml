@@ -16,6 +16,7 @@ data-dependencies:
   - ../../../../Tests/canton/splice-node/dars/splice-api-token-transfer-instruction-v1-current.dar
   - ../../../../Tests/canton/splice-node/dars/splice-api-token-burn-mint-v1-current.dar
   - ../../../../Tests/canton/splice-node/dars/splice-api-token-allocation-v1-current.dar
+  - ../../../../Tests/canton/splice-node/dars/splice-api-token-allocation-instruction-v1-current.dar
   - ../../../../Tests/canton/splice-node/dars/splice-api-featured-app-v1-1.0.0.dar
 build-options:
   - -Wno-crypto-text-is-alpha
