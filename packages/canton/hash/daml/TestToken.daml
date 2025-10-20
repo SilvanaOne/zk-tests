@@ -14,6 +14,7 @@ import Splice.Api.Token.HoldingV1 qualified as Token.Holding
 import Splice.Api.Token.TransferInstructionV1 qualified as Token.Transfer
 import Splice.Api.Token.BurnMintV1 qualified as Token.BurnMint
 import DA.TextMap qualified as TextMap
+import DA.Map qualified as Map
 import DA.Foldable (forA_)
 import DA.Time (RelTime)
 
@@ -275,13 +276,48 @@ template TestTokenTransferInstruction
           meta = Token.Metadata.emptyMetadata
 
       transferInstruction_updateImpl self arg = do
-        -- Admin can update the transfer state
-        -- For this simple implementation, we don't support internal workflows
-        return Token.Transfer.TransferInstructionResult with
-          output = Token.Transfer.TransferInstructionResult_Pending with
-            transferInstructionCid = toInterfaceContractId @Token.Transfer.TransferInstruction self
-          senderChangeCids = []
-          meta = Token.Metadata.emptyMetadata
+        -- Admin can update the transfer state for internal workflows
+        -- Supports transitions between pending states
+        case status of
+          Token.Transfer.TransferPendingReceiverAcceptance -> do
+            -- Transition to internal workflow state
+            -- This is used when registry needs internal approvals (e.g., compliance, AML)
+            newInstr <- create this with
+              status = Token.Transfer.TransferPendingInternalWorkflow with
+                pendingActions = Map.fromList
+                  [(actor, "Internal compliance review required") | actor <- arg.extraActors]
+              originalInstructionCid = case originalInstructionCid of
+                Some cid -> Some cid  -- Preserve original
+                None -> Some (toInterfaceContractId @Token.Transfer.TransferInstruction self)
+
+            return Token.Transfer.TransferInstructionResult with
+              output = Token.Transfer.TransferInstructionResult_Pending with
+                transferInstructionCid = toInterfaceContractId newInstr
+              senderChangeCids = []
+              meta = Token.Metadata.emptyMetadata
+
+          Token.Transfer.TransferPendingInternalWorkflow pendingActions -> do
+            -- Complete internal workflow and return to receiver acceptance
+            -- or advance to another internal state
+            let updatedActions = if null arg.extraActors
+                  then Map.empty  -- Clear all pending actions
+                  else Map.fromList
+                    [(actor, "Additional review required") | actor <- arg.extraActors]
+
+            let newStatus = if Map.null updatedActions
+                  then Token.Transfer.TransferPendingReceiverAcceptance  -- Back to receiver acceptance
+                  else Token.Transfer.TransferPendingInternalWorkflow with
+                    pendingActions = updatedActions
+
+            newInstr <- create this with
+              status = newStatus
+              originalInstructionCid = originalInstructionCid  -- Preserve lineage
+
+            return Token.Transfer.TransferInstructionResult with
+              output = Token.Transfer.TransferInstructionResult_Pending with
+                transferInstructionCid = toInterfaceContractId newInstr
+              senderChangeCids = []
+              meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
 -- Mint Request (Propose-Accept Pattern)
