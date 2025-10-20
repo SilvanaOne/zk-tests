@@ -28,8 +28,8 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test-build    - Build the CIP-56 compliance test suite"
-	@echo "  make test          - Build and run all CIP-56 compliance tests (simulated ledger)"
-	@echo "  make localnet-test - Build and run all tests against Canton localnet"
+	@echo "  make test          - Build and run basic tests (simulated ledger, offline)"
+	@echo "  make localnet-test - Build and run full test suite (requires Canton localnet)"
 	@echo ""
 	@echo "Package Management:"
 	@echo "  make upload [DAR_FILE=<path>]  - Upload DAR to both user and provider nodes"
@@ -79,7 +79,9 @@ test-build:
 	@cd tests && daml build
 
 # Run all CIP-56 compliance tests (simulated ledger - no Canton node required)
-# Note: IDE ledger has limitations with multi-party submissions (submitMulti)
+# Note: IDE ledger has known limitations:
+#   - Contract visibility issues with multi-signatory templates in complex workflows
+#   - For full test coverage, use 'make localnet-test' instead
 test: build test-build
 	@echo "========================================="
 	@echo "TestToken CIP-56 Compliance Test Suite"

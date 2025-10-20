@@ -98,13 +98,17 @@ template TestToken
 
     -- | Merge multiple holdings into a single holding to prevent UTXO fragmentation.
     -- Helps mitigate griefing attacks where malicious actors create many small holdings.
+    -- Note: Requires admin authority since creating a new holding needs both owner and admin signatures.
+    -- In production, this would be exposed via a registry/factory pattern (like AmuletRules).
     choice MergeHoldings : ContractId TestToken
       with
         otherHoldingCids : [ContractId TestToken]
-      controller owner
+        admin : Party  -- Admin must authorize to create the merged holding
+      controller owner, admin
       do
         -- Validate this holding is unlocked
         assertMsg "Cannot merge locked holdings" (isNone lock)
+        assertMsg "Admin must match instrumentAdmin" (admin == instrumentAdmin)
 
         -- Fetch and validate other holdings
         otherHoldings <- mapA fetch otherHoldingCids

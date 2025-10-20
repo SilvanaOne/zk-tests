@@ -26,7 +26,7 @@ testBasicTransfer = script do
   now <- getCurrentTime
 
   -- Bob has tokens
-  bobHolding <- mintTokens admin bob 100.0 defaultInstrumentId
+  bobHolding <- mintTokens admin factories.burnMintFactoryCid bob 100.0
 
   -- Create transfer from Bob to Alice
   let transfer = Token.Transfer.Transfer with

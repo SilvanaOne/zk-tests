@@ -85,24 +85,21 @@ setupFactories admin instrumentId = do
 -- Token Minting Utilities
 ----------------------------------------------------------------------------------------------------
 
--- | Mint tokens directly to a party (bypasses propose-accept pattern for testing).
-mintTokens : Party -> Party -> Decimal -> Text -> Script (ContractId TestToken)
-mintTokens admin receiver amount instrumentId = do
-  submitMulti [admin, receiver] [] $ createCmd TestToken with
-    owner = receiver
-    instrumentAdmin = admin
+-- | Mint tokens to a party using the propose-accept pattern.
+-- This works with IDE ledger mode (--ide-ledger) without requiring submitMulti.
+mintTokens : Party -> ContractId TestTokenBurnMintFactory -> Party -> Decimal -> Script (ContractId TestToken)
+mintTokens admin burnMintFactoryCid receiver amount = do
+  -- Admin proposes mint
+  requestCid <- submit admin $ exerciseCmd burnMintFactoryCid ProposeMint with
+    receiver
     amount
-    instrumentId
-    lock = None
-    metadata = TextMap.fromList
-      [ ("test/minted-for", "test-setup")
-      , ("test/receiver", show receiver)
-      ]
+  -- Receiver accepts
+  submit receiver $ exerciseCmd requestCid Accept
 
 -- | Mint multiple token holdings for a party.
-mintTokensMultiple : Party -> Party -> [Decimal] -> Text -> Script [ContractId TestToken]
-mintTokensMultiple admin receiver amounts instrumentId =
-  mapA (\amt -> mintTokens admin receiver amt instrumentId) amounts
+mintTokensMultiple : Party -> ContractId TestTokenBurnMintFactory -> Party -> [Decimal] -> Script [ContractId TestToken]
+mintTokensMultiple admin burnMintFactoryCid receiver amounts =
+  mapA (\amt -> mintTokens admin burnMintFactoryCid receiver amt) amounts
 
 ----------------------------------------------------------------------------------------------------
 -- Assertion Utilities
