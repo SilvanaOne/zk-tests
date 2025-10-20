@@ -159,11 +159,12 @@ template TestTokenTransferFactory
               case holdingView.lock of
                 None -> pure ()
                 Some lockInfo -> do
-                  let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
-                        (Some absTime, _) -> now >= absTime
-                        (_, _) -> False
-                  assertMsg ("Cannot use locked holding in transfer. Context: " <> optional "" (\c -> c) lockInfo.context)
-                    isExpired
+                  let expired = isLockExpired now lockInfo
+                  assertMsg ("Cannot use locked holding in transfer. Context: " <>
+                             optional "none" (\c -> c) lockInfo.context <>
+                             ". Expires at: " <> show lockInfo.expiresAt <>
+                             ". Current time: " <> show now)
+                    expired
 
             -- Calculate total input
             let totalInput = sum $ map (\v -> v.amount) holdingViews
@@ -184,7 +185,7 @@ template TestTokenTransferFactory
                   amount = totalInput - transfer.amount
                   instrumentId = instrId.id
                   lock = None
-                  metadata = transfer.meta.values
+                  metadata = createStandardMetadata "transfer-change" transfer.meta.values now
                 return [toInterfaceContractId @Token.Holding.Holding changeCid]
               else return []
 
@@ -243,6 +244,7 @@ template TestTokenTransferInstruction
 
         -- Holdings were already archived by TransferFactory, change already created
         -- Just create receiver holding to complete the transfer
+        now <- getTime
 
         -- Create receiver holding (without lock - new holdings start unlocked)
         receiverCid <- create TestToken with
@@ -251,7 +253,7 @@ template TestTokenTransferInstruction
           amount = transfer.amount
           instrumentId = transfer.instrumentId.id
           lock = None  -- New holdings from transfers start unlocked
-          metadata = transfer.meta.values
+          metadata = createStandardMetadata "transfer-accept" transfer.meta.values now
 
         return Token.Transfer.TransferInstructionResult with
           output = Token.Transfer.TransferInstructionResult_Completed with
@@ -837,11 +839,12 @@ template TestTokenAllocationFactory
               case holdingView.lock of
                 None -> pure ()
                 Some lockInfo -> do
-                  let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
-                        (Some absTime, _) -> now >= absTime
-                        (_, _) -> False
-                  assertMsg ("Cannot allocate locked holding. Context: " <> optional "" (\c -> c) lockInfo.context)
-                    isExpired
+                  let expired = isLockExpired now lockInfo
+                  assertMsg ("Cannot allocate locked holding. Context: " <>
+                             optional "none" (\c -> c) lockInfo.context <>
+                             ". Expires at: " <> show lockInfo.expiresAt <>
+                             ". Current time: " <> show now)
+                    expired
 
             -- Calculate total input
             let totalInput = sum $ map (\v -> v.amount) holdingViews
@@ -889,6 +892,21 @@ template TestTokenAllocationFactory
 -- Helper Functions
 ----------------------------------------------------------------------------------------------------
 
+-- | Create standard metadata for a newly created holding.
+createStandardMetadata : Text -> TextMap.TextMap Text -> Time -> TextMap.TextMap Text
+createStandardMetadata source existingMeta now =
+  TextMap.union existingMeta (TextMap.fromList
+    [ ("splice.lfdecentralizedtrust.org/created-from", source)
+    , ("splice.lfdecentralizedtrust.org/created-at", show now)
+    ])
+
+-- | Check if a lock has expired based on current time.
+isLockExpired : Time -> Token.Holding.Lock -> Bool
+isLockExpired now lock = case (lock.expiresAt, lock.expiresAfter) of
+  (Some absTime, _) -> now >= absTime  -- Absolute time takes precedence
+  (None, Some _) -> False  -- Relative expiry not fully supported without creation timestamp
+  (None, None) -> False  -- No expiry means never expires
+
 -- | Archive holdings and return the total amount, validating locks.
 archiveAndSumHoldings : [ContractId Token.Holding.Holding] -> Update Decimal
 archiveAndSumHoldings cids = do
@@ -902,12 +920,13 @@ archiveAndSumHoldings cids = do
         None -> pure ()  -- No lock, can proceed
         Some lockInfo -> do
           -- Check if lock has expired (CIP-56 allows using expired locks)
-          let isExpired = case (lockInfo.expiresAt, lockInfo.expiresAfter) of
-                (Some absTime, _) -> now >= absTime
-                (_, _) -> False  -- If no absolute expiry, consider not expired
+          let expired = isLockExpired now lockInfo
 
-          assertMsg ("Cannot use locked holding (lock not expired). Context: " <> show lockInfo.context)
-            isExpired
+          assertMsg ("Cannot use locked holding (lock not expired). Context: " <>
+                     optional "none" (\c -> c) lockInfo.context <>
+                     ". Expires at: " <> show lockInfo.expiresAt <>
+                     ". Current time: " <> show now)
+            expired
 
       archive cid
       return holdingView.amount
