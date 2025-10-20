@@ -89,19 +89,6 @@ template TestToken
             assertMsg "Lock has not expired yet" (now >= expiryTime)
             create this with lock = None
 
-    -- | Update lock parameters (requires authorization from current lock holders).
-    choice UpdateLock : ContractId TestToken
-      with
-        updatedLock : Token.Holding.Lock
-        authorizer : Party
-      controller authorizer
-      do
-        case lock of
-          None -> error "No lock to update"
-          Some currentLock -> do
-            assertMsg "Authorizer must be a current lock holder"
-              (authorizer `elem` currentLock.holders)
-            create this with lock = Some updatedLock
 
 ----------------------------------------------------------------------------------------------------
 -- Transfer Factory
