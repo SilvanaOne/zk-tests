@@ -21,6 +21,9 @@ import DA.TextMap qualified as TextMap
 import DA.Map qualified as Map
 import DA.Foldable (forA_)
 import DA.Time (RelTime)
+import DA.Text (isInfixOf)
+import DA.Text qualified as Text
+import DA.Optional (isNone)
 
 ----------------------------------------------------------------------------------------------------
 -- Holding Template
@@ -76,18 +79,54 @@ template TestToken
       controller owner
       do
         case lock of
-          None -> error "No lock to unlock"
+          None -> abort "No lock to unlock"
           Some currentLock -> do
+            -- Validate lock has expiry information
+            case (currentLock.expiresAt, currentLock.expiresAfter) of
+              (None, Some _) -> abort "Relative expiry not yet supported in unlock"
+              (None, None) -> abort "Lock has no expiry"
+              _ -> pure ()
+
             -- Check if lock is expired
             now <- getTime
-            let expiryTime = case (currentLock.expiresAt, currentLock.expiresAfter) of
-                  (Some absTime, None) -> absTime
-                  (None, Some _) -> error "Relative expiry not yet supported in unlock"
-                  (Some absTime, Some _) -> absTime  -- Use absolute time if both set
-                  (None, None) -> error "Lock has no expiry"
+            let expiryTime = case currentLock.expiresAt of
+                  Some absTime -> absTime
+                  None -> error "Lock expiry validation failed"  -- Should not reach here
 
             assertMsg "Lock has not expired yet" (now >= expiryTime)
             create this with lock = None
+
+    -- | Merge multiple holdings into a single holding to prevent UTXO fragmentation.
+    -- Helps mitigate griefing attacks where malicious actors create many small holdings.
+    choice MergeHoldings : ContractId TestToken
+      with
+        otherHoldingCids : [ContractId TestToken]
+      controller owner
+      do
+        -- Validate this holding is unlocked
+        assertMsg "Cannot merge locked holdings" (isNone lock)
+
+        -- Fetch and validate other holdings
+        otherHoldings <- mapA fetch otherHoldingCids
+        forA_ otherHoldings $ \other -> do
+          assertMsg "All holdings must have the same owner" (other.owner == owner)
+          assertMsg "All holdings must have the same instrument admin" (other.instrumentAdmin == instrumentAdmin)
+          assertMsg "All holdings must have the same instrument ID" (other.instrumentId == instrumentId)
+          assertMsg "Cannot merge locked holdings" (isNone other.lock)
+
+        -- Archive all holdings including this one
+        archive self
+        forA_ otherHoldingCids archive
+
+        -- Calculate total amount
+        let totalAmount = amount + sum (map (\h -> h.amount) otherHoldings)
+
+        -- Create merged holding
+        now <- getTime
+        create this with
+          amount = totalAmount
+          lock = None
+          metadata = createStandardMetadata "merge-holdings" metadata now
 
 
 ----------------------------------------------------------------------------------------------------
@@ -879,13 +918,29 @@ template TestTokenAllocationFactory
 -- Helper Functions
 ----------------------------------------------------------------------------------------------------
 
+-- | Validate metadata to prevent bloat and ensure proper format.
+-- Checks metadata size limits and key format.
+validateMetadata : TextMap.TextMap Text -> Bool
+validateMetadata meta =
+  TextMap.size meta <= 20 &&
+  all (\(k, v) -> ("." `isInfixOf` k) || Text.length k < 50) (TextMap.toList meta) &&
+  all (\(_, v) -> Text.length v <= 500) (TextMap.toList meta)
+
 -- | Create standard metadata for a newly created holding.
+-- Validates metadata before merging to ensure security.
 createStandardMetadata : Text -> TextMap.TextMap Text -> Time -> TextMap.TextMap Text
 createStandardMetadata source existingMeta now =
-  TextMap.union existingMeta (TextMap.fromList
-    [ ("splice.lfdecentralizedtrust.org/created-from", source)
-    , ("splice.lfdecentralizedtrust.org/created-at", show now)
-    ])
+  let
+    standardFields = TextMap.fromList
+      [ ("splice.lfdecentralizedtrust.org/created-from", source)
+      , ("splice.lfdecentralizedtrust.org/created-at", show now)
+      ]
+    merged = TextMap.union existingMeta standardFields
+  in
+    -- Validate before returning
+    if validateMetadata merged
+      then merged
+      else standardFields  -- Fall back to just standard fields if validation fails
 
 -- | Check if a lock has expired based on current time.
 isLockExpired : Time -> Token.Holding.Lock -> Bool
