@@ -6,6 +6,7 @@
 -- This module implements a complete CIP-56 compliant token with:
 -- - HoldingV1: Balance representation with lock support
 -- - TransferFactory + TransferInstruction: P2P transfers (FOP - Free of Payment)
+-- - TransferPreapproval: Instant payments without receiver signature (Amulet-inspired)
 -- - AllocationFactory + AllocationInstruction + Allocation: DVP settlements (Delivery vs Payment)
 -- - BurnMintFactory: Token issuance and redemption
 -- - LockFactory: Holding lock management for escrow and DVP
@@ -132,12 +133,156 @@ template TestToken
           lock = None
           metadata = createStandardMetadata "merge-holdings" metadata now
 
+----------------------------------------------------------------------------------------------------
+-- Transfer Pre-approval (Amulet-inspired pattern for instant payments)
+----------------------------------------------------------------------------------------------------
+
+-- | Result types for transfer pre-approval operations
+data TransferPreapproval_UseResult = TransferPreapproval_UseResult with
+    receiverHoldingCid : ContractId TestToken
+      -- ^ The holding created for the receiver
+    senderChangeCid : Optional (ContractId TestToken)
+      -- ^ Change holding returned to sender (if any)
+  deriving (Eq, Show)
+
+data TransferPreapproval_RenewResult = TransferPreapproval_RenewResult with
+    newPreapprovalCid : ContractId TestTokenTransferPreapproval
+      -- ^ The renewed pre-approval contract
+  deriving (Eq, Show)
+
+data TransferPreapproval_CancelResult = TransferPreapproval_CancelResult
+  deriving (Eq, Show)
+
+-- | A pre-approval by a receiver to accept token transfers from any sender without signature.
+--
+-- This enables instant payments and is inspired by Amulet's TransferPreapproval pattern.
+-- Pre-approvals can be self-managed (provider = receiver) or managed by an app provider.
+--
+-- Unlike Amulet, TestToken pre-approvals:
+-- - Do not require fee burning (no economic cost for indexing)
+-- - Use admin party instead of DSO party
+-- - Are simpler without reward coupon integration
+template TestTokenTransferPreapproval
+  with
+    receiver : Party
+      -- ^ The party that will receive transfers via this pre-approval.
+    provider : Party
+      -- ^ The party managing this pre-approval (can be same as receiver for self-managed).
+    admin : Party
+      -- ^ The registry admin party.
+    instrumentId : Text
+      -- ^ The instrument ID for this token.
+    validFrom : Time
+      -- ^ When this pre-approval becomes valid.
+    lastRenewedAt : Time
+      -- ^ When this pre-approval was last renewed (equals validFrom on creation).
+    expiresAt : Time
+      -- ^ When this pre-approval expires.
+    metadata : TextMap.TextMap Text
+      -- ^ Additional metadata for tracking.
+  where
+    signatory receiver, provider, admin
+
+    ensure expiresAt > validFrom && lastRenewedAt >= validFrom
+
+    -- | Use the pre-approval to transfer tokens instantly.
+    -- Any party can use this to send tokens to the receiver.
+    choice UsePreapproval : TransferPreapproval_UseResult
+      with
+        sender : Party
+          -- ^ The party sending tokens.
+        senderHoldingCid : ContractId TestToken
+          -- ^ The sender's holding to use for payment.
+        amount : Decimal
+          -- ^ The amount to transfer.
+        transferContext : TextMap.TextMap Text
+          -- ^ Additional context for this transfer.
+      controller sender
+      do
+        -- Validate timing
+        now <- getTime
+        assertMsg "Pre-approval not yet valid" (now >= validFrom)
+        assertMsg "Pre-approval has expired" (now < expiresAt)
+
+        -- Fetch and validate sender's holding
+        senderHolding <- fetch senderHoldingCid
+        assertMsg "Sender must own the holding" (senderHolding.owner == sender)
+        assertMsg "Instrument ID mismatch" (senderHolding.instrumentId == instrumentId)
+        assertMsg "Admin mismatch" (senderHolding.instrumentAdmin == admin)
+        assertMsg "Holding must not be locked" (isNone senderHolding.lock)
+        assertMsg "Insufficient balance" (senderHolding.amount >= amount)
+
+        -- Archive sender's holding
+        archive senderHoldingCid
+
+        -- Create receiver's holding
+        receiverCid <- create TestToken with
+          owner = receiver
+          instrumentAdmin = admin
+          amount = amount
+          instrumentId = instrumentId
+          lock = None
+          metadata = TextMap.union transferContext $
+            TextMap.insert "splice.lfdecentralizedtrust.org/transfer-type" "preapproval-instant" $
+            TextMap.insert "splice.lfdecentralizedtrust.org/timestamp" (show now) metadata
+
+        -- Create change holding for sender if needed
+        changeCidOpt <- if senderHolding.amount > amount
+          then do
+            changeCid <- create TestToken with
+              owner = sender
+              instrumentAdmin = admin
+              amount = senderHolding.amount - amount
+              instrumentId = instrumentId
+              lock = None
+              metadata = createStandardMetadata "preapproval-change" transferContext now
+            return (Some changeCid)
+          else return None
+
+        return TransferPreapproval_UseResult with
+          receiverHoldingCid = receiverCid
+          senderChangeCid = changeCidOpt
+
+    -- | Renew the pre-approval to extend its expiry.
+    choice RenewPreapproval : TransferPreapproval_RenewResult
+      with
+        newExpiresAt : Time
+          -- ^ The new expiry time (must be after current expiry).
+      controller provider
+      do
+        now <- getTime
+        assertMsg "Pre-approval has already expired" (now < expiresAt)
+        assertMsg "New expiry must be after current expiry" (newExpiresAt > expiresAt)
+
+        -- Create renewed pre-approval
+        newCid <- create this with
+          lastRenewedAt = now
+          expiresAt = newExpiresAt
+          metadata = TextMap.insert "splice.lfdecentralizedtrust.org/renewed-at" (show now) metadata
+
+        return TransferPreapproval_RenewResult with
+          newPreapprovalCid = newCid
+
+    -- | Cancel the pre-approval before expiry.
+    -- Can be called by either receiver or provider.
+    choice CancelPreapproval : TransferPreapproval_CancelResult
+      with
+        canceller : Party
+          -- ^ The party cancelling (must be receiver or provider).
+      controller canceller
+      do
+        assertMsg "Only receiver or provider can cancel"
+          (canceller == receiver || canceller == provider)
+        return TransferPreapproval_CancelResult
 
 ----------------------------------------------------------------------------------------------------
 -- Transfer Factory
 ----------------------------------------------------------------------------------------------------
 
 -- | Factory for creating transfer instructions between parties.
+--
+-- Note: For instant payments without receiver signature, use TestTokenTransferPreapproval instead.
+-- This factory creates standard CIP-56 transfer instructions that require receiver acceptance.
 template TestTokenTransferFactory
   with
     admin : Party
@@ -356,6 +501,55 @@ template TestTokenTransferInstruction
               meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
+-- Transfer Pre-approval Factory
+----------------------------------------------------------------------------------------------------
+
+-- | Factory for creating transfer pre-approvals.
+-- This enables receivers to pre-approve incoming transfers for instant payments.
+template TestTokenTransferPreapprovalFactory
+  with
+    admin : Party
+      -- ^ The registry admin party.
+  where
+    signatory admin
+
+    -- | Create a new transfer pre-approval.
+    -- Requires authorization from both receiver and provider.
+    nonconsuming choice CreateTransferPreapproval : ContractId TestTokenTransferPreapproval
+      with
+        receiver : Party
+          -- ^ The party that will receive transfers.
+        provider : Party
+          -- ^ The party managing the pre-approval (can be same as receiver).
+        instrumentId : Text
+          -- ^ The instrument ID for this token.
+        expiresAt : Time
+          -- ^ When this pre-approval expires.
+        preapprovalMetadata : TextMap.TextMap Text
+          -- ^ Additional metadata for the pre-approval.
+        expectedAdmin : Optional Party
+          -- ^ Expected admin party (security: prevents delegation attacks).
+      controller receiver, provider
+      do
+        checkExpectedAdmin admin expectedAdmin
+        now <- getTime
+        assertMsg "Expiry must be in the future" (expiresAt > now)
+
+        create TestTokenTransferPreapproval with
+          receiver
+          provider
+          admin
+          instrumentId
+          validFrom = now
+          lastRenewedAt = now
+          expiresAt
+          metadata = TextMap.union preapprovalMetadata $
+            TextMap.fromList
+              [ ("splice.lfdecentralizedtrust.org/created-at", show now)
+              , ("splice.lfdecentralizedtrust.org/instrument-id", instrumentId)
+              ]
+
+----------------------------------------------------------------------------------------------------
 -- Mint Request (Propose-Accept Pattern)
 ----------------------------------------------------------------------------------------------------
 
@@ -425,8 +619,11 @@ template TestTokenBurnMintFactory
       with
         receiver : Party
         amount : Decimal
+        expectedAdmin : Optional Party
+          -- ^ Expected admin party (security: prevents delegation attacks).
       controller admin
       do
+        checkExpectedAdmin admin expectedAdmin
         create TestTokenMintRequest with
           admin
           receiver
@@ -527,8 +724,11 @@ template TestTokenLockFactory
         expiresAt : Optional Time
         expiresAfter : Optional RelTime
         context : Optional Text
+        expectedAdmin : Optional Party
+          -- ^ Expected admin party (security: prevents delegation attacks).
       controller admin
       do
+        checkExpectedAdmin admin expectedAdmin
         -- Fetch the holding
         holding <- fetch holdingCid
 
@@ -556,8 +756,11 @@ template TestTokenLockFactory
     nonconsuming choice ReleaseExpiredLock : ContractId TestToken
       with
         holdingCid : ContractId TestToken
+        expectedAdmin : Optional Party
+          -- ^ Expected admin party (security: prevents delegation attacks).
       controller admin
       do
+        checkExpectedAdmin admin expectedAdmin
         -- Fetch the holding
         holding <- fetch holdingCid
 
@@ -585,8 +788,11 @@ template TestTokenLockFactory
       with
         holdingCid : ContractId TestToken
         reason : Text
+        expectedAdmin : Optional Party
+          -- ^ Expected admin party (security: prevents delegation attacks).
       controller admin
       do
+        checkExpectedAdmin admin expectedAdmin
         -- Fetch the holding
         holding <- fetch holdingCid
 
@@ -921,6 +1127,20 @@ template TestTokenAllocationFactory
 ----------------------------------------------------------------------------------------------------
 -- Helper Functions
 ----------------------------------------------------------------------------------------------------
+
+-- | Validate that the expected admin matches the actual admin.
+-- This prevents malicious delegation attacks where a fake factory
+-- is substituted for the real one.
+--
+-- Inspired by Amulet's checkExpectedDso pattern. Users must explicitly specify
+-- which admin party they expect to prevent accidental use of malicious factories.
+checkExpectedAdmin : Party -> Optional Party -> Update ()
+checkExpectedAdmin actualAdmin optExpectedAdmin =
+  case optExpectedAdmin of
+    None -> abort "Expected admin not set by caller. Set expectedAdmin = Some <admin> as a security measure to prevent delegation attacks."
+    Some expectedAdmin ->
+      assertMsg ("Expected admin " <> show expectedAdmin <> " does not match actual admin " <> show actualAdmin)
+        (actualAdmin == expectedAdmin)
 
 -- | Validate metadata to prevent bloat and ensure proper format.
 -- Checks metadata size limits and key format.
