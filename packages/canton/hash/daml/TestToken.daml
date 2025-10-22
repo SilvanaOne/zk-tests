@@ -10,6 +10,12 @@
 -- - AllocationFactory + AllocationInstruction + Allocation: DVP settlements (Delivery vs Payment)
 -- - BurnMintFactory: Token issuance and redemption
 -- - LockFactory: Holding lock management for escrow and DVP
+--
+-- METADATA CONVENTIONS:
+-- - CIP-56 standard keys use 'splice.lfdecentralizedtrust.org/' prefix
+--   (only: lock-context, reason, registry-urls)
+-- - TestToken custom keys use 'testtoken.silvana.com/' prefix
+--   (follows CIP-56 guidance for implementation-specific metadata)
 module TestToken where
 
 import Splice.Api.Token.MetadataV1 qualified as Token.Metadata
@@ -223,8 +229,8 @@ template TestTokenTransferPreapproval
           instrumentId = instrumentId
           lock = None
           metadata = TextMap.union transferContext $
-            TextMap.insert "splice.lfdecentralizedtrust.org/transfer-type" "preapproval-instant" $
-            TextMap.insert "splice.lfdecentralizedtrust.org/timestamp" (show now) metadata
+            TextMap.insert transferTypeMetaKey "preapproval-instant" $
+            TextMap.insert timestampMetaKey (show now) metadata
 
         -- Create change holding for sender if needed
         changeCidOpt <- if senderHolding.amount > amount
@@ -258,7 +264,7 @@ template TestTokenTransferPreapproval
         newCid <- create this with
           lastRenewedAt = now
           expiresAt = newExpiresAt
-          metadata = TextMap.insert "splice.lfdecentralizedtrust.org/renewed-at" (show now) metadata
+          metadata = TextMap.insert renewedAtMetaKey (show now) metadata
 
         return TransferPreapproval_RenewResult with
           newPreapprovalCid = newCid
@@ -442,19 +448,25 @@ template TestTokenTransferInstruction
           Token.Transfer.TransferPendingReceiverAcceptance -> pure ()
           _ -> abort "Transfer is not pending receiver acceptance"
 
+        -- Extract reason per CIP-56 standard
+        let reason = extractReasonFromMetadata arg.extraArgs.meta
+
         -- Return holdings to sender (no-op for this simple implementation)
         return Token.Transfer.TransferInstructionResult with
           output = Token.Transfer.TransferInstructionResult_Failed
           senderChangeCids = []
-          meta = Token.Metadata.emptyMetadata
+          meta = includeReasonInMetadata reason
 
       transferInstruction_withdrawImpl self arg = do
         -- Sender can always withdraw
+        -- Extract reason per CIP-56 standard
+        let reason = extractReasonFromMetadata arg.extraArgs.meta
+
         -- Return holdings to sender (no-op for this simple implementation)
         return Token.Transfer.TransferInstructionResult with
           output = Token.Transfer.TransferInstructionResult_Failed
           senderChangeCids = []
-          meta = Token.Metadata.emptyMetadata
+          meta = includeReasonInMetadata reason
 
       transferInstruction_updateImpl self arg = do
         -- Admin can update the transfer state for internal workflows
@@ -545,8 +557,8 @@ template TestTokenTransferPreapprovalFactory
           expiresAt
           metadata = TextMap.union preapprovalMetadata $
             TextMap.fromList
-              [ ("splice.lfdecentralizedtrust.org/created-at", show now)
-              , ("splice.lfdecentralizedtrust.org/instrument-id", instrumentId)
+              [ (createdAtMetaKey, show now)
+              , (instrumentIdMetaKey, instrumentId)
               ]
 
 ----------------------------------------------------------------------------------------------------
@@ -848,8 +860,8 @@ template TestTokenAllocation
           instrumentId = allocation.transferLeg.instrumentId.id
           lock = None
           metadata = TextMap.fromList
-            [ ("splice.lfdecentralizedtrust.org/settlement-id", allocation.settlement.settlementRef.id)
-            , ("splice.lfdecentralizedtrust.org/settlement-executor", show allocation.settlement.executor)
+            [ (settlementIdMetaKey, allocation.settlement.settlementRef.id)
+            , (settlementExecutorMetaKey, show allocation.settlement.executor)
             ]
 
         return Token.Allocation.Allocation_ExecuteTransferResult with
@@ -881,9 +893,12 @@ template TestTokenAllocation
           return (toInterfaceContractId @Token.Holding.Holding cid)
           ) holdingViews
 
+        -- Extract reason per CIP-56 standard
+        let reason = extractReasonFromMetadata arg.extraArgs.meta
+
         return Token.Allocation.Allocation_CancelResult with
           senderHoldingCids = senderCids
-          meta = Token.Metadata.emptyMetadata
+          meta = includeReasonInMetadata reason
 
       allocation_withdrawImpl self arg = do
         let TestTokenAllocation{..} = this
@@ -909,9 +924,12 @@ template TestTokenAllocation
           return (toInterfaceContractId @Token.Holding.Holding cid)
           ) holdingViews
 
+        -- Extract reason per CIP-56 standard
+        let reason = extractReasonFromMetadata arg.extraArgs.meta
+
         return Token.Allocation.Allocation_WithdrawResult with
           senderHoldingCids = senderCids
-          meta = Token.Metadata.emptyMetadata
+          meta = includeReasonInMetadata reason
 
 ----------------------------------------------------------------------------------------------------
 -- Allocation Instruction (DVP Request Lifecycle)
@@ -968,10 +986,13 @@ template TestTokenAllocationInstruction
           return (toInterfaceContractId @Token.Holding.Holding cid)
           ) holdingViews
 
+        -- Extract reason per CIP-56 standard
+        let reason = extractReasonFromMetadata arg.extraArgs.meta
+
         return Token.AllocInstruction.AllocationInstructionResult with
           output = Token.AllocInstruction.AllocationInstructionResult_Failed
           senderChangeCids = senderCids
-          meta = Token.Metadata.emptyMetadata
+          meta = includeReasonInMetadata reason
 
       allocationInstruction_updateImpl self arg = do
         let TestTokenAllocationInstruction{..} = this
@@ -1102,7 +1123,7 @@ template TestTokenAllocationFactory
                   instrumentId = arg.allocation.transferLeg.instrumentId.id
                   lock = None
                   metadata = TextMap.fromList
-                    [("splice.lfdecentralizedtrust.org/allocation-change", "true")]
+                    [(allocationChangeMetaKey, "true")]
                 return [toInterfaceContractId @Token.Holding.Holding changeCid]
               else return []
 
@@ -1125,6 +1146,52 @@ template TestTokenAllocationFactory
           meta = Token.Metadata.emptyMetadata
 
 ----------------------------------------------------------------------------------------------------
+-- Metadata Key Constants
+----------------------------------------------------------------------------------------------------
+
+-- | CIP-56 standard metadata keys (defined by CIP-56 specification).
+-- Only these 3 keys use the splice.lfdecentralizedtrust.org prefix.
+reasonMetaKey : Text
+reasonMetaKey = "splice.lfdecentralizedtrust.org/reason"
+
+-- Note: lock-context is handled via Lock.context field, not as separate metadata
+-- Note: registry-urls is not applicable to holdings
+
+-- | TestToken custom metadata keys.
+-- Uses testtoken.silvana.com prefix per CIP-56 requirement that
+-- "metadata keys be prefixed with a DNS subdomain that uniquely
+-- identifies the organization defining the key."
+testTokenPrefix : Text
+testTokenPrefix = "testtoken.silvana.com/"
+
+createdFromMetaKey : Text
+createdFromMetaKey = testTokenPrefix <> "created-from"
+
+createdAtMetaKey : Text
+createdAtMetaKey = testTokenPrefix <> "created-at"
+
+timestampMetaKey : Text
+timestampMetaKey = testTokenPrefix <> "timestamp"
+
+renewedAtMetaKey : Text
+renewedAtMetaKey = testTokenPrefix <> "renewed-at"
+
+transferTypeMetaKey : Text
+transferTypeMetaKey = testTokenPrefix <> "transfer-type"
+
+instrumentIdMetaKey : Text
+instrumentIdMetaKey = testTokenPrefix <> "instrument-id"
+
+settlementIdMetaKey : Text
+settlementIdMetaKey = testTokenPrefix <> "settlement-id"
+
+settlementExecutorMetaKey : Text
+settlementExecutorMetaKey = testTokenPrefix <> "settlement-executor"
+
+allocationChangeMetaKey : Text
+allocationChangeMetaKey = testTokenPrefix <> "allocation-change"
+
+----------------------------------------------------------------------------------------------------
 -- Helper Functions
 ----------------------------------------------------------------------------------------------------
 
@@ -1142,6 +1209,24 @@ checkExpectedAdmin actualAdmin optExpectedAdmin =
       assertMsg ("Expected admin " <> show expectedAdmin <> " does not match actual admin " <> show actualAdmin)
         (actualAdmin == expectedAdmin)
 
+-- | Extract the CIP-56 standard reason metadata from ExtraArgs.
+-- Returns the reason if present, otherwise None.
+-- Per CIP-56: "used to communicate a human-readable reason for calling a choice...
+-- when calling choices that advance a workflow differently from the default path
+-- (e.g., withdrawing an allocation or aborting a transfer instruction)"
+extractReasonFromMetadata : Token.Metadata.Metadata -> Optional Text
+extractReasonFromMetadata meta =
+  TextMap.lookup reasonMetaKey meta.values
+
+-- | Include reason in result metadata if provided.
+-- This follows CIP-56 guidance for communicating reasons for non-default workflow paths.
+includeReasonInMetadata : Optional Text -> Token.Metadata.Metadata
+includeReasonInMetadata optReason =
+  case optReason of
+    None -> Token.Metadata.emptyMetadata
+    Some reason -> Token.Metadata.Metadata with
+      values = TextMap.singleton reasonMetaKey reason
+
 -- | Validate metadata to prevent bloat and ensure proper format.
 -- Checks metadata size limits and key format.
 validateMetadata : TextMap.TextMap Text -> Bool
@@ -1152,12 +1237,15 @@ validateMetadata meta =
 
 -- | Create standard metadata for a newly created holding.
 -- Validates metadata before merging to ensure security.
+--
+-- Uses testtoken.silvana.com prefix for TestToken-specific keys,
+-- as required by CIP-56 for implementation-defined metadata.
 createStandardMetadata : Text -> TextMap.TextMap Text -> Time -> TextMap.TextMap Text
 createStandardMetadata source existingMeta now =
   let
     standardFields = TextMap.fromList
-      [ ("splice.lfdecentralizedtrust.org/created-from", source)
-      , ("splice.lfdecentralizedtrust.org/created-at", show now)
+      [ (createdFromMetaKey, source)
+      , (createdAtMetaKey, show now)
       ]
     merged = TextMap.union existingMeta standardFields
   in
