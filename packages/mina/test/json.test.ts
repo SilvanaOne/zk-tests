@@ -12,6 +12,7 @@ import {
   fetchAccount,
   fetchLastBlock,
   UInt32,
+  Transaction,
 } from "o1js";
 import { fetchMinaAccount, accountBalanceMina } from "@silvana-one/mina-utils";
 import { sleep } from "../src/sleep.js";
@@ -184,8 +185,18 @@ describe("balance instability check", () => {
         tx.setFee(fee);
       }
       const txSigned = tx.sign([sender.key]);
+
+      // Serialize the transaction to JSON string
+      const txJson = txSigned.toJSON();
+      console.log(`Transaction serialized to JSON string (length: ${txJson.length} chars)`);
+
+      // Deserialize the transaction from JSON string
+      const txDeserialized = Transaction.fromJSON(txJson);
+      console.log(`Transaction deserialized successfully`);
+
+      // Send the deserialized transaction
       console.time("sendTx");
-      let txSent = await txSigned.safeSend();
+      let txSent = await txDeserialized.safeSend();
       console.timeEnd("sendTx");
       console.log(`txSent ${i}:`, txSent.hash, txSent.status);
       console.time("applied");
