@@ -40,8 +40,8 @@ let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
-const url = "https://devnet.zeko.io/graphql";
-//const url = "http://m1.zeko.io/graphql";
+//const url = "https://devnet.zeko.io/graphql";
+const url = "http://m1.zeko.io/graphql";
 
 let retries = 0;
 
@@ -132,7 +132,7 @@ describe("Based rollup", async () => {
         "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
       )
     );
-    console.log(`kvBalance: ${kvBalance} MINA`);
+    console.log(`kvBalance: ${kvBalance.toBigInt() / 1_000_000_000n} MINA`);
     // const kvAccount = await fetchAccount({
     //   publicKey: PublicKey.fromBase58(
     //     "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
