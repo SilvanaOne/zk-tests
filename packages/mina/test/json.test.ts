@@ -183,32 +183,9 @@ describe("balance instability check", () => {
         );
         tx.setFee(fee);
       }
-      tx.sign([sender.key]);
+      const txSigned = tx.sign([sender.key]);
       console.time("sendTx");
-      let txSent = await tx.safeSend();
-      let retry = 0;
-      while (txSent.status !== "pending") {
-        retry++;
-        console.log(
-          `\x1b[31mtxSent errors ${i} retry ${retry}:\x1b[0m`,
-          txSent.hash,
-          txSent.status,
-          txSent.errors
-        );
-        await sleep(5000);
-        const fee = await fetchZekoFee({ tx, url });
-        if (fee) {
-          console.log(
-            "fee:",
-            Number((fee?.toBigInt() * 1000n) / 1_000_000_000n) / 1000
-          );
-        }
-        if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
-          tx.setFee(fee);
-          tx.sign([sender.key]);
-        }
-        txSent = await tx.safeSend();
-      }
+      let txSent = await txSigned.safeSend();
       console.timeEnd("sendTx");
       console.log(`txSent ${i}:`, txSent.hash, txSent.status);
       console.time("applied");

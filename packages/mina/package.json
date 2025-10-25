@@ -21,6 +21,7 @@
     "based:zeko": "CHAIN=zeko npm run test test/based.zeko.test.ts",
     "based:devnet": "CHAIN=devnet npm run test test/based.devnet.test.ts",
     "zkapp:zeko": "CHAIN=zeko npm run test test/zkapp.zeko.test.ts",
+    "json:zeko": "CHAIN=zeko npm run test test/json.test.ts",
     "fee:zeko": "CHAIN=zeko npm run test test/fee.zeko.test.ts",
     "status": "CHAIN=zeko npm run test test/status.test.ts",
     "slot": "npm run test test/slot.test.ts",
