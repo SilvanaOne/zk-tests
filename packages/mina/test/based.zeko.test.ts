@@ -17,11 +17,10 @@ import {
   initBlockchain,
   accountBalanceMina,
   accountBalance,
-  Zeko,
-  Devnet,
   fetchMinaAccount,
   sendTx,
 } from "@silvana-one/mina-utils";
+import { Zeko, Devnet } from "@silvana-one/api";
 import { faucet } from "../src/faucet.js";
 import { sleep } from "../src/sleep.js";
 import { pushEvent, emptyEvents } from "../src/events/events.js";
@@ -41,7 +40,8 @@ let sender: TestPublicKey;
 const expectedStatus = chain === "zeko" ? "pending" : "included";
 const DELAY = 1000;
 //const url = "https://devnet.zeko.io/graphql";
-const url = "http://m1.zeko.io/graphql";
+//const url = "http://m1.zeko.io/graphql";
+const url = "https://alphanet.zeko.io/graphql";
 
 let retries = 0;
 
@@ -56,22 +56,26 @@ function arraysEqual(a: number[], b: number[]) {
 describe("Based rollup", async () => {
   it.skip("should init blockchain", async () => {
     console.log({ chain });
-    if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {
+    if (
+      chain !== "mina:devnet" &&
+      chain !== "zeko:testnet" &&
+      chain !== "mina:local"
+    ) {
       throw new Error("Invalid chain");
     }
     if (!PRIVATE_KEY) {
       throw new Error("PRIVATE_KEY is not set");
     }
-    const { keys } = await initBlockchain(
+    const { keys } = await initBlockchain({
       chain,
-      chain === "local" ? 1 : undefined
-    );
+      deployersNumber: chain === "mina:local" ? 1 : undefined,
+    });
     const keysJson = await readFile("./data/keys.json", "utf-8");
     const { keys: loadedKeys } = JSON.parse(keysJson) as {
       keys: { privateKey: string; publicKey: string }[];
     };
     sender =
-      chain === "local" ? keys[0] : TestPublicKey.fromBase58(PRIVATE_KEY);
+      chain === "mina:local" ? keys[0] : TestPublicKey.fromBase58(PRIVATE_KEY);
   });
   it.skip("should topup accounts on zeko", async () => {
     if (!PRIVATE_KEY) {
@@ -102,10 +106,8 @@ describe("Based rollup", async () => {
     console.log(`${sender.toBase58()}: ${balance} MINA`);
   });
   it("should init zeko alphanet", async () => {
-    console.log({ chain });
-    if (chain !== "zeko") {
-      throw new Error("Invalid chain, should be zeko");
-    }
+    console.log({ chain, url });
+
     if (!PRIVATE_KEY) {
       throw new Error("PRIVATE_KEY is not set");
     }
@@ -133,12 +135,12 @@ describe("Based rollup", async () => {
       )
     );
     console.log(`kvBalance: ${kvBalance.toBigInt() / 1_000_000_000n} MINA`);
-    // const kvAccount = await fetchAccount({
-    //   publicKey: PublicKey.fromBase58(
-    //     "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
-    //   ),
-    // });
-    // console.log("kvAccount", kvAccount);
+    const kvAccount = await fetchAccount({
+      publicKey: PublicKey.fromBase58(
+        "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv"
+      ),
+    });
+    console.log("kvAccount", kvAccount);
   });
   it(`should send tx`, async () => {
     if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {

@@ -18,7 +18,7 @@
     "verify": "npm run test test/verify.test.ts",
     "info": "npm run test test/info.test.ts",
     "based": "CHAIN=zeko npm run test test/based.test.ts",
-    "based:zeko": "CHAIN=zeko npm run test test/based.zeko.test.ts",
+    "based:zeko": "CHAIN=zeko:testnet npm run test test/based.zeko.test.ts",
     "based:devnet": "CHAIN=devnet npm run test test/based.devnet.test.ts",
     "zkapp:zeko": "CHAIN=zeko npm run test test/zkapp.zeko.test.ts",
     "json:zeko": "CHAIN=zeko npm run test test/json.test.ts",
