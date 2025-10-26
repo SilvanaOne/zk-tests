@@ -1,0 +1,25 @@
+{
+  "name": "mina-rust",
+  "version": "0.1.0",
+  "author": "DFST",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "NODE_NO_WARNINGS=1 node -r ./log.cjs --loader=ts-node/esm --enable-source-maps -r dotenv/config --require dotenv/config --env-file=.env --test",
+    "template": "npm run test test/template.test.ts",
+    "rust": "npm run test test/rust.test.ts"
+  },
+  "node": {
+    "version": ">=24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "dotenv": "^17.2.3",
+    "log-timestamp": "^0.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "o1js": "file:../../../../../Tests/o1js"
+  }
+}
