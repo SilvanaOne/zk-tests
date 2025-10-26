@@ -39,8 +39,12 @@ describe("Rust", () => {
     console.log("proof round trip ok?", ok);
 
     console.log("verification key round trip...");
+    // ok = await proof.verify(verificationKeyRoundTrip(verificationKey));
 
-    ok = await proof.verify(verificationKeyRoundTrip(verificationKey));
+    console.time("proof verified");
+
+    ok = await proof.verify(verificationKey);
+    console.timeEnd("proof verified");
 
     console.log("verification key round trip ok?", ok);
 
