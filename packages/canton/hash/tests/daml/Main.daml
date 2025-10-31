@@ -44,6 +44,7 @@ import DA.Time
 
 import HoldingTests
 import TransferTests
+import FixedPointHexTests
 
 import TestUtils
 
@@ -58,6 +59,11 @@ main = script do
   debug "========================================="
   debug "TestToken CIP-56 Compliance Test Suite"
   debug "========================================="
+  debug ""
+
+  debug "Running FixedPointHex Tests..."
+  runAllFixedPointHexTests
+  debug "✅ FixedPointHex Tests PASSED"
   debug ""
 
   debug "Running Holdings API Tests..."

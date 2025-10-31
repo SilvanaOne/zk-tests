@@ -93,6 +93,7 @@ mintTokens admin burnMintFactoryCid receiver amount = do
   requestCid <- submit admin $ exerciseCmd burnMintFactoryCid ProposeMint with
     receiver
     amount
+    expectedAdmin = None
   -- Receiver accepts
   submit receiver $ exerciseCmd requestCid Accept
 

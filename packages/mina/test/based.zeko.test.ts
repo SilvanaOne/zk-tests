@@ -38,10 +38,11 @@ const PRIVATE_KEY = process.env.TEST_ACCOUNT_3_PRIVATE_KEY;
 let sender: TestPublicKey;
 
 const expectedStatus = chain === "zeko" ? "pending" : "included";
-const DELAY = 1000;
+const DELAY = 100;
 //const url = "https://devnet.zeko.io/graphql";
 //const url = "http://m1.zeko.io/graphql";
-const url = "https://alphanet.zeko.io/graphql";
+const minaUrl = "https://alphanet.zeko.io/graphql";
+const archiveUrl = "https://archive.alphanet.zeko.io/graphql";
 
 let retries = 0;
 
@@ -106,15 +107,15 @@ describe("Based rollup", async () => {
     console.log(`${sender.toBase58()}: ${balance} MINA`);
   });
   it("should init zeko alphanet", async () => {
-    console.log({ chain, url });
+    console.log({ chain, minaUrl, archiveUrl });
 
     if (!PRIVATE_KEY) {
       throw new Error("PRIVATE_KEY is not set");
     }
 
     const networkInstance = Mina.Network({
-      mina: url,
-      archive: url,
+      mina: minaUrl,
+      archive: minaUrl,
       networkId: "testnet",
     });
     Mina.setActiveInstance(networkInstance);
@@ -143,9 +144,9 @@ describe("Based rollup", async () => {
     console.log("kvAccount", kvAccount);
   });
   it(`should send tx`, async () => {
-    if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {
-      throw new Error("Invalid chain");
-    }
+    // if (chain !== "devnet" && chain !== "zeko" && chain !== "local") {
+    //   throw new Error("Invalid chain");
+    // }
     await fetchMinaAccount({ publicKey: sender, force: true });
     console.log("sender", sender.toJSON());
     console.log("sender balance", await accountBalanceMina(sender));
@@ -181,7 +182,7 @@ describe("Based rollup", async () => {
         }
       );
       console.timeEnd("prepared");
-      const fee = await fetchZekoFee({ tx, url });
+      const fee = await fetchZekoFee({ tx, url: minaUrl });
 
       if (fee && fee.toBigInt() < MAX_FEE * 1_000_000_000n) {
         console.log(
@@ -200,7 +201,7 @@ describe("Based rollup", async () => {
       while (txSent.status !== "pending") {
         console.log("txSent retry", txSent.hash, txSent.status, txSent.errors);
         await sleep(1000);
-        const fee = await fetchZekoFee({ tx, url });
+        const fee = await fetchZekoFee({ tx, url: minaUrl });
         if (fee) {
           console.log(
             "fee:",

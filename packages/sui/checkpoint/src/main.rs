@@ -280,7 +280,7 @@ struct CheckpointSummaryForSigning {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Sui client
     let client = sui_sdk::SuiClientBuilder::default()
-        .build("https://fullnode.mainnet.sui.io:443")
+        .build("https://fullnode.devnet.sui.io:443")
         .await?;
 
     let discover = client.available_rpc_methods();

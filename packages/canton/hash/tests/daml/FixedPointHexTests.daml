@@ -1,0 +1,243 @@
+-- Copyright (c) 2025 Silvana. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+-- | Tests and examples for FixedPointHex encoding/decoding
+-- Demonstrates conversion between Decimal (10 fractional digits) and 16-byte hex
+module FixedPointHexTests where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.Foldable (forA_)
+
+import FixedPointHex
+
+----------------------------------------------------------------------------------------------------
+-- Example Test Cases: Decimal ↔ Hex Conversions
+----------------------------------------------------------------------------------------------------
+
+-- | Test: Zero value
+-- Decimal: 0.0000000000
+-- Hex: 0000000000000000000000000000000000000000 (16 bytes = 32 hex chars)
+testZero : Script ()
+testZero = script do
+  let decimal = 0.0
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Zero"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Small fractional value
+-- Decimal: 0.0000000001 (1e-10, smallest unit with scale=10)
+-- Expected hex: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01
+testSmallFraction : Script ()
+testSmallFraction = script do
+  let decimal = 0.0000000001
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Small Fraction (0.0000000001)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: One unit
+-- Decimal: 1.0000000000
+-- Internal representation: 10000000000 (10^10)
+-- Hex: 00 00 00 00 00 00 00 00 00 00 00 02 54 0b e4 00
+testOne : Script ()
+testOne = script do
+  let decimal = 1.0
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: One (1.0)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Decimal with all fractional digits used
+-- Decimal: 123.4567890000
+-- Internal: 1234567890000 = 0x11F 71FB 04E0
+testMixedDecimal : Script ()
+testMixedDecimal = script do
+  let decimal = 123.4567890000
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Mixed Decimal (123.4567890000)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Token amount example
+-- Decimal: 1000.5000000000 (1000.5 tokens)
+-- Internal: 10005000000000
+testTokenAmount : Script ()
+testTokenAmount = script do
+  let decimal = 1000.5
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Token Amount (1000.5)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Large value
+-- Decimal: 999999.9999999999
+-- Internal: 9999999999999999
+testLargeValue : Script ()
+testLargeValue = script do
+  let decimal = 999999.9999999999
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Large Value (999999.9999999999)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Maximum precision
+-- Decimal: 42.1234567890 (uses all 10 fractional digits)
+-- Internal: 421234567890
+testMaxPrecision : Script ()
+testMaxPrecision = script do
+  let decimal = 42.1234567890
+  let encoded = encodeDecimalToFixedHex decimal
+  let decoded = decodeFixedHexToDecimal encoded
+
+  debug "Test: Max Precision (42.1234567890)"
+  debug ("  Input:   " <> show decimal)
+  debug ("  Hex:     " <> encoded)
+  debug ("  Decoded: " <> show decoded)
+
+  decoded === decimal
+
+-- | Test: Round trip for various values
+testRoundTrips : Script ()
+testRoundTrips = script do
+  debug "Test: Round Trip Conversions"
+
+  let testValues =
+        [ 0.0
+        , 0.0000000001
+        , 0.5
+        , 1.0
+        , 10.0
+        , 100.0
+        , 123.456789
+        , 1000.0
+        , 9999.9999999999
+        , 100000.0
+        ]
+
+  forA_ testValues (\d -> do
+    let encoded = encodeDecimalToFixedHex d
+    let decoded = decodeFixedHexToDecimal encoded
+    debug ("  " <> show d <> " → " <> encoded <> " → " <> show decoded)
+    decoded === d
+    )
+
+  debug "✅ All round trips successful"
+
+-- | Test: Specific hex examples with known decimal values
+-- This demonstrates the exact hex encoding for reference
+testKnownHexValues : Script ()
+testKnownHexValues = script do
+  debug "Test: Known Hex Values"
+  debug ""
+
+  -- Example 1: 0.0000000001 = 1 smallest unit
+  debug "Example 1: Smallest unit"
+  debug "  Decimal:     0.0000000001"
+  debug "  Internal:    1"
+  debug "  Hex:         0000000000000000000000000000000001"
+  let decoded1 = decodeFixedHexToDecimal "0000000000000000000000000000000001"
+  debug ("  Decoded:     " <> show decoded1)
+  decoded1 === 0.0000000001
+  debug ""
+
+  -- Example 2: 1.0 = 10000000000 = 0x02540BE400
+  debug "Example 2: One unit"
+  debug "  Decimal:     1.0000000000"
+  debug "  Internal:    10000000000"
+  debug "  Hex:         00000000000000000000000002540be400"
+  let decoded2 = decodeFixedHexToDecimal "00000000000000000000000002540be400"
+  debug ("  Decoded:     " <> show decoded2)
+  decoded2 === 1.0
+  debug ""
+
+  -- Example 3: 100.0 = 1000000000000 = 0xE8D4A51000
+  debug "Example 3: One hundred"
+  debug "  Decimal:     100.0000000000"
+  debug "  Internal:    1000000000000"
+  debug "  Hex:         000000000000000000000000e8d4a51000"
+  let decoded3 = decodeFixedHexToDecimal "000000000000000000000000e8d4a51000"
+  debug ("  Decoded:     " <> show decoded3)
+  decoded3 === 100.0
+  debug ""
+
+----------------------------------------------------------------------------------------------------
+-- Run All Tests
+----------------------------------------------------------------------------------------------------
+
+runAllFixedPointHexTests : Script ()
+runAllFixedPointHexTests = script do
+  debug "====================================="
+  debug "FixedPointHex Encoding/Decoding Tests"
+  debug "====================================="
+  debug ""
+
+  testZero
+  debug ""
+
+  testSmallFraction
+  debug ""
+
+  testOne
+  debug ""
+
+  testMixedDecimal
+  debug ""
+
+  testTokenAmount
+  debug ""
+
+  testLargeValue
+  debug ""
+
+  testMaxPrecision
+  debug ""
+
+  testRoundTrips
+  debug ""
+
+  testKnownHexValues
+  debug ""
+
+  debug "====================================="
+  debug "✅ All FixedPointHex Tests PASSED"
+  debug "====================================="
+  debug ""
+  debug "Summary:"
+  debug "  - Scale: 10 fractional digits"
+  debug "  - Encoding: 16-byte (128-bit) big-endian hex"
+  debug "  - All round trips verified"
+  debug "  - Known hex values validated"
+
+  return ()
