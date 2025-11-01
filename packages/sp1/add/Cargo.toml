@@ -1,25 +1,27 @@
 [workspace]
 members = [
     "lib/add",
-    "lib/proof",
+    # "lib/proof", # Temporarily excluded due to serde version conflict with mina-hasher
     "sui/client",
     "programs/add",
     "programs/aggregate",
     "programs/sha256",
     "programs/p3",
-    "programs/ps",
+    # "programs/ps", # Temporarily excluded due to serde version conflict
     "programs/mina",
-    "programs/proof",
-    "script",
+    # "programs/proof", # Depends on proof-lib
+    # "script", # Depends on proof-lib
+    "witness",
 ]
 
 exclude = ["arbitrum"]
 
 default-members = [
     "lib/add",
-    "lib/proof",
+    # "lib/proof", # Temporarily excluded
     "sui/client",
-    "script",
+    # "script", # Temporarily excluded
+    "witness",
 ]
 
 resolver = "2"

@@ -1,0 +1,40 @@
+[package]
+name = "witness"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+price-lib = { path = "../lib/price" }
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+dotenvy = "0.15"
+anyhow = "1.0"
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["aws_lc_rs"] }
+rustls-native-certs = "0.8"
+rustls-pemfile = "2.0"
+
+# Sui gRPC v2 dependencies
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git" }
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+
+# TSA dependencies
+cms = "0.2.3"
+der = { version = "0.7", features = ["alloc"] }
+x509-tsp = "0.1"
+x509-parser = "0.16"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.9"
+hex = "0.4"
+spki = { version = "0.7", default-features = false }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = "0.4"
