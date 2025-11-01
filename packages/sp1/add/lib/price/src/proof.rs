@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -6,7 +7,7 @@ use crate::tsa_types::TsaResponse;
 use crate::types::{CertificateChain, PriceData};
 
 /// Complete proof data structure containing price, time attestations, and certificates
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct PriceProofData {
     /// Price data from Binance
     pub price: PriceData,

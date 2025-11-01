@@ -9,6 +9,7 @@ members = [
     "programs/p3",
     # "programs/ps", # Temporarily excluded due to serde version conflict
     "programs/mina",
+    "programs/price",
     # "programs/proof", # Depends on proof-lib
     # "script", # Depends on proof-lib
     "witness",

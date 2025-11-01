@@ -1,11 +1,7 @@
-mod binance;
-mod price_proof;
-mod sui;
-mod tsa;
-
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use clap::{Parser, Subcommand};
+use witness::price_proof;
 
 #[derive(Parser)]
 #[command(name = "witness")]
@@ -18,7 +14,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Fetch price with full proof (price + certificates + time attestations)
-    Proof,
+    Proof {
+        /// Token/trading pair to fetch (e.g., BTC, ETH, SOL)
+        /// Will be converted to {TOKEN}USDT format for Binance API
+        #[arg(short, long, default_value = "BTC")]
+        token: String,
+    },
 }
 
 #[tokio::main]
@@ -37,19 +38,23 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Proof => {
-            handle_proof_command().await?;
+        Commands::Proof { token } => {
+            handle_proof_command(token).await?;
         }
     }
 
     Ok(())
 }
 
-async fn handle_proof_command() -> Result<()> {
+async fn handle_proof_command(token: &str) -> Result<()> {
     println!("=== Fetching Price Proof Data ===\n");
 
+    // Convert token to Binance trading pair format (e.g., BTC -> BTCUSDT)
+    let symbol = format!("{}USDT", token.to_uppercase());
+    println!("Trading pair: {}\n", symbol);
+
     // 1. Fetch all data
-    let proof_data = price_proof::fetch_price_proof_data().await?;
+    let proof_data = price_proof::fetch_price_proof_data(&symbol).await?;
 
     // 2. Verify everything
     println!("\n=== Verifying Proof Data ===\n");
@@ -151,7 +156,7 @@ fn display_proof_results(
     if verification.all_verified {
         println!("✅ ALL VERIFICATIONS PASSED!");
         println!("\nThis proof demonstrates that:");
-        println!("  • The BTC price ${} was fetched from authentic Binance API", proof.price.price);
+        println!("  • The {} price ${} was fetched from authentic Binance API", proof.price.symbol, proof.price.price);
         println!("  • The TLS certificate chain is valid and trusted");
         println!("  • The time is attested by both Sui checkpoint and TSA");
         println!("  • All timestamps are consistent and within acceptable bounds");

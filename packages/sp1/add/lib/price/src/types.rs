@@ -1,13 +1,14 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct PriceData {
     pub symbol: String,
     pub price: String,
     pub timestamp_fetched: u64, // Unix timestamp in milliseconds
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct CertificateInfo {
     pub subject: String,
     pub issuer: String,
@@ -16,7 +17,7 @@ pub struct CertificateInfo {
     pub sha256_fingerprint: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct CertificateChain {
     pub certificates_der: Vec<Vec<u8>>, // Raw DER-encoded certificates
     pub certificates_info: Vec<CertificateInfo>,

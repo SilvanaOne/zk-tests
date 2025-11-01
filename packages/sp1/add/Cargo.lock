@@ -7447,6 +7447,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "borsh",
  "chrono",
  "cms",
  "der 0.7.10",
@@ -7457,6 +7458,16 @@ dependencies = [
  "spki 0.7.3",
  "x509-parser 0.16.0",
  "x509-tsp",
+]
+
+[[package]]
+name = "price-program"
+version = "0.1.0"
+dependencies = [
+ "alloy-sol-types",
+ "borsh",
+ "price-lib",
+ "sp1-zkvm",
 ]
 
 [[package]]

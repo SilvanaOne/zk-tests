@@ -1,4 +1,5 @@
 use anyhow::Result;
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::CheckpointInfo;
@@ -6,7 +7,7 @@ use crate::proof::PriceProofData;
 use crate::tsa_types::TsaResponse;
 use crate::types::CertificateChain;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct VerificationResult {
     pub price_verified: bool,
     pub certificates_verified: bool,

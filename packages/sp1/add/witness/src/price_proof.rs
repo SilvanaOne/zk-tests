@@ -3,12 +3,15 @@ use price_lib::PriceProofData;
 use tracing::{debug, info};
 
 /// Fetch all proof data: price, certificates, checkpoint, and TSA timestamp
-pub async fn fetch_price_proof_data() -> Result<PriceProofData> {
+///
+/// # Arguments
+/// * `symbol` - Trading pair symbol (e.g., "BTCUSDT", "ETHUSDT", "SOLUSDT")
+pub async fn fetch_price_proof_data(symbol: &str) -> Result<PriceProofData> {
     info!("=== Fetching Price Proof Data ===");
 
     // 1. Fetch price and verify TLS certificates
-    info!("Fetching BTC price from Binance and verifying TLS certificates...");
-    let (price, certificates) = crate::binance::fetch_and_verify_price("BTCUSDT").await?;
+    info!("Fetching {} price from Binance and verifying TLS certificates...", symbol);
+    let (price, certificates) = crate::binance::fetch_and_verify_price(symbol).await?;
     debug!("Price fetched: {} = ${}", price.symbol, price.price);
     debug!(
         "TLS verified: {} certificates in chain",

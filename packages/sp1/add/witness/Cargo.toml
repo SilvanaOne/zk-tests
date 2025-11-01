@@ -3,6 +3,14 @@ name = "witness"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "witness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "witness"
+path = "src/main.rs"
+
 [dependencies]
 price-lib = { path = "../lib/price" }
 tokio = { version = "1.40", features = ["full"] }

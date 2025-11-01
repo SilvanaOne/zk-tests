@@ -16,10 +16,17 @@ struct BinanceTicker {
 
 const BINANCE_API_DOMAIN: &str = "api.binance.com";
 const BINANCE_API_URL: &str = "https://api.binance.com/api/v3/ticker/24hr";
+const BINANCE_FUTURES_API_DOMAIN: &str = "fapi.binance.com";
+const BINANCE_FUTURES_API_URL: &str = "https://fapi.binance.com/fapi/v1/ticker/24hr";
 
-/// Fetch BTC price from Binance API
-pub async fn fetch_price(symbol: &str) -> Result<PriceData> {
-    info!("Fetching {} price from Binance", symbol);
+/// Check if error is "Invalid symbol" from Binance API
+fn is_invalid_symbol_error(error_text: &str) -> bool {
+    error_text.contains("-1121") || error_text.contains("Invalid symbol")
+}
+
+/// Fetch price from Binance Spot API
+async fn fetch_from_spot(symbol: &str) -> Result<PriceData> {
+    debug!("Trying Spot API for {}", symbol);
 
     let client = reqwest::Client::builder()
         .use_rustls_tls()
@@ -33,17 +40,72 @@ pub async fn fetch_price(symbol: &str) -> Result<PriceData> {
 
     if !response.status().is_success() {
         let error_text = response.text().await?;
-        anyhow::bail!("Binance API error: {}", error_text);
+        anyhow::bail!("Spot API error: {}", error_text);
     }
 
     let ticker: BinanceTicker = response.json().await?;
     let timestamp_fetched = chrono::Utc::now().timestamp_millis() as u64;
+
+    info!("✓ Price fetched from Spot API");
 
     Ok(PriceData {
         symbol: symbol.to_string(),
         price: ticker.last_price,
         timestamp_fetched,
     })
+}
+
+/// Fetch price from Binance Futures API
+async fn fetch_from_futures(symbol: &str) -> Result<PriceData> {
+    debug!("Trying Futures API for {}", symbol);
+
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()?;
+
+    let response = client
+        .get(BINANCE_FUTURES_API_URL)
+        .query(&[("symbol", symbol)])
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await?;
+        anyhow::bail!("Futures API error: {}", error_text);
+    }
+
+    let ticker: BinanceTicker = response.json().await?;
+    let timestamp_fetched = chrono::Utc::now().timestamp_millis() as u64;
+
+    info!("✓ Price fetched from Futures API");
+
+    Ok(PriceData {
+        symbol: symbol.to_string(),
+        price: ticker.last_price,
+        timestamp_fetched,
+    })
+}
+
+/// Fetch price from Binance API with automatic Spot → Futures fallback
+pub async fn fetch_price(symbol: &str) -> Result<PriceData> {
+    info!("Fetching {} price from Binance", symbol);
+
+    // Try Spot API first
+    match fetch_from_spot(symbol).await {
+        Ok(price) => Ok(price),
+        Err(e) => {
+            let error_msg = e.to_string();
+
+            // If it's an invalid symbol error, try Futures API
+            if is_invalid_symbol_error(&error_msg) {
+                info!("Symbol not found on Spot, trying Futures API...");
+                fetch_from_futures(symbol).await
+            } else {
+                // Other errors should be propagated
+                Err(e)
+            }
+        }
+    }
 }
 
 /// Verify Binance TLS certificate and capture the certificate chain

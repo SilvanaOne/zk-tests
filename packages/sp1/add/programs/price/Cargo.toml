@@ -1,0 +1,10 @@
+[package]
+version = "0.1.0"
+name = "price-program"
+edition = "2024"
+
+[dependencies]
+alloy-sol-types = { workspace = true }
+sp1-zkvm = "5.1.0"
+price-lib = { path = "../../lib/price" }
+borsh = { version = "1.5", default-features = false, features = ["derive"] }
