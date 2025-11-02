@@ -24,8 +24,15 @@ fn is_invalid_symbol_error(error_text: &str) -> bool {
     error_text.contains("-1121") || error_text.contains("Invalid symbol")
 }
 
+/// API source for price data
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ApiSource {
+    Spot,
+    Futures,
+}
+
 /// Fetch price from Binance Spot API
-async fn fetch_from_spot(symbol: &str) -> Result<PriceData> {
+async fn fetch_from_spot(symbol: &str) -> Result<(PriceData, ApiSource)> {
     debug!("Trying Spot API for {}", symbol);
 
     let client = reqwest::Client::builder()
@@ -48,15 +55,18 @@ async fn fetch_from_spot(symbol: &str) -> Result<PriceData> {
 
     info!("✓ Price fetched from Spot API");
 
-    Ok(PriceData {
-        symbol: symbol.to_string(),
-        price: ticker.last_price,
-        timestamp_fetched,
-    })
+    Ok((
+        PriceData {
+            symbol: symbol.to_string(),
+            price: ticker.last_price,
+            timestamp_fetched,
+        },
+        ApiSource::Spot,
+    ))
 }
 
 /// Fetch price from Binance Futures API
-async fn fetch_from_futures(symbol: &str) -> Result<PriceData> {
+async fn fetch_from_futures(symbol: &str) -> Result<(PriceData, ApiSource)> {
     debug!("Trying Futures API for {}", symbol);
 
     let client = reqwest::Client::builder()
@@ -79,20 +89,24 @@ async fn fetch_from_futures(symbol: &str) -> Result<PriceData> {
 
     info!("✓ Price fetched from Futures API");
 
-    Ok(PriceData {
-        symbol: symbol.to_string(),
-        price: ticker.last_price,
-        timestamp_fetched,
-    })
+    Ok((
+        PriceData {
+            symbol: symbol.to_string(),
+            price: ticker.last_price,
+            timestamp_fetched,
+        },
+        ApiSource::Futures,
+    ))
 }
 
 /// Fetch price from Binance API with automatic Spot → Futures fallback
-pub async fn fetch_price(symbol: &str) -> Result<PriceData> {
+/// Returns (PriceData, ApiSource) to indicate which API was used
+pub async fn fetch_price(symbol: &str) -> Result<(PriceData, ApiSource)> {
     info!("Fetching {} price from Binance", symbol);
 
     // Try Spot API first
     match fetch_from_spot(symbol).await {
-        Ok(price) => Ok(price),
+        Ok(result) => Ok(result),
         Err(e) => {
             let error_msg = e.to_string();
 
@@ -109,10 +123,18 @@ pub async fn fetch_price(symbol: &str) -> Result<PriceData> {
 }
 
 /// Verify Binance TLS certificate and capture the certificate chain
-pub async fn verify_binance_certificate() -> Result<CertificateChain> {
-    info!("Verifying Binance TLS certificate chain");
-
-    let domain = BINANCE_API_DOMAIN;
+/// Verifies the certificate for the specific API source that was used
+pub async fn verify_binance_certificate(source: ApiSource) -> Result<CertificateChain> {
+    let (domain, endpoint) = match source {
+        ApiSource::Spot => {
+            info!("Verifying Binance Spot API TLS certificate chain");
+            (BINANCE_API_DOMAIN, "/api/v3/ping")
+        }
+        ApiSource::Futures => {
+            info!("Verifying Binance Futures API TLS certificate chain");
+            (BINANCE_FUTURES_API_DOMAIN, "/fapi/v1/ping")
+        }
+    };
     let port = 443;
 
     // Install the default crypto provider (using aws-lc-rs or ring)
@@ -150,8 +172,8 @@ pub async fn verify_binance_certificate() -> Result<CertificateChain> {
 
     // Send a simple HTTPS request to get the certificate
     let request = format!(
-        "GET /api/v3/ping HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
-        domain
+        "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
+        endpoint, domain
     );
     tls_stream.write_all(request.as_bytes()).await?;
     tls_stream.flush().await?;
@@ -190,19 +212,29 @@ pub async fn verify_binance_certificate() -> Result<CertificateChain> {
                 );
             }
 
-            // Verify SANs (Subject Alternative Names)
+            // Verify SANs (Subject Alternative Names) for the correct domain
             if let Ok(Some(san_ext)) = x509_cert.subject_alternative_name() {
                 let mut found_binance = false;
+                let expected_sans = match source {
+                    ApiSource::Spot => vec!["*.binance.com", "api.binance.com"],
+                    ApiSource::Futures => vec!["*.binance.com", "fapi.binance.com"],
+                };
+
                 for name in &san_ext.value.general_names {
                     if let GeneralName::DNSName(dns) = name {
-                        if *dns == "*.binance.com" || *dns == "api.binance.com" {
+                        if expected_sans.contains(&dns.as_ref()) {
                             found_binance = true;
+                            debug!("Found valid SAN: {}", dns);
                             break;
                         }
                     }
                 }
                 if !found_binance {
-                    anyhow::bail!("Certificate does not have valid Binance SANs");
+                    anyhow::bail!(
+                        "Certificate does not have valid SANs for {:?} API (expected: {:?})",
+                        source,
+                        expected_sans
+                    );
                 }
             }
         }
@@ -247,9 +279,15 @@ pub async fn verify_binance_certificate() -> Result<CertificateChain> {
 }
 
 /// Fetch price and verify TLS certificate in one operation
+/// Ensures TLS verification is performed on the ACTUAL domain used to fetch the price
 pub async fn fetch_and_verify_price(symbol: &str) -> Result<(PriceData, CertificateChain)> {
-    let price = fetch_price(symbol).await?;
-    let cert_chain = verify_binance_certificate().await?;
+    let (price, source) = fetch_price(symbol).await?;
+    let cert_chain = verify_binance_certificate(source).await?;
+
+    info!(
+        "Price fetched and verified from {:?} API: {} = {}",
+        source, symbol, price.price
+    );
 
     Ok((price, cert_chain))
 }

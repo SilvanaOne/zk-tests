@@ -11,7 +11,7 @@ members = [
     "programs/mina",
     "programs/price",
     # "programs/proof", # Depends on proof-lib
-    # "script", # Depends on proof-lib
+    "script",
     "witness",
 ]
 

@@ -1,25 +1,42 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute prove-core verify-core prove-shrink prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
+.PHONY: help build execute calculate execute-price prove-core prove-core-price verify-core prove-shrink prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
 
 # Load environment variables from .env file
-include .env
+-include .env
 export
+
+# Docker image configuration (defaults to local if not set in .env)
+DOCKER_IMAGE ?= sp1-price-prover:latest
+DOCKER_BUILDER_IMAGE ?= docker.io/dfstio/sp1-builder:latest
 
 # Default target
 help:
 	@echo "SP1 Add Project Commands:"
 	@echo ""
 	@echo "Building and Execution:"
-	@echo "  build          - Build the SP1 program"
+	@echo "  build-base     - Build SP1 builder base image (one-time setup)"
+	@echo "  push-base      - Push SP1 builder base image to registry"
+	@echo "  build          - Build Docker container with SP1 price prover"
+	@echo "  push           - Push Docker image to registry (run after build)"
+	@echo "  build-rust     - Build Rust binary locally (no Docker)"
 	@echo "  execute        - Execute the program without generating proof"
 	@echo "                   Usage: make execute OPERATIONS=10"
+	@echo "  calculate      - Alias for execute (for backward compatibility)"
+	@echo "  execute-price  - Execute price verification zkVM program"
+	@echo "                   Usage: make execute-price TOKEN=BTC COUNT=3 INTERVAL=5"
 	@echo ""
 	@echo "Proof Generation:"
-	@echo "  prove-core     - Generate SP1 core proof and save as JSON"
-	@echo "                   Usage: make prove-core OPERATIONS=10 PROOFS=2"
-	@echo "  verify-core    - Verify a saved core proof from JSON"
+	@echo "  prove-core       - Generate SP1 core proof and save as JSON"
+	@echo "                     Usage: make prove-core OPERATIONS=10 PROOFS=2"
+	@echo "  prove-core-price - Generate price verification compressed core proof"
+	@echo "                     Usage: make prove-core-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "  prove-groth16-price - Generate Groth16 price verification proof (EVM-compatible)"
+	@echo "                     Usage: make prove-groth16-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "  prove-plonk-price - Generate PLONK price verification proof (EVM-compatible)"
+	@echo "                     Usage: make prove-plonk-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "  verify-core      - Verify a saved core proof from JSON"
 	@echo "                   Usage: make verify-core [PROOF=path/to/proof.json] [AGGREGATE=1]"
 	@echo "  prove-shrink   - Generate SP1 shrink proof (zkVerify compatible)"
 	@echo "                   Usage: make prove-shrink OPERATIONS=10 PROOFS=2 [HOSTED=true]"
@@ -65,6 +82,11 @@ help:
 	@echo "                   TYPE: sha256, bn254, mina, p3 (default: sha256, only sha256 implemented)"
 	@echo "                   ITERATIONS: number of hash iterations (default: 10)"
 	@echo ""
+	@echo "Docker Commands:"
+	@echo "  docker-prove-price - Run price proof generation in Docker"
+	@echo "                       Usage: make docker-prove-price TOKEN=ETH COUNT=5 INTERVAL=3"
+	@echo "  docker-shell       - Open interactive shell in Docker container"
+	@echo ""
 	@echo "Utilities:"
 	@echo "  locks          - Check for running Rust-related processes (cargo, rustup, rust-analyzer)"
 	@echo "  fetch-submodules - Fetch and initialize all Git submodules"
@@ -72,9 +94,78 @@ help:
 	@echo "  solana-keys    - List Solana Anchor program keys"
 
 # Building and execution
+build-base:
+	@echo "🏗️  Building SP1 builder base image..."
+	@echo "Image: $(DOCKER_BUILDER_IMAGE)"
+	@echo "Platform: linux/arm64"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@echo "⚠️  This is a one-time setup and may take 10-20 minutes"
+	@start_time=$$(date +%s); \
+	DOCKER_BUILDKIT=1 docker build \
+		--platform linux/arm64 \
+		-f Dockerfile.builder \
+		-t $(DOCKER_BUILDER_IMAGE) \
+		--progress=plain \
+		. && \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"; \
+	echo "✅ SP1 builder base image built: $(DOCKER_BUILDER_IMAGE)"
+
+push-base:
+	@echo "🚀 Pushing SP1 builder base image to registry..."
+	@echo "Image: $(DOCKER_BUILDER_IMAGE)"
+	@if [ "$(DOCKER_BUILDER_IMAGE)" = "sp1-builder:latest" ]; then \
+		echo "⚠️  WARNING: Using default local image name"; \
+		echo "Set DOCKER_BUILDER_IMAGE to push to a registry"; \
+		exit 1; \
+	fi
+	@if [ -n "$(DOCKER_PASSWORD)" ]; then \
+		echo "$(DOCKER_PASSWORD)" | docker login --username $(DOCKER_USERNAME) --password-stdin; \
+	fi
+	docker push $(DOCKER_BUILDER_IMAGE)
+	@echo "✅ Base image pushed: $(DOCKER_BUILDER_IMAGE)"
+
 build:
-	@echo "Building SP1 program..."
+	@echo "🐳 Building SP1 price prover Docker container..."
+	@echo "Base Image: $(DOCKER_BUILDER_IMAGE)"
+	@echo "App Image: $(DOCKER_IMAGE)"
+	@echo "Platform: linux/arm64 (AWS Graviton, Apple Silicon servers)"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@echo ""
+	@echo "📝 Note: This build uses the pre-built SP1 base image."
+	@echo "   If the base image doesn't exist, run 'make build-base' first."
+	@echo ""
+	@start_time=$$(date +%s); \
+	DOCKER_BUILDKIT=1 docker build \
+		--platform linux/arm64 \
+		-t $(DOCKER_IMAGE) \
+		--progress=plain \
+		. && \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"; \
+	echo "✅ Docker image built: $(DOCKER_IMAGE)"
+
+build-rust:
+	@echo "Building Rust binary only..."
 	cd script && cargo build --release
+
+push:
+	@echo "🚀 Pushing Docker image to registry..."
+	@echo "Image: $(DOCKER_IMAGE)"
+	@if [ "$(DOCKER_IMAGE)" = "sp1-price-prover:latest" ]; then \
+		echo "⚠️  WARNING: Using default local image name"; \
+		echo "Set DOCKER_IMAGE in .env to push to a registry"; \
+		exit 1; \
+	fi
+	@if [ -n "$(DOCKER_PASSWORD)" ]; then \
+		echo "$(DOCKER_PASSWORD)" | docker login --username $(DOCKER_USERNAME) --password-stdin; \
+	fi
+	docker push $(DOCKER_IMAGE)
+	@echo "✅ Image pushed: $(DOCKER_IMAGE)"
 
 execute:
 	@echo "Executing program without proof..."
@@ -87,7 +178,69 @@ execute:
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	echo "⏱️  Duration: $${duration} seconds"
 
+# Alias for backward compatibility
+calculate: execute
+
+execute-price:
+	@echo "Executing price verification zkVM program..."
+	@echo "Usage: make execute-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin price -- --execute \
+		--token $(or $(TOKEN),BTC) \
+		--count $(or $(COUNT),1) \
+		--interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
 # Proof generation
+prove-core-price:
+	@echo "Generating price verification compressed core proof..."
+	@echo "Usage: make prove-core-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin price -- --prove \
+		--system compressed \
+		--token $(or $(TOKEN),BTC) \
+		--count $(or $(COUNT),1) \
+		--interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+prove-groth16-price:
+	@echo "Generating Groth16 price verification proof..."
+	@echo "Usage: make prove-groth16-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin price -- --prove \
+		--system groth16 \
+		--token $(or $(TOKEN),BTC) \
+		--count $(or $(COUNT),1) \
+		--interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+prove-plonk-price:
+	@echo "Generating PLONK price verification proof..."
+	@echo "Usage: make prove-plonk-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin price -- --prove \
+		--system plonk \
+		--token $(or $(TOKEN),BTC) \
+		--count $(or $(COUNT),1) \
+		--interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
 prove-core:
 	@echo "Generating SP1 core proof..."
 	@echo "Usage: make prove-core OPERATIONS=10 PROOFS=2"
@@ -427,6 +580,38 @@ hash:
 	duration=$$((end_time - start_time)); \
 	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	echo "⏱️  Duration: $${duration} seconds"
+
+# Docker proof generation
+docker-prove-price:
+	@echo "Running price proof in Docker container..."
+	@echo "Usage: make docker-prove-price TOKEN=ETH COUNT=5 INTERVAL=3 [SYSTEM=groth16]"
+	@echo ""
+	@echo "⚠️  Security Note: Groth16 proofs require Docker-in-Docker"
+	@echo "   Mounting /var/run/docker.sock gives container access to Docker daemon"
+	@echo ""
+	@mkdir -p $(HOME)/.sp1/circuits
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	docker run --rm \
+		-e TMPDIR=/root/.sp1/tmp \
+		-e SP1_GROTH16_CIRCUIT_PATH=$(HOME)/.sp1/circuits/groth16 \
+		-e SP1_PLONK_CIRCUIT_PATH=$(HOME)/.sp1/circuits/plonk \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(HOME)/.sp1:/root/.sp1 \
+		-v $(PWD)/proofs:/app/proofs \
+		sp1-price-prover:latest \
+		--prove --system $(or $(SYSTEM),groth16) --token $(or $(TOKEN),BTC) --count $(or $(COUNT),1) --interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+docker-shell:
+	@echo "Opening shell in Docker container..."
+	docker run --rm -it \
+		-v $(PWD)/proofs:/app/proofs \
+		--entrypoint /bin/bash \
+		sp1-price-prover:latest
 
 # Full workflow targets
 full-groth16: prove-groth16 deploy-groth16 verify-groth16

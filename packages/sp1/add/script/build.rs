@@ -9,9 +9,10 @@ fn main() {
     build_program_with_args("../programs/aggregate", Default::default());
     build_program_with_args("../programs/sha256", Default::default());
     build_program_with_args("../programs/p3", Default::default());
-    build_program_with_args("../programs/ps", Default::default());
-    build_program_with_args("../programs/proof", Default::default());
+    // build_program_with_args("../programs/ps", Default::default());  // Disabled due to mina-hasher serde conflict
+    // build_program_with_args("../programs/proof", Default::default());  // Disabled due to proof-lib dependency
     build_program_with_args("../programs/mina", Default::default());
+    build_program_with_args("../programs/price", Default::default());
 
     // Generate ABI from Add.sol
     generate_abi();
@@ -27,7 +28,8 @@ fn generate_abi() {
     }
 
     // Run forge to generate ABI
-    let output = Command::new("forge")
+    // Skip if forge is not available (e.g., in Docker builds)
+    let output = match Command::new("forge")
         .args([
             "build",
             "--extra-output-files",
@@ -36,7 +38,13 @@ fn generate_abi() {
             ethereum_dir.to_str().unwrap(),
         ])
         .output()
-        .expect("Failed to run forge build");
+    {
+        Ok(output) => output,
+        Err(e) => {
+            eprintln!("Warning: forge not found, skipping ABI generation: {}", e);
+            return;
+        }
+    };
 
     if !output.status.success() {
         eprintln!(

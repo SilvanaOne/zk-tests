@@ -32,6 +32,10 @@ path = "src/bin/hash.rs"
 name = "shrink"
 path = "src/bin/shrink.rs"
 
+[[bin]]
+name = "price"
+path = "src/bin/price.rs"
+
 [dependencies]
 sp1-sdk = { version = "5.1.0", default-features = false, features = ["network", "reserved-capacity"] }
 sp1-core-executor = "5.1.0"
@@ -45,7 +49,10 @@ tracing = "0.1.40"
 hex = "0.4.3"
 alloy-sol-types = { workspace = true }
 add-lib = { path = "../lib/add" }
-proof-lib = { path = "../lib/proof" }
+# proof-lib = { path = "../lib/proof" }  # Disabled due to mina-hasher serde version conflict
+price-lib = { path = "../lib/price" }
+witness = { path = "../witness" }
+indexed-merkle-map = { git = "https://github.com/silvanaone/silvana", package = "indexed-merkle-map" }
 dotenv = "0.15.0"
 alloy = { version = "0.6", features = ["full"] }
 eyre = "0.6"
@@ -61,7 +68,7 @@ num-bigint = "0.4"
 num-traits = "0.2"
 bincode = "1.3"
 borsh = "1.5"
-indexed-merkle-map = { git = "https://github.com/silvanaone/silvana", package = "indexed-merkle-map"}
+# indexed-merkle-map already added above in dependencies section
 rand = "0.8"
 
 [build-dependencies]

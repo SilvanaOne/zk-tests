@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sp1_sdk::{
     HashableKey, Prover, ProverClient, SP1Proof, SP1ProofWithPublicValues, SP1Stdin,
     SP1VerifyingKey,
+    install::{groth16_circuit_artifacts_dir, plonk_circuit_artifacts_dir, install_circuit_artifacts},
 };
 use sp1_core_executor::{SP1Context, SP1ReduceProof};
 use sp1_prover::{components::CpuProverComponents, InnerSC, SP1Prover};
@@ -23,6 +24,44 @@ pub enum FinalProofType {
     Core,
     Groth16,
     Plonk,
+}
+
+/// Ensure circuit artifacts are downloaded before proof generation
+///
+/// SP1's try_install_circuit_artifacts() only checks if the directory exists,
+/// not if the actual circuit files are present. This function checks for the
+/// required circuit binary file and triggers download if missing.
+fn ensure_circuit_artifacts(proof_type: FinalProofType) -> Result<(), Box<dyn std::error::Error>> {
+    let (artifacts_type, build_dir) = match proof_type {
+        FinalProofType::Groth16 => {
+            ("groth16", groth16_circuit_artifacts_dir())
+        }
+        FinalProofType::Plonk => {
+            ("plonk", plonk_circuit_artifacts_dir())
+        }
+        FinalProofType::Core => return Ok(()), // Compressed proofs don't need circuits
+    };
+
+    // Check if the required circuit file exists
+    let circuit_file = build_dir.join(format!("{}_circuit.bin", artifacts_type));
+
+    if circuit_file.exists() {
+        println!("[sp1] {} circuit artifacts verified at {}", artifacts_type, build_dir.display());
+        Ok(())
+    } else {
+        // Clean up empty directory if it exists
+        if build_dir.exists() {
+            println!("[sp1] {} circuit directory exists but files are missing. Cleaning up...", artifacts_type);
+            std::fs::remove_dir_all(&build_dir)?;
+        }
+
+        // Download the circuit artifacts
+        println!("[sp1] Downloading {} circuit artifacts (~4GB, may take a few minutes)...", artifacts_type);
+        install_circuit_artifacts(build_dir.clone(), artifacts_type);
+        println!("[sp1] {} circuit artifacts downloaded successfully", artifacts_type);
+
+        Ok(())
+    }
 }
 
 /// Core proof fixture for serialization
@@ -198,6 +237,9 @@ pub fn generate_and_aggregate_proofs(
         aggregate_stdin.write_proof(*compressed_proof.clone(), vk.vk.clone());
     }
 
+    // Ensure circuit artifacts are available before final proof generation
+    ensure_circuit_artifacts(final_proof_type)?;
+
     // Generate the final proof based on the selected proof type
     // Note: When using ProverClient::from_env(), the strategy is automatically determined
     // based on the SP1_PROVER environment variable we set earlier
@@ -269,6 +311,9 @@ pub fn generate_single_proof(
     stdin: &SP1Stdin,
     final_proof_type: FinalProofType,
 ) -> Result<SP1ProofWithPublicValues, Box<dyn std::error::Error>> {
+    // Ensure circuit artifacts are available before proof generation
+    ensure_circuit_artifacts(final_proof_type)?;
+
     // Create prover client
     let client = ProverClient::builder().cpu().build();
     let (pk, _vk) = client.setup(elf);

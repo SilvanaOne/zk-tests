@@ -1,0 +1,37 @@
+# IDE and system files
+.vscode/
+.claude/
+.DS_Store
+*.swp
+*.swo
+
+# Environment files (passed at runtime)
+.env
+.env.*
+
+# Output directories (mounted as volumes)
+proofs/
+out/
+
+# Build artifacts
+target/
+**/.cargo/
+.cargo/
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Deployment-specific (keep sui/ for workspace)
+ethereum/
+solana/
+arbitrum/
+
+# Git
+.git/
+.gitignore
+
+# Rust build files (keep Cargo.lock for reproducible builds)
+*.rlib
+*.rmeta

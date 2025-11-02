@@ -11,7 +11,7 @@
 
 use clap::Parser;
 use sp1_sdk::{Prover, ProverClient, SP1Stdin, include_elf};
-use proof_lib::create_poseidon_proof;
+// use proof_lib::create_poseidon_proof;  // Disabled due to mina-hasher serde conflict
 
 /// The ELF files for different hash programs
 pub const SHA256_ELF: &[u8] = include_elf!("sha256-program");
@@ -67,15 +67,17 @@ struct Args {
 }
 
 /// Create and serialize a real Poseidon proof
+/// Disabled due to mina-hasher serde conflict
 fn create_real_serialized_proof() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    println!("Creating Poseidon proof...");
-    let proof = create_poseidon_proof()?;
-    
-    println!("Serializing proof...");
-    let serialized = proof.serialize()?;
-    println!("Serialized proof size: {} bytes", serialized.len());
-    
-    Ok(serialized)
+    Err("Proof type disabled due to mina-hasher serde version conflict".into())
+    // println!("Creating Poseidon proof...");
+    // let proof = create_poseidon_proof()?;
+    //
+    // println!("Serializing proof...");
+    // let serialized = proof.serialize()?;
+    // println!("Serialized proof size: {} bytes", serialized.len());
+    //
+    // Ok(serialized)
 }
 
 fn main() {

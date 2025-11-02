@@ -1,0 +1,21 @@
+services:
+  # Price proof generation service
+  price-prover:
+    image: ${DOCKER_IMAGE:-sp1-price-prover:latest}
+    volumes:
+      # Mount Docker socket for Groth16 proof generation (Docker-in-Docker)
+      # Warning: This gives the container access to the Docker daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount SP1 circuits directory for sharing with nested gnark container
+      # This allows DinD to access circuit files downloaded by the parent container
+      - ${HOME}/.sp1:/root/.sp1
+      - ./proofs:/app/proofs
+    environment:
+      - TOKEN=${TOKEN:-BTC}
+      - COUNT=${COUNT:-1}
+      - INTERVAL=${INTERVAL:-5}
+      - SYSTEM=${SYSTEM:-groth16}
+      - TMPDIR=/root/.sp1/tmp
+      - SP1_GROTH16_CIRCUIT_PATH=${HOME}/.sp1/circuits/groth16
+      - SP1_PLONK_CIRCUIT_PATH=${HOME}/.sp1/circuits/plonk
+    command: --prove --system ${SYSTEM:-groth16} --token ${TOKEN} --count ${COUNT} --interval ${INTERVAL}
