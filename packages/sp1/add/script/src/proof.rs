@@ -312,33 +312,67 @@ pub fn generate_single_proof(
     final_proof_type: FinalProofType,
 ) -> Result<SP1ProofWithPublicValues, Box<dyn std::error::Error>> {
     // Ensure circuit artifacts are available before proof generation
-    ensure_circuit_artifacts(final_proof_type)?;
+    println!("Checking circuit artifacts...");
+    ensure_circuit_artifacts(final_proof_type).map_err(|e| {
+        eprintln!("❌ Circuit artifacts check failed: {}", e);
+        e
+    })?;
 
     // Create prover client
+    println!("Initializing prover client...");
     let client = ProverClient::builder().cpu().build();
+
+    println!("Setting up proving/verifying keys...");
     let (pk, _vk) = client.setup(elf);
 
     let prove_start = Instant::now();
 
     println!("\nGenerating SP1 proof...");
+    println!("  ⏳ This may take a while for large inputs...");
 
     let proof = match final_proof_type {
         FinalProofType::Core => {
             println!("  Proof type: Core (compressed)");
-            client.prove(&pk, stdin).compressed().run()?
+            client.prove(&pk, stdin).compressed().run()
+                .map_err(|e| {
+                    eprintln!("\n❌ Core proof generation failed!");
+                    eprintln!("Error: {}", e);
+                    e
+                })?
         }
         FinalProofType::Groth16 => {
             println!("  Proof type: Groth16");
-            client.prove(&pk, stdin).groth16().run()?
+            println!("  📊 Stages: core → compress → shrink → wrap → groth16");
+            client.prove(&pk, stdin).groth16().run()
+                .map_err(|e| {
+                    eprintln!("\n❌ Groth16 proof generation failed!");
+                    eprintln!("Error: {}", e);
+                    eprintln!("\nPossible causes:");
+                    eprintln!("  - Memory exhaustion (try reducing --count)");
+                    eprintln!("  - Circuit artifacts missing or corrupted");
+                    eprintln!("  - Docker-in-Docker issues (gnark container failed)");
+                    eprintln!("  - Input data too large for proof system");
+                    e
+                })?
         }
         FinalProofType::Plonk => {
             println!("  Proof type: PLONK");
-            client.prove(&pk, stdin).plonk().run()?
+            println!("  📊 Stages: core → compress → shrink → wrap → plonk");
+            client.prove(&pk, stdin).plonk().run()
+                .map_err(|e| {
+                    eprintln!("\n❌ PLONK proof generation failed!");
+                    eprintln!("Error: {}", e);
+                    eprintln!("\nPossible causes:");
+                    eprintln!("  - Memory exhaustion (try reducing --count)");
+                    eprintln!("  - Circuit artifacts missing or corrupted");
+                    eprintln!("  - Docker-in-Docker issues (gnark container failed)");
+                    e
+                })?
         }
     };
 
     let prove_duration = prove_start.elapsed();
-    println!("Proof generated in {:.2}s", prove_duration.as_secs_f64());
+    println!("✓ Proof generated in {:.2}s", prove_duration.as_secs_f64());
 
     Ok(proof)
 }

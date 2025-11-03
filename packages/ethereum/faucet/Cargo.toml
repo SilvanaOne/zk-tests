@@ -1,0 +1,10 @@
+[package]
+name = "faucet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy = { version = "0.8", features = ["signers", "signer-local", "provider-http", "rpc-types"] }
+hex = "0.4"
+dotenvy = "0.15"
+tokio = { version = "1", features = ["full"] }

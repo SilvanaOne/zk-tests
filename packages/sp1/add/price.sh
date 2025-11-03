@@ -10,7 +10,8 @@ PROOFS_DIR="${PROOFS_DIR:-./proofs}"
 
 # Default parameters
 TOKEN="${TOKEN:-BTC}"
-COUNT="${COUNT:-1}"
+OPERATIONS="${OPERATIONS:-10}"
+PROOFS="${PROOFS:-1}"
 INTERVAL="${INTERVAL:-5}"
 SYSTEM="${SYSTEM:-groth16}"
 
@@ -48,7 +49,8 @@ USAGE:
 
 OPTIONS:
     --token TOKEN          Token symbol (default: BTC)
-    --count COUNT          Number of price points to fetch (default: 1)
+    --operations N         Number of price points per proof (default: 10)
+    --proofs N             Number of proofs to generate and aggregate (default: 1)
     --interval SECONDS     Interval between fetches in seconds (default: 5)
     --system SYSTEM        Proof system: groth16, plonk, or compressed (default: groth16)
     --image IMAGE          Docker image to use (default: docker.io/dfstio/price-devnet-test:latest)
@@ -65,31 +67,36 @@ SECURITY NOTE:
     For compressed proofs (no Docker socket access), use: --system compressed
 
 EXAMPLES:
-    # Generate single BTC Groth16 proof (default)
+    # Generate single BTC Groth16 proof with 10 prices (default)
     ./price.sh --token BTC
 
-    # Generate 5 ETH price proofs with 3-second intervals
-    ./price.sh --token ETH --count 5 --interval 3
+    # Generate 5 ETH prices with 3-second intervals in one proof
+    ./price.sh --token ETH --operations 5 --interval 3
+
+    # Generate aggregated proof: 1000 prices = 10 proofs × 100 prices each
+    ./price.sh --token BTC --operations 100 --proofs 10 --system groth16
 
     # Generate PLONK proof instead of Groth16
     ./price.sh --token BTC --system plonk
 
-    # Generate compressed core proof (for aggregation)
+    # Generate compressed core proof
     ./price.sh --token ETH --system compressed
 
     # Execute without generating proof (faster, for testing)
     ./price.sh --token SOL --execute
 
     # Pull latest image and generate proof
-    ./price.sh --pull --token BTC --count 3
+    ./price.sh --pull --token BTC --operations 3
 
 ENVIRONMENT VARIABLES:
     DOCKER_IMAGE           Docker image to use
     TOKEN                  Token symbol
-    COUNT                  Number of price points
+    OPERATIONS             Number of prices per proof
+    PROOFS                 Number of proofs to aggregate
     INTERVAL               Interval in seconds
     SYSTEM                 Proof system (groth16, plonk, compressed)
     PROOFS_DIR             Directory for proof output
+    CLEANUP                Set to "true" to remove container after exit (default: false)
 
 OUTPUT:
     Proofs are saved to: ${PROOFS_DIR}/
@@ -108,8 +115,12 @@ while [[ $# -gt 0 ]]; do
             TOKEN="$2"
             shift 2
             ;;
-        --count)
-            COUNT="$2"
+        --operations)
+            OPERATIONS="$2"
+            shift 2
+            ;;
+        --proofs)
+            PROOFS="$2"
             shift 2
             ;;
         --interval)
@@ -195,23 +206,38 @@ if ! docker image inspect "$DOCKER_IMAGE" &> /dev/null; then
     fi
 fi
 
+# Calculate total prices
+TOTAL_PRICES=$((OPERATIONS * PROOFS))
+
 # Display configuration
 echo ""
 print_info "Configuration:"
-echo "  Image:     $DOCKER_IMAGE"
-echo "  Token:     $TOKEN"
-echo "  Count:     $COUNT"
-echo "  Interval:  ${INTERVAL}s"
-echo "  System:    $SYSTEM"
-echo "  Mode:      $MODE"
-echo "  Output:    $PROOFS_DIR/"
+echo "  Image:       $DOCKER_IMAGE"
+echo "  Token:       $TOKEN"
+echo "  Operations:  $OPERATIONS per proof"
+echo "  Proofs:      $PROOFS"
+echo "  Total:       $TOTAL_PRICES prices"
+echo "  Interval:    ${INTERVAL}s"
+echo "  System:      $SYSTEM"
+echo "  Mode:        $MODE"
+echo "  Output:      $PROOFS_DIR/"
 echo ""
 
 # Prepare Docker command
-DOCKER_CMD="docker run --rm"
+# Always use named container and keep logs (can be disabled with CLEANUP=true)
+CONTAINER_NAME="sp1-price-prover-$$"
+if [ "${CLEANUP:-false}" = "true" ]; then
+    DOCKER_CMD="docker run --rm"
+    print_info "Cleanup mode: Container will be removed after exit"
+else
+    DOCKER_CMD="docker run --name $CONTAINER_NAME"
+    print_info "Container will be preserved for log inspection"
+    print_info "View logs with: docker logs $CONTAINER_NAME"
+fi
 
-# Set Rust logging level
+# Set Rust logging level and backtrace for detailed error messages
 DOCKER_CMD="$DOCKER_CMD -e RUST_LOG=info"
+DOCKER_CMD="$DOCKER_CMD -e RUST_BACKTRACE=1"
 
 # Mount Docker socket for Groth16/PLONK proofs (Docker-in-Docker)
 # Skip for compressed proofs or execute mode
@@ -247,7 +273,7 @@ else
     DOCKER_CMD="$DOCKER_CMD --prove --system $SYSTEM"
 fi
 
-DOCKER_CMD="$DOCKER_CMD --token $TOKEN --count $COUNT --interval $INTERVAL"
+DOCKER_CMD="$DOCKER_CMD --token $TOKEN --operations $OPERATIONS --proofs $PROOFS --interval $INTERVAL"
 
 # Run the container
 print_info "Starting price prover container..."
@@ -272,6 +298,14 @@ if eval $DOCKER_CMD; then
         ls -lh "$PROOFS_DIR"/*.json 2>/dev/null | tail -5 || echo "  No proof files found"
     fi
 
+    # Cleanup instructions
+    if [ "${CLEANUP:-false}" = "false" ]; then
+        echo ""
+        print_info "Container logs available:"
+        echo "  View logs:        docker logs $CONTAINER_NAME"
+        echo "  Remove container: docker rm $CONTAINER_NAME"
+    fi
+
     exit 0
 else
     END_TIME=$(date +%s)
@@ -282,5 +316,15 @@ else
     echo "⏱️  Duration: ${DURATION}s"
     echo ""
     print_error "Price prover failed!"
+
+    # Show how to access logs
+    if [ "${CLEANUP:-false}" = "false" ]; then
+        echo ""
+        print_warning "Container preserved for debugging:"
+        echo "  View logs:        docker logs $CONTAINER_NAME"
+        echo "  Inspect:          docker inspect $CONTAINER_NAME"
+        echo "  Remove container: docker rm $CONTAINER_NAME"
+    fi
+
     exit 1
 fi

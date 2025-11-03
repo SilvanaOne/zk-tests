@@ -1,7 +1,7 @@
 # SP1 Add Project Makefile
 # This Makefile helps with generating proofs, deploying contracts, and verifying proofs on Sepolia
 
-.PHONY: help build execute calculate execute-price prove-core prove-core-price verify-core prove-shrink prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
+.PHONY: help build execute calculate execute-price prove-core prove-core-price prove-groth16-price prove-plonk-price prove-aggregate-price verify-core prove-shrink prove-groth16 prove-plonk vkey deploy-groth16 deploy-plonk deploy-sui sui solana arbitrum verify-groth16 verify-plonk verify-contract-groth16 verify-contract-plonk check-contract-groth16 check-contract-plonk get-sum-groth16 get-sum-plonk test clean fetch-submodules hash
 
 # Load environment variables from .env file
 -include .env
@@ -31,11 +31,13 @@ help:
 	@echo "  prove-core       - Generate SP1 core proof and save as JSON"
 	@echo "                     Usage: make prove-core OPERATIONS=10 PROOFS=2"
 	@echo "  prove-core-price - Generate price verification compressed core proof"
-	@echo "                     Usage: make prove-core-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "                     Usage: make prove-core-price TOKEN=BTC OPERATIONS=10 PROOFS=1"
 	@echo "  prove-groth16-price - Generate Groth16 price verification proof (EVM-compatible)"
-	@echo "                     Usage: make prove-groth16-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "                     Usage: make prove-groth16-price TOKEN=BTC OPERATIONS=10 PROOFS=1"
 	@echo "  prove-plonk-price - Generate PLONK price verification proof (EVM-compatible)"
-	@echo "                     Usage: make prove-plonk-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "                     Usage: make prove-plonk-price TOKEN=BTC OPERATIONS=10 PROOFS=1"
+	@echo "  prove-aggregate-price - Generate aggregated price proofs (split large datasets)"
+	@echo "                     Usage: make prove-aggregate-price TOKEN=BTC OPERATIONS=100 PROOFS=10 SYSTEM=groth16"
 	@echo "  verify-core      - Verify a saved core proof from JSON"
 	@echo "                   Usage: make verify-core [PROOF=path/to/proof.json] [AGGREGATE=1]"
 	@echo "  prove-shrink   - Generate SP1 shrink proof (zkVerify compatible)"
@@ -198,13 +200,14 @@ execute-price:
 # Proof generation
 prove-core-price:
 	@echo "Generating price verification compressed core proof..."
-	@echo "Usage: make prove-core-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "Usage: make prove-core-price TOKEN=BTC OPERATIONS=10 PROOFS=1 INTERVAL=5"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release --bin price -- --prove \
 		--system compressed \
 		--token $(or $(TOKEN),BTC) \
-		--count $(or $(COUNT),1) \
+		--operations $(or $(OPERATIONS),10) \
+		--proofs $(or $(PROOFS),1) \
 		--interval $(or $(INTERVAL),5); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
@@ -213,13 +216,14 @@ prove-core-price:
 
 prove-groth16-price:
 	@echo "Generating Groth16 price verification proof..."
-	@echo "Usage: make prove-groth16-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "Usage: make prove-groth16-price TOKEN=BTC OPERATIONS=10 PROOFS=1 INTERVAL=5"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release --bin price -- --prove \
 		--system groth16 \
 		--token $(or $(TOKEN),BTC) \
-		--count $(or $(COUNT),1) \
+		--operations $(or $(OPERATIONS),10) \
+		--proofs $(or $(PROOFS),1) \
 		--interval $(or $(INTERVAL),5); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
@@ -228,13 +232,31 @@ prove-groth16-price:
 
 prove-plonk-price:
 	@echo "Generating PLONK price verification proof..."
-	@echo "Usage: make prove-plonk-price TOKEN=BTC COUNT=3 INTERVAL=5"
+	@echo "Usage: make prove-plonk-price TOKEN=BTC OPERATIONS=10 PROOFS=1 INTERVAL=5"
 	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@start_time=$$(date +%s); \
 	cd script && cargo run --release --bin price -- --prove \
 		--system plonk \
 		--token $(or $(TOKEN),BTC) \
-		--count $(or $(COUNT),1) \
+		--operations $(or $(OPERATIONS),10) \
+		--proofs $(or $(PROOFS),1) \
+		--interval $(or $(INTERVAL),5); \
+	end_time=$$(date +%s); \
+	duration=$$((end_time - start_time)); \
+	echo "⏱️  End time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "⏱️  Duration: $${duration} seconds"
+
+prove-aggregate-price:
+	@echo "Generating aggregated price verification proof..."
+	@echo "Usage: make prove-aggregate-price TOKEN=BTC OPERATIONS=100 PROOFS=10 SYSTEM=groth16"
+	@echo "This will generate $(or $(PROOFS),10) proofs of $(or $(OPERATIONS),100) prices each = $$(($(or $(PROOFS),10) * $(or $(OPERATIONS),100))) total prices"
+	@echo "⏱️  Start time: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@start_time=$$(date +%s); \
+	cd script && cargo run --release --bin price -- --prove \
+		--system $(or $(SYSTEM),groth16) \
+		--token $(or $(TOKEN),BTC) \
+		--operations $(or $(OPERATIONS),100) \
+		--proofs $(or $(PROOFS),10) \
 		--interval $(or $(INTERVAL),5); \
 	end_time=$$(date +%s); \
 	duration=$$((end_time - start_time)); \
