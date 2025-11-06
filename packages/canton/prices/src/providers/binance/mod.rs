@@ -6,7 +6,7 @@ pub mod websocket;
 
 #[allow(unused_imports)]
 pub use handler::{parse_message, print_message, Statistics};
-pub use klines::BinanceKlineClient;
+pub use klines::{BinanceKlineClient, MarketType};
 #[allow(unused_imports)]
 pub use models::BinanceMessage;
 pub use rest::BinanceRestClient;

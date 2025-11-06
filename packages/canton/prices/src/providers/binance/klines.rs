@@ -3,9 +3,17 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
+/// Market type for Binance API
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarketType {
+    Spot,
+    Futures,
+}
+
 /// Binance Kline (candlestick) REST API client
 pub struct BinanceKlineClient {
     base_url: String,
+    api_path: String,
     client: reqwest::Client,
 }
 
@@ -35,9 +43,24 @@ pub struct KlineData {
 
 impl BinanceKlineClient {
     /// Create a new Binance Kline API client
-    pub fn new() -> Self {
+    ///
+    /// # Arguments
+    /// * `market_type` - Market type (Spot or Futures)
+    pub fn new(market_type: MarketType) -> Self {
+        let (base_url, api_path) = match market_type {
+            MarketType::Spot => (
+                "https://api.binance.com".to_string(),
+                "/api/v3/klines".to_string(),
+            ),
+            MarketType::Futures => (
+                "https://fapi.binance.com".to_string(),
+                "/fapi/v1/klines".to_string(),
+            ),
+        };
+
         Self {
-            base_url: "https://api.binance.com".to_string(),
+            base_url,
+            api_path,
             client: reqwest::Client::new(),
         }
     }
@@ -59,7 +82,7 @@ impl BinanceKlineClient {
         interval: &str,
         limit: Option<u32>,
     ) -> Result<Vec<KlineData>> {
-        let url = format!("{}/api/v3/klines", self.base_url);
+        let url = format!("{}{}", self.base_url, self.api_path);
         let limit = limit.unwrap_or(1);
 
         info!("Fetching {} klines for {} (interval: {})", limit, symbol, interval);

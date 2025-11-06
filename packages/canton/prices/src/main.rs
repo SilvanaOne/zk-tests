@@ -68,6 +68,9 @@ enum Commands {
         /// Timeframe interval (5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M). Default: 15m
         #[arg(long, default_value = "15m")]
         interval: String,
+        /// Market type (spot, futures). Default: spot
+        #[arg(long, default_value = "spot")]
+        market: String,
     },
 }
 
@@ -99,8 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::News { token } => {
             run_news_mode(token.as_ref()).await?;
         }
-        Commands::Pivot { token, interval } => {
-            run_pivot_mode(token.as_ref(), interval).await?;
+        Commands::Pivot { token, interval, market } => {
+            run_pivot_mode(token.as_ref(), interval, market).await?;
         }
     }
 
@@ -694,20 +697,29 @@ where
 }
 
 /// Calculate and display pivot points for cryptocurrencies
-async fn run_pivot_mode(tokens: Option<&Vec<String>>, interval: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_pivot_mode(tokens: Option<&Vec<String>>, interval: &str, market: &str) -> Result<(), Box<dyn std::error::Error>> {
     use crate::pivot::calculate_all_pivots;
-    use crate::providers::binance::BinanceKlineClient;
+    use crate::providers::binance::{BinanceKlineClient, MarketType};
 
     info!("Calculating pivot points...");
+
+    // Parse market type
+    let market_type = match market.to_lowercase().as_str() {
+        "spot" => MarketType::Spot,
+        "futures" => MarketType::Futures,
+        _ => {
+            return Err(format!("Invalid market type '{}'. Use 'spot' or 'futures'.", market).into());
+        }
+    };
 
     let default_tokens = vec!["btc".to_string(), "eth".to_string(), "mina".to_string()];
     let tokens_list = tokens.cloned().unwrap_or(default_tokens);
     let symbols = providers::get_provider_symbols(provider::ProviderType::Binance, &tokens_list);
 
-    println!("Calculating pivot points for: {} (interval: {})\n", symbols.join(", "), interval);
+    println!("Calculating pivot points for: {} (interval: {}, market: {})\n", symbols.join(", "), interval, market);
 
     // Create kline client
-    let client = BinanceKlineClient::new();
+    let client = BinanceKlineClient::new(market_type);
 
     // Calculate pivots for each symbol
     for symbol in &symbols {
