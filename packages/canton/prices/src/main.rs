@@ -762,38 +762,38 @@ fn print_pivot_points(symbol: &str, interval: &str, pivots: &pivot::PivotPoints)
 
     // Classic Pivots
     println!("Classic Pivots:");
-    println!("  R3: ${:>10.2}    S3: ${:>10.2}", pivots.classic.r3, pivots.classic.s3);
-    println!("  R2: ${:>10.2}    S2: ${:>10.2}", pivots.classic.r2, pivots.classic.s2);
-    println!("  R1: ${:>10.2}    S1: ${:>10.2}", pivots.classic.r1, pivots.classic.s1);
-    println!("   P: ${:>10.2}", pivots.classic.pivot);
+    println!("  R3: {:>10.4}    S3: {:>10.4}", pivots.classic.r3, pivots.classic.s3);
+    println!("  R2: {:>10.4}    S2: {:>10.4}", pivots.classic.r2, pivots.classic.s2);
+    println!("  R1: {:>10.4}    S1: {:>10.4}", pivots.classic.r1, pivots.classic.s1);
+    println!("   P: {:>10.4}", pivots.classic.pivot);
     println!();
 
     // Fibonacci Pivots
     println!("Fibonacci Pivots:");
-    println!("  R3: ${:>10.2}    S3: ${:>10.2}", pivots.fibonacci.r3, pivots.fibonacci.s3);
-    println!("  R2: ${:>10.2}    S2: ${:>10.2}", pivots.fibonacci.r2, pivots.fibonacci.s2);
-    println!("  R1: ${:>10.2}    S1: ${:>10.2}", pivots.fibonacci.r1, pivots.fibonacci.s1);
-    println!("   P: ${:>10.2}", pivots.fibonacci.pivot);
+    println!("  R3: {:>10.4}    S3: {:>10.4}", pivots.fibonacci.r3, pivots.fibonacci.s3);
+    println!("  R2: {:>10.4}    S2: {:>10.4}", pivots.fibonacci.r2, pivots.fibonacci.s2);
+    println!("  R1: {:>10.4}    S1: {:>10.4}", pivots.fibonacci.r1, pivots.fibonacci.s1);
+    println!("   P: {:>10.4}", pivots.fibonacci.pivot);
     println!();
 
     // Camarilla Pivots
     println!("Camarilla Pivots:");
-    println!("  R4: ${:>10.2}    S4: ${:>10.2}", pivots.camarilla.r4, pivots.camarilla.s4);
-    println!("  R3: ${:>10.2}    S3: ${:>10.2}", pivots.camarilla.r3, pivots.camarilla.s3);
-    println!("  R2: ${:>10.2}    S2: ${:>10.2}", pivots.camarilla.r2, pivots.camarilla.s2);
-    println!("  R1: ${:>10.2}    S1: ${:>10.2}", pivots.camarilla.r1, pivots.camarilla.s1);
+    println!("  R4: {:>10.4}    S4: {:>10.4}", pivots.camarilla.r4, pivots.camarilla.s4);
+    println!("  R3: {:>10.4}    S3: {:>10.4}", pivots.camarilla.r3, pivots.camarilla.s3);
+    println!("  R2: {:>10.4}    S2: {:>10.4}", pivots.camarilla.r2, pivots.camarilla.s2);
+    println!("  R1: {:>10.4}    S1: {:>10.4}", pivots.camarilla.r1, pivots.camarilla.s1);
     println!();
 
     // Woodie Pivots
     println!("Woodie Pivots:");
-    println!("  R2: ${:>10.2}    S2: ${:>10.2}", pivots.woodie.r2, pivots.woodie.s2);
-    println!("  R1: ${:>10.2}    S1: ${:>10.2}", pivots.woodie.r1, pivots.woodie.s1);
-    println!("   P: ${:>10.2}", pivots.woodie.pivot);
+    println!("  R2: {:>10.4}    S2: {:>10.4}", pivots.woodie.r2, pivots.woodie.s2);
+    println!("  R1: {:>10.4}    S1: {:>10.4}", pivots.woodie.r1, pivots.woodie.s1);
+    println!("   P: {:>10.4}", pivots.woodie.pivot);
     println!();
 
     // DeMark Pivots
     println!("DeMark Pivots:");
-    println!("  R1: ${:>10.2}    S1: ${:>10.2}", pivots.demark.r1, pivots.demark.s1);
-    println!("   P: ${:>10.2}", pivots.demark.pivot);
+    println!("  R1: {:>10.4}    S1: {:>10.4}", pivots.demark.r1, pivots.demark.s1);
+    println!("   P: {:>10.4}", pivots.demark.pivot);
     println!();
 }
