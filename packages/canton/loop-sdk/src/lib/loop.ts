@@ -264,3 +264,316 @@ export async function verifyLoopSignature(
     return false;
   }
 }
+
+// Disclosed contract info from Scan API
+interface DisclosedContractInfo {
+  contractId: string;
+  templateId: string;
+  createdEventBlob: string;
+}
+
+// Transfer context response from the Scan API
+export interface TransferContext {
+  amuletRulesContractId: string;
+  openRoundContractId: string;
+  transferPreapprovalContractId: string;
+  featuredAppRightContractId: string | null;
+  externalPartyAmuletRulesContractId: string;
+  dsoParty: string;
+  // Full contract info for disclosed contracts
+  amuletRules: DisclosedContractInfo;
+  openMiningRound: DisclosedContractInfo;
+  transferPreapproval: DisclosedContractInfo;
+  featuredAppRight: DisclosedContractInfo | null;
+  externalPartyAmuletRules: DisclosedContractInfo;
+  synchronizerId: string;
+}
+
+// Transfer result structure
+export interface TransferResult {
+  success: boolean;
+  updateId?: string;         // Canton Ledger API updateId (1220... format)
+  submissionId?: string;     // Loop-specific submission ID
+  commandId?: string;        // Loop-specific command ID
+  error?: string;
+}
+
+/**
+ * Extracts the Canton updateId from Loop's base64-encoded transaction_data.
+ * The transaction_data is a protobuf-encoded Transaction or TransactionTree message.
+ * update_id is field 1 (string) in the protobuf schema.
+ *
+ * Canton updateId format: 1220 + 64 hex chars (multihash SHA-256)
+ *
+ * Protobuf wire format for field 1 string:
+ * - Tag byte: 0x0a (field 1, wire type 2 = length-delimited)
+ * - Length: varint encoding
+ * - Value: UTF-8 string bytes
+ */
+function extractUpdateId(transactionDataBase64: string): string | undefined {
+  try {
+    // Decode base64 to binary
+    const binaryString = atob(transactionDataBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Parse protobuf field 1 (update_id)
+    // The message starts with tag 0x0a (field 1, wire type 2)
+    let pos = 0;
+
+    // Read tag byte - should be 0x0a for field 1, wire type 2 (length-delimited)
+    if (bytes[pos] !== 0x0a) {
+      console.warn("[loop.ts] Expected protobuf tag 0x0a at position 0, got:", bytes[pos]?.toString(16));
+      return undefined;
+    }
+    pos++;
+
+    // Read varint length
+    let length = 0;
+    let shift = 0;
+    while (pos < bytes.length) {
+      const b = bytes[pos++];
+      length |= (b & 0x7f) << shift;
+      if ((b & 0x80) === 0) break;
+      shift += 7;
+    }
+
+    // Read the string value
+    if (pos + length > bytes.length) {
+      console.warn("[loop.ts] Protobuf string length exceeds buffer");
+      return undefined;
+    }
+
+    const updateIdBytes = bytes.slice(pos, pos + length);
+    const updateId = new TextDecoder('utf-8').decode(updateIdBytes);
+
+    // Validate it matches Canton updateId format: 1220 + 64 hex chars
+    if (/^1220[a-f0-9]{64}$/i.test(updateId)) {
+      return updateId;
+    }
+
+    console.warn("[loop.ts] Extracted field 1 doesn't match updateId format:", updateId);
+    return undefined;
+  } catch (e) {
+    console.warn("[loop.ts] Could not extract updateId from transaction_data:", e);
+    return undefined;
+  }
+}
+
+/**
+ * Fetches transfer context from Scan API via our Next.js server route
+ */
+async function fetchTransferContext(
+  receiverParty: string,
+  network: LoopNetwork
+): Promise<TransferContext> {
+  const response = await fetch(
+    `/api/scan/transfer-context?network=${network}&receiverParty=${encodeURIComponent(receiverParty)}`
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || `Failed to fetch transfer context: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Transfers CC (Canton Coin/Amulet) to another party using TransferFactory_Transfer
+ *
+ * Uses the ExternalPartyAmuletRules contract which implements the TransferFactory interface.
+ * This approach only requires sender authorization (unlike TransferPreapproval_Send which
+ * requires both sender and provider authorization).
+ *
+ * @param params.receiver - The receiver's partyId
+ * @param params.amount - Amount to transfer (as a decimal string, e.g., "100.0")
+ * @param params.description - Optional description/reason for the transfer
+ */
+export async function transferCC(params: {
+  receiver: string;
+  amount: string;
+  description?: string;
+}): Promise<TransferResult> {
+  const provider = getProvider();
+  if (!provider) {
+    return { success: false, error: "Not connected to Loop wallet" };
+  }
+
+  const network = getNetwork();
+  const sender = provider.party_id;
+
+  console.log("[loop.ts] transferCC called:", { sender, ...params, network });
+
+  try {
+    // 1. Fetch transfer context from Scan API
+    console.log("[loop.ts] Fetching transfer context for receiver:", params.receiver);
+    const context = await fetchTransferContext(params.receiver, network);
+    console.log("[loop.ts] Transfer context:", context);
+
+    // 2. Get user's Amulet holdings to use as inputs
+    const holdings = await provider.getActiveContracts({
+      templateId: "#splice-amulet:Splice.Amulet:Amulet"
+    });
+
+    if (!holdings || holdings.length === 0) {
+      return { success: false, error: "No Amulet holdings found. You need CC to make a transfer." };
+    }
+
+    console.log("[loop.ts] Found", holdings.length, "Amulet contracts");
+
+    // 3. Extract contract IDs from holdings
+    const inputHoldingCids = holdings
+      .map(h => h.contractEntry?.JsActiveContract?.createdEvent?.contractId)
+      .filter((id): id is string => !!id);
+
+    if (inputHoldingCids.length === 0) {
+      return { success: false, error: "Could not extract contract IDs from Amulet holdings" };
+    }
+
+    console.log("[loop.ts] Prepared", inputHoldingCids.length, "input contracts for transfer");
+
+    // 4. Build timestamps for the transfer
+    // requestedAt uses microsecond precision (6 digits), executeBefore uses millisecond precision (3 digits)
+    const now = new Date();
+    const executeBefore = new Date(now.getTime() + 30000); // 30 seconds from now
+
+    // Format timestamps to match DAML expected format
+    // toISOString() gives: 2025-11-27T21:04:42.104Z (3 digits milliseconds)
+    // For requestedAt, we need 6 digits: 2025-11-27T21:04:42.104000Z
+    // For executeBefore, we need 3 digits: 2025-11-27T21:05:12.104Z (as-is)
+    const requestedAtStr = now.toISOString().replace(/Z$/, '000Z'); // Add 000 for microseconds
+    const executeBeforeStr = executeBefore.toISOString(); // Keep millisecond precision
+
+    // 5. Build disclosed contracts array - 5 contracts total
+    // These are contracts the sender doesn't have visibility to but needs to reference
+    const disclosedContracts: Array<{
+      contractId: string;
+      createdEventBlob: string;
+      synchronizerId: string;
+      templateId: string;
+    }> = [
+      // AmuletRules
+      {
+        contractId: context.amuletRules.contractId,
+        createdEventBlob: context.amuletRules.createdEventBlob,
+        synchronizerId: context.synchronizerId,
+        templateId: context.amuletRules.templateId,
+      },
+      // OpenMiningRound
+      {
+        contractId: context.openMiningRound.contractId,
+        createdEventBlob: context.openMiningRound.createdEventBlob,
+        synchronizerId: context.synchronizerId,
+        templateId: context.openMiningRound.templateId,
+      },
+      // ExternalPartyAmuletRules (the TransferFactory contract)
+      {
+        contractId: context.externalPartyAmuletRules.contractId,
+        createdEventBlob: context.externalPartyAmuletRules.createdEventBlob,
+        synchronizerId: context.synchronizerId,
+        templateId: context.externalPartyAmuletRules.templateId,
+      },
+      // TransferPreapproval
+      {
+        contractId: context.transferPreapproval.contractId,
+        createdEventBlob: context.transferPreapproval.createdEventBlob,
+        synchronizerId: context.synchronizerId,
+        templateId: context.transferPreapproval.templateId,
+      },
+    ];
+
+    // Add FeaturedAppRight if available
+    if (context.featuredAppRight) {
+      disclosedContracts.push({
+        contractId: context.featuredAppRight.contractId,
+        createdEventBlob: context.featuredAppRight.createdEventBlob,
+        synchronizerId: context.synchronizerId,
+        templateId: context.featuredAppRight.templateId,
+      });
+    }
+
+    // 6. Build the TransferFactory_Transfer command
+    const command = {
+      commands: [{
+        ExerciseCommand: {
+          templateId: "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
+          contractId: context.externalPartyAmuletRulesContractId,
+          choice: "TransferFactory_Transfer",
+          choiceArgument: {
+            expectedAdmin: context.dsoParty,
+            transfer: {
+              sender,
+              receiver: params.receiver,
+              amount: params.amount.includes('.') ? params.amount : `${params.amount}.0`,
+              instrumentId: {
+                admin: context.dsoParty,
+                id: "Amulet"
+              },
+              inputHoldingCids,
+              requestedAt: requestedAtStr,
+              executeBefore: executeBeforeStr,
+              meta: {
+                values: {
+                  "splice.lfdecentralizedtrust.org/reason": params.description || "Transfer"
+                }
+              }
+            },
+            extraArgs: {
+              context: {
+                values: {
+                  "amulet-rules": {
+                    tag: "AV_ContractId",
+                    value: context.amuletRulesContractId
+                  },
+                  "open-round": {
+                    tag: "AV_ContractId",
+                    value: context.openRoundContractId
+                  },
+                  "featured-app-right": {
+                    tag: "AV_ContractId",
+                    value: context.featuredAppRightContractId
+                  },
+                  "transfer-preapproval": {
+                    tag: "AV_ContractId",
+                    value: context.transferPreapprovalContractId
+                  }
+                }
+              },
+              meta: { values: {} }
+            }
+          }
+        }
+      }],
+      disclosedContracts,
+    };
+
+    console.log("[loop.ts] Submitting TransferFactory_Transfer command:", JSON.stringify(command, null, 2));
+
+    // 7. Submit the transaction
+    const result = await provider.submitTransaction(command);
+    console.log("[loop.ts] Transfer result:", result);
+
+    // 8. Extract Canton updateId from transaction_data
+    let updateId: string | undefined;
+    if (result?.transaction_data) {
+      updateId = extractUpdateId(result.transaction_data);
+      console.log("[loop.ts] Extracted updateId:", updateId);
+    }
+
+    return {
+      success: true,
+      updateId,
+      submissionId: result?.submission_id,
+      commandId: result?.command_id,
+    };
+  } catch (error) {
+    console.error("[loop.ts] Transfer error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Transfer failed"
+    };
+  }
+}

@@ -15,9 +15,11 @@ import {
   RefreshCw,
   ShieldCheck,
   FileText,
+  Send,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useUserState } from "@/context/userState";
-import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, type ActiveContract } from "@/lib/loop";
+import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, type ActiveContract, type TransferResult } from "@/lib/loop";
 import type { Holding } from "@fivenorth/loop-sdk";
 
 interface LoopWalletDashboardProps {
@@ -54,6 +56,13 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
 
   // PartyId verification state
   const [partyIdVerified, setPartyIdVerified] = useState<boolean | null>(null);
+
+  // Transfer state
+  const [transferReceiver, setTransferReceiver] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferDescription, setTransferDescription] = useState("");
+  const [transferStatus, setTransferStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
 
   // Capitalize first letter for display
   const networkDisplay = network.charAt(0).toUpperCase() + network.slice(1);
@@ -179,6 +188,38 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } catch (error) {
       console.error("[LoopWallet] Verification error:", error);
       setVerifyStatus("invalid");
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!transferReceiver || !transferAmount || !isConnected) return;
+
+    setTransferStatus("loading");
+    setTransferResult(null);
+
+    try {
+      const result = await transferCC({
+        receiver: transferReceiver,
+        amount: transferAmount,
+        description: transferDescription || undefined,
+      });
+
+      setTransferResult(result);
+      setTransferStatus(result.success ? "success" : "error");
+
+      if (result.success) {
+        // Clear form on success
+        setTransferReceiver("");
+        setTransferAmount("");
+        setTransferDescription("");
+        // Refresh holdings after successful transfer
+        fetchHoldings();
+        fetchActiveContracts();
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Transfer error:", error);
+      setTransferResult({ success: false, error: error?.message || "Transfer failed" });
+      setTransferStatus("error");
     }
   };
 
@@ -433,6 +474,91 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                 );
               })}
             </div>
+          )}
+        </div>
+
+        {/* Transfer CC Section */}
+        <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+          <h4 className="text-sm font-semibold text-foreground flex items-center">
+            <Send className="w-4 h-4 mr-2" />
+            Transfer CC
+          </h4>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Receiver Party ID</label>
+              <Input
+                placeholder="Enter receiver's party ID..."
+                value={transferReceiver}
+                onChange={(e) => setTransferReceiver(e.target.value)}
+                className="bg-input border-border focus:border-primary text-foreground text-xs placeholder:text-muted-foreground h-8 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Amount (CC)</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
+                className="bg-input border-border focus:border-primary text-foreground text-xs placeholder:text-muted-foreground h-8 mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Description (optional)</label>
+              <Input
+                placeholder="Transfer reason..."
+                value={transferDescription}
+                onChange={(e) => setTransferDescription(e.target.value)}
+                className="bg-input border-border focus:border-primary text-foreground text-xs placeholder:text-muted-foreground h-8 mt-1"
+              />
+            </div>
+          </div>
+          <Button
+            onClick={handleTransfer}
+            disabled={!transferReceiver || !transferAmount || transferStatus === "loading"}
+            className="w-full bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue hover:brightness-105 text-white h-8 text-xs"
+          >
+            {transferStatus === "loading" && (
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+            )}
+            <Send className="mr-2 h-3 w-3" />
+            Send CC
+          </Button>
+          {transferStatus === "error" && transferResult && (
+            <Alert variant="destructive" className="mt-2 p-2">
+              <XCircle className="h-4 w-4" />
+              <AlertTitle className="text-sm">Transfer Failed</AlertTitle>
+              <AlertDescription className="text-xs">
+                {transferResult.error || "Unknown error occurred"}
+              </AlertDescription>
+            </Alert>
+          )}
+          {transferStatus === "success" && transferResult && (
+            <Alert
+              variant="default"
+              className="mt-2 p-2 bg-muted/30 border-border"
+            >
+              <CheckCircle className="h-4 w-4 text-brand-green" />
+              <AlertTitle className="text-sm text-foreground">
+                Transfer Successful
+              </AlertTitle>
+              <AlertDescription className="space-y-1 text-xs">
+                <p className="text-muted-foreground">
+                  Your CC has been sent successfully.
+                </p>
+                {transferResult.updateId && (
+                  <DataRow
+                    label="Update ID"
+                    value={transferResult.updateId}
+                    truncate={true}
+                    className="border-none py-0.5"
+                    valueClassName="text-xs font-mono"
+                  />
+                )}
+              </AlertDescription>
+            </Alert>
           )}
         </div>
 

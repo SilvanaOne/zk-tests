@@ -15,6 +15,20 @@ declare module "@fivenorth/loop-sdk" {
     [key: string]: any;
   }
 
+  export interface TransactionCommand {
+    ExerciseCommand: {
+      templateId: string;
+      contractId: string;
+      choice: string;
+      choiceArgument: Record<string, any>;
+    };
+  }
+
+  export interface TransactionPayload {
+    commands: TransactionCommand[];
+    disclosedContracts?: any[];
+  }
+
   export interface LoopProvider {
     party_id: string;
     public_key: string;
@@ -22,6 +36,7 @@ declare module "@fivenorth/loop-sdk" {
     getHolding(): Promise<Holding[]>;
     getActiveContracts(params?: { templateId?: string; interfaceId?: string }): Promise<ActiveContract[]>;
     signMessage(message: string): Promise<any>;
+    submitTransaction(payload: TransactionPayload): Promise<any>;
   }
 
   export interface LoopInitOptions {
