@@ -17,3 +17,4 @@ dist/
 .zkcloudworker/
 test/helpers/env.ts
 ZEKO.md
+test/faucet.zeko-nft.test.ts

@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"components/dashboard/silvana-tee-dashboard.tsx -> @/components/api/api\":{\"id\":\"components/dashboard/silvana-tee-dashboard.tsx -> @/components/api/api\",\"files\":[\"static/chunks/_app-pages-browser_src_components_api_api_tsx.js\"]}}"

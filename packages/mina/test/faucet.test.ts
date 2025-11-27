@@ -6,18 +6,20 @@ import {
   initBlockchain,
   accountBalanceMina,
   accountBalance,
-  Zeko,
-  Devnet,
   fetchMinaAccount,
 } from "@silvana-one/mina-utils";
+import { Zeko, Devnet } from "@silvana-one/api";
 import { sleep } from "../src/sleep.js";
 import { faucet, faucetDevnet } from "../src/faucet.js";
 
 let keys: { privateKey: string; publicKey: string }[] = [];
 const chain = process.env.CHAIN;
-const MINIMUM_AMOUNT = 5000;
+const MINIMUM_AMOUNT = 10000;
 const keysToTopup: string[] = [
-  "B62qmZB4E4KhmpYwoPDHe5c4yeQeAreCEwwgkGUrqSa6Ma3uC2RDZRY",
+  "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv",
+  "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv",
+  "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv",
+  "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv",
   "B62qo69VLUPMXEC6AFWRgjdTEGsA3xKvqeU5CgYm3jAbBJL7dTvaQkv",
 ];
 const writeEnv = false;
@@ -25,59 +27,65 @@ const writeEnv = false;
 describe("Topup", async () => {
   it("should check balances", async () => {
     console.log({ chain });
-    if (chain !== "devnet" && chain !== "zeko") {
+    if (chain !== "mina:devnet" && chain !== "zeko:testnet") {
       throw new Error("Invalid chain");
     }
-    await initBlockchain(chain);
-    const keysJson = await readFile("./data/keys-2.json", "utf-8");
-    const { keys: loadedKeys } = JSON.parse(keysJson) as {
-      keys: { privateKey: string; publicKey: string }[];
-    };
-    keys = loadedKeys;
-    if (writeEnv) {
-      let envContent = "";
-      for (let i = 0; i < keys.length; i++) {
-        const { privateKey, publicKey } = keys[i];
-        envContent += `# Account ${i + 1}\n`;
-        envContent += `TEST_ACCOUNT_${i + 1}_PRIVATE_KEY=${privateKey}\n`;
-        envContent += `TEST_ACCOUNT_${i + 1}_PUBLIC_KEY=${publicKey}\n\n`;
-      }
-      await writeFile("./data/.env.silvana", envContent);
-    }
-    for (let i = 0; i < keys.length; i++) {
-      const { privateKey, publicKey } = keys[i];
-      assert.strictEqual(
-        PrivateKey.fromBase58(privateKey).toPublicKey().toBase58(),
-        publicKey
-      );
-      const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
-      if (balance < MINIMUM_AMOUNT) {
-        keysToTopup.push(publicKey);
+    await initBlockchain({ chain });
+    // const keysJson = await readFile("./data/keys-2.json", "utf-8");
+    // const { keys: loadedKeys } = JSON.parse(keysJson) as {
+    //   keys: { privateKey: string; publicKey: string }[];
+    // };
+    // keys = loadedKeys;
+    // if (writeEnv) {
+    //   let envContent = "";
+    //   for (let i = 0; i < keys.length; i++) {
+    //     const { privateKey, publicKey } = keys[i];
+    //     envContent += `# Account ${i + 1}\n`;
+    //     envContent += `TEST_ACCOUNT_${i + 1}_PRIVATE_KEY=${privateKey}\n`;
+    //     envContent += `TEST_ACCOUNT_${i + 1}_PUBLIC_KEY=${publicKey}\n\n`;
+    //   }
+    //   await writeFile("./data/.env.silvana", envContent);
+    // }
+    // for (let i = 0; i < keys.length; i++) {
+    //   const { privateKey, publicKey } = keys[i];
+    //   assert.strictEqual(
+    //     PrivateKey.fromBase58(privateKey).toPublicKey().toBase58(),
+    //     publicKey
+    //   );
+    //   const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
+    //   if (balance < MINIMUM_AMOUNT) {
+    //     keysToTopup.push(publicKey);
+    //     console.log(`${publicKey}: ${balance} MINA`);
+    //   }
+    // }
+    console.log(`Accounts to topup: ${keysToTopup.length}`);
+  });
+  it(
+    "should topup accounts on zeko",
+    { skip: chain !== "zeko:testnet" },
+    async () => {
+      for (const publicKey of keysToTopup) {
+        const response = await faucet({
+          publicKey,
+          explorerUrl: Zeko.explorerAccountUrl ?? "",
+          network: "devnet",
+          faucetUrl: "https://zeko-faucet-a1ct.onrender.com/",
+        });
+        if (response.result !== "Successfully sent") {
+          console.log("faucet error:", response);
+          await sleep(180_000);
+        }
+        await sleep(5_000);
+        const balance = await accountBalanceMina(
+          PublicKey.fromBase58(publicKey)
+        );
         console.log(`${publicKey}: ${balance} MINA`);
       }
     }
-    console.log(`Accounts to topup: ${keysToTopup.length}`);
-  });
-  it("should topup accounts on zeko", { skip: chain !== "zeko" }, async () => {
-    for (const publicKey of keysToTopup) {
-      const response = await faucet({
-        publicKey,
-        explorerUrl: Zeko.explorerAccountUrl ?? "",
-        network: "devnet",
-        faucetUrl: "https://zeko-faucet-a1ct.onrender.com/",
-      });
-      if (response.result !== "Successfully sent") {
-        console.log("faucet error:", response);
-        await sleep(180_000);
-      }
-      await sleep(5_000);
-      const balance = await accountBalanceMina(PublicKey.fromBase58(publicKey));
-      console.log(`${publicKey}: ${balance} MINA`);
-    }
-  });
+  );
   it(
     "should topup accounts on devnet",
-    { skip: chain !== "devnet" },
+    { skip: chain !== "mina:devnet" },
     async () => {
       const tanks: { privateKey: string; publicKey: string }[] = [];
       for (const key of keysToTopup) {
