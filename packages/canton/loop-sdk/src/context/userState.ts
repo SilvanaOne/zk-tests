@@ -439,7 +439,7 @@ export const UserStateProvider: React.FC<{
             console.log("Creating wallet connection", walletId, address);
             const newConnection: UserWalletStatus = {
               loginType: "wallet",
-              chain: walletInfo.chain as "ethereum" | "solana" | "sui",
+              chain: walletInfo.chain as "canton",
               wallet: walletInfo.name,
               walletId,
               isConnected: true,

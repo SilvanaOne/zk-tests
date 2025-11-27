@@ -1,6 +1,5 @@
 "use client";
 import { Logger } from "@logtail/next";
-import { teeApiCall } from "./tee";
 const log = new Logger({
   source: "login",
 });
@@ -103,55 +102,13 @@ export async function getMessage(params: {
 export async function login(
   request: LoginRequest
 ): Promise<EncryptedLoginResponse> {
-  try {
-    const response = await teeApiCall({
-      endpoint: "login",
-      request,
-    });
-    if (!response.success) {
-      log.error("Login error T102:", {
-        response,
-      });
-      return {
-        success: false,
-        data: null,
-        error: response.error ?? "Error T102",
-        indexes: null,
-      };
-    }
-
-    const data: EncryptedLoginResponse =
-      process.env.NEXT_PUBLIC_LOCAL === "true"
-        ? (response.data as EncryptedLoginResponse)
-        : ((response.data as any)?.response?.data as EncryptedLoginResponse);
-    console.log("Login response:", data);
-    if (
-      data.success &&
-      data.data !== null &&
-      data.data !== undefined &&
-      Array.isArray(data.data)
-    ) {
-      return data;
-    } else {
-      log.error("Login error T103:", {
-        response: data.error,
-      });
-      return {
-        success: false,
-        data: null,
-        indexes: null,
-        error: data.error,
-      };
-    }
-  } catch (error: any) {
-    log.error("Login error T104:", {
-      error,
-    });
-    return {
-      success: false,
-      data: null,
-      indexes: null,
-      error: `Login error: ${error?.message}`,
-    };
-  }
+  // Login via Loop SDK - this function is kept for interface compatibility
+  // Actual login is handled through Loop SDK's authentication flow
+  log.info("Login called with Loop SDK", { request });
+  return {
+    success: false,
+    data: null,
+    indexes: null,
+    error: "Login is handled via Loop SDK",
+  };
 }

@@ -1,6 +1,6 @@
 import type React from "react";
 
-export type WalletChain = "solana" | "sui" | "ethereum";
+export type WalletChain = "canton";
 export type WalletProvider = "google" | "github";
 export type WalletType = "wallet" | "social";
 

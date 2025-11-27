@@ -8,14 +8,22 @@ interface ModernHeaderProps {
   teeConnected: boolean;
   teeLoading: boolean;
   onAddConnection: () => void;
+  onLogout: () => void;
 }
 
 export function ModernHeader({
   teeConnected,
   teeLoading,
   onAddConnection,
+  onLogout,
 }: ModernHeaderProps) {
-  const { theme, setTheme, resolvedTheme, systemTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatch by only rendering theme-dependent UI after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -56,36 +64,41 @@ export function ModernHeader({
           </span>
         </div>
 
-        {/* Theme Toggle Button */}
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200 border border-white/20 hover:border-white/30"
-          title={`Switch to ${
-            resolvedTheme === "dark" ? "light" : "dark"
-          } mode`}
-        >
-          {resolvedTheme === "dark" ? (
-            <Sun className="h-4 w-4 text-brand-yellow" />
-          ) : (
-            <Moon className="h-4 w-4 text-brand-purple" />
-          )}
-        </button>
+        {/* Theme Toggle Button - only render after mount to avoid hydration mismatch */}
+        {mounted && (
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200 border border-white/20 hover:border-white/30"
+            title={`Switch to ${
+              resolvedTheme === "dark" ? "light" : "dark"
+            } mode`}
+          >
+            {resolvedTheme === "dark" ? (
+              <Sun className="h-4 w-4 text-brand-yellow" />
+            ) : (
+              <Moon className="h-4 w-4 text-brand-purple" />
+            )}
+          </button>
+        )}
 
         <button
-          onClick={onAddConnection}
+          onClick={teeConnected ? onLogout : onAddConnection}
           id="add-connection"
-          className="
+          className={`
     relative flex items-center gap-2
     h-12 px-6
     rounded-full
-    bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue
+    ${teeConnected
+      ? "bg-gradient-to-r from-red-500 to-red-600"
+      : "bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue"
+    }
     text-white font-semibold
     shadow-[0_4px_20px_rgba(0,0,0,0.2)]
     hover:brightness-105 hover:shadow-[0_6px_24px_rgba(0,0,0,0.25)]
     active:scale-95 transition-all duration-200
-  "
+  `}
         >
-          Connect
+          {teeConnected ? "Logout" : "Connect"}
         </button>
       </div>
     </header>

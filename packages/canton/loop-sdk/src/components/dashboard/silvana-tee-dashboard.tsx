@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef } from "react";
 import { ModernHeader } from "@/components/dashboard/modern-header";
-import { TeeStatusDashboard } from "@/components/dashboard/tee-status-dashboard";
 import { UserStatusDashboard } from "@/components/dashboard/user-status-dashboard";
-import { MinaWalletDashboard } from "@/components/dashboard/mina-wallet-dashboard";
+import { LoopWalletDashboard } from "@/components/dashboard/loop-wallet-dashboard";
 import { WalletConnectModal } from "@/components/dashboard/wallet-connect-modal";
 import { AnimatedBackground } from "@/components/ui/animated-background";
 import { ModernCard, SectionHeader } from "@/components/ui/modern-card";
@@ -14,19 +13,17 @@ import type {
   UserSocialLoginStatus,
   ApiFunctions,
 } from "@/lib/types";
-import {
-  Attestation,
-  TeeStats,
-  TeeStatusData,
-  getAttestation,
-  getStats,
-} from "@/lib/tee";
 import { getWalletById } from "@/lib/wallet";
 import Image from "next/image";
 import type { ApiFrameHandle } from "@/components/api/api";
 import { useUserState, UserStateProvider } from "@/context/userState";
 import { sleep } from "@/lib/utils";
 import { Logger } from "@logtail/next";
+import { initLoop, connectLoop, disconnectLoop, type LoopNetwork } from "@/lib/loop";
+import {
+  NetworkSelectModal,
+  type NetworkType,
+} from "@/components/dashboard/network-select-modal";
 
 const log = new Logger({
   source: "SilvanaTeeDashboard",
@@ -39,10 +36,14 @@ const Api = dynamic(() => import("@/components/api/api").then((m) => m.Api), {
 // Internal dashboard component
 function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
   const { apiFunctions } = props;
-  const [teeStatus, setTeeStatus] = useState<TeeStatusData | null>(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
-  const [isLoadingTee, setIsLoadingTee] = useState(true);
-  const [isFetchingTee, setIsFetchingTee] = useState(false);
+
+  // Loop wallet state
+  const [loopConnected, setLoopConnected] = useState(false);
+  const [loopPartyId, setLoopPartyId] = useState<string | null>(null);
+  const [loopInitialized, setLoopInitialized] = useState(false);
+  const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkType>("devnet");
 
   // Get state and methods from context
   const {
@@ -58,117 +59,43 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
     resetFailedConnections,
   } = useUserState();
 
+  // Initialize Loop SDK
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!teeStatus) {
-        return;
-      }
-      const stats = await getStats();
-      if (stats.success && stats.data) {
-        setTeeStatus((prevTeeStatus) => {
-          if (!prevTeeStatus) {
-            return null;
-          }
-          return { ...prevTeeStatus, stats: stats.data! };
-        });
-      } else {
-        log.error("Error fetching stats", {
-          stats,
-        });
-      }
-    };
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userState]);
+    if (loopInitialized) return;
 
-  useEffect(() => {
-    const fetchTeeData = async () => {
-      if (isFetchingTee || !isLoadingTee) {
-        return;
-      }
-      setIsFetchingTee(true);
-      const stats = await getStats();
-      const attestation = await getAttestation();
-      if (
-        !stats.success ||
-        !attestation.success ||
-        !stats.data ||
-        !attestation.data
-      ) {
-        setIsLoadingTee(false);
-        setIsFetchingTee(false);
-        log.error("Error fetching stats or attestation", {
-          stats,
-          attestation,
-        });
-        return;
-      }
-      await sleep(1000);
-      console.log("Calling verifyAttestation");
-      let count = 0;
-      let verifiedAttestation: {
-        verifiedAttestation: string | null;
-        error: string | null;
-      } | null = null;
-      while (
-        count < 5 &&
-        (!verifiedAttestation || !verifiedAttestation?.verifiedAttestation)
-      ) {
-        verifiedAttestation = await apiFunctions.verifyAttestation(
-          attestation.data
-        );
-        count++;
-        console.log(`verifyAttestation ${count}:`, verifiedAttestation);
-        await sleep(1000);
-      }
+    initLoop({
+      onConnect: (provider) => {
+        console.log("Loop wallet connected:", provider.party_id);
+        setLoopConnected(true);
+        setLoopPartyId(provider.party_id);
+      },
+      onReject: () => {
+        console.log("Loop wallet connection rejected");
+        setLoopConnected(false);
+        setLoopPartyId(null);
+      },
+    });
+    setLoopInitialized(true);
+  }, [loopInitialized]);
 
-      if (
-        !verifiedAttestation ||
-        verifiedAttestation.error ||
-        !verifiedAttestation.verifiedAttestation
-      ) {
-        setIsLoadingTee(false);
-        setIsFetchingTee(false);
-        log.error("Error parsing attestation data", {
-          error: verifiedAttestation?.error,
-        });
-        return;
-      }
-      let attestationData: { result: Attestation; error: string | null };
-      try {
-        attestationData = JSON.parse(
-          verifiedAttestation.verifiedAttestation
-        ) as { result: Attestation; error: string | null };
-      } catch (error) {
-        log.error("Error parsing attestation data", {
-          error,
-        });
-        setIsLoadingTee(false);
-        setIsFetchingTee(false);
-        return;
-      }
-      if (!attestationData.result) {
-        setIsLoadingTee(false);
-        setIsFetchingTee(false);
-        log.error("Error parsing attestation data T104", {
-          error: attestationData?.error,
-        });
-        return;
-      }
-      setTeeStatus({
-        stats: stats.data,
-        attestation: attestationData.result,
-      });
-      log.info("Tee status fetched T105", {
-        stats: stats.data,
-        attestation: attestationData.result,
-      });
-      setIsLoadingTee(false);
-      setIsFetchingTee(false);
-    };
-    fetchTeeData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Handle Connect button click - opens network selection modal
+  const handleConnect = () => {
+    setIsNetworkModalOpen(true);
+  };
+
+  // Handle network selection and connect
+  const handleNetworkConnect = (network: NetworkType) => {
+    setSelectedNetwork(network);
+    setIsNetworkModalOpen(false);
+    connectLoop(network as LoopNetwork);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    disconnectLoop();
+    setLoopConnected(false);
+    setLoopPartyId(null);
+  };
 
   // Get connected wallets and social connections
   const connectedWallets = getWalletConnections();
@@ -219,42 +146,37 @@ function SilvanaTeeDashboardInternal(props: { apiFunctions: ApiFunctions }) {
 
       <div className="min-h-screen">
         <ModernHeader
-          teeConnected={teeStatus?.attestation.is_valid ?? false}
-          teeLoading={isLoadingTee}
-          onAddConnection={() => setIsWalletModalOpen(true)}
+          teeConnected={loopConnected}
+          teeLoading={false}
+          onAddConnection={handleConnect}
+          onLogout={handleLogout}
         />
 
         <div className="pt-20 pb-12">
           <div className="container mx-auto px-6 xl:px-12 max-w-[1440px]">
-            <ModernCard delay={0.1} className="mb-6">
-              <SectionHeader>Connected Wallets & Accounts</SectionHeader>
-
-              {connectedMethods.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-4">
-                  {connectedWallets.map(renderConnection)}
-                  {connectedSocials.map(renderConnection)}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center">
-                  Click &ldquo;Add Connection&rdquo; to connect your wallets and
-                  social accounts
-                </p>
-              )}
-            </ModernCard>
+            {/* Connected Wallets & Accounts - Hidden */}
 
             {/* Main Grid Layout */}
             <div className="grid grid-cols-12 gap-6">
               {/* User Authentication - Hidden for now */}
 
-              {/* Mina Wallet - Full Width */}
+              {/* Loop Wallet - Full Width */}
               <div className="col-span-12">
-                <MinaWalletDashboard />
+                <LoopWalletDashboard loopPartyId={loopPartyId} network={selectedNetwork} />
               </div>
 
               {/* TEE Status - Hidden for now */}
             </div>
           </div>
         </div>
+
+        {/* Network Select Modal */}
+        <NetworkSelectModal
+          isOpen={isNetworkModalOpen}
+          onClose={() => setIsNetworkModalOpen(false)}
+          onConnect={handleNetworkConnect}
+          selectedNetwork={selectedNetwork}
+        />
 
         {/* Wallet Connect Modal */}
         <WalletConnectModal

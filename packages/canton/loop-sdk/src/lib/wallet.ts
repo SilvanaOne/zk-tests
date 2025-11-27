@@ -1,8 +1,4 @@
 "use client";
-import { connectMetaMask, signMetaMaskMessage } from "@/lib/metamask";
-import { connectPhantom, signPhantomMessage } from "@/lib/phantom";
-import { getWallets } from "@mysten/wallet-standard";
-import { connectSolflare, signSolflareMessage } from "@/lib/solflare";
 import { getMessage, LoginRequest, LoginResponse } from "./login";
 import { WalletChain, WalletProvider, WalletType } from "./types";
 
@@ -26,76 +22,14 @@ export interface WalletOptionSocial extends WalletOptionBase {
 export type WalletOption = WalletOptionWallet | WalletOptionSocial;
 
 export const walletOptions: WalletOption[] = [
-  // Ethereum wallets
+  // Loop wallet (Canton network)
   {
-    id: "metamask-ethereum",
-    name: "MetaMask",
-    chain: "ethereum",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
+    id: "loop-canton",
+    name: "Loop",
+    chain: "canton",
+    logo: "/loop.svg",
     type: "wallet",
-    description: "Ethereum",
-  },
-  {
-    id: "phantom-ethereum",
-    name: "Phantom",
-    chain: "ethereum",
-    logo: "/phantom.svg",
-    type: "wallet",
-    description: "Ethereum",
-  },
-
-  // Sui wallets
-  {
-    id: "phantom-sui",
-    name: "Phantom",
-    chain: "sui",
-    logo: "/phantom.svg",
-    type: "wallet",
-    description: "Sui",
-  },
-  {
-    id: "slush-sui",
-    name: "Slush",
-    chain: "sui",
-    logo: "/slush.svg",
-    type: "wallet",
-    description: "Sui",
-  },
-
-  // Solana wallets
-  {
-    id: "phantom-solana",
-    name: "Phantom",
-    chain: "solana",
-    logo: "/phantom.svg",
-    type: "wallet",
-    description: "Solana",
-  },
-  {
-    id: "solflare-solana",
-    name: "Solflare",
-    chain: "solana",
-    logo: "/solflare.svg",
-    type: "wallet",
-    description: "Solana",
-  },
-
-  // Social logins
-  {
-    id: "google",
-    name: "Google",
-    logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/google.svg",
-    type: "social",
-    description: "Google Login",
-    provider: "google",
-  },
-  {
-    id: "github",
-    name: "GitHub",
-    logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/github.svg",
-    type: "social",
-    description: "GitHub Login",
-    provider: "github",
+    description: "Canton Network",
   },
 ];
 
@@ -135,24 +69,10 @@ export async function connectWallet(
     return undefined;
   }
   switch (walletId) {
-    case "metamask-ethereum":
-      return await connectMetaMask();
-    case "phantom-ethereum":
-      return await connectPhantom("ethereum");
-    case "phantom-sui":
-      return connectPhantom("sui");
-    case "slush-sui":
-      const availableWallets = getWallets().get();
-      const wallet = availableWallets.find(
-        (wallet) => wallet.name === "Slush"
-      ) as any;
-      const connected = await wallet?.features["standard:connect"].connect(); // connect call
-      const address = connected?.accounts[0]?.address;
-      return address as string | undefined;
-    case "phantom-solana":
-      return connectPhantom("solana");
-    case "solflare-solana":
-      return connectSolflare();
+    case "loop-canton":
+      // Loop wallet connection is handled via Loop SDK
+      // This function returns undefined as Loop uses a different connection flow
+      return undefined;
     default:
       throw new Error(`Unsupported wallet id: ${walletId}`);
   }
@@ -191,143 +111,10 @@ export async function signWalletMessage(params: {
       return undefined;
     }
     switch (walletId) {
-      case "metamask-ethereum": {
-        const signedMessage = await signMetaMaskMessage({
-          message: msgData.request.message,
-          display: "utf8",
-        });
-        if (!signedMessage) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const signature = signedMessage;
-        if (!signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature,
-        };
-        return request;
-      }
-      case "phantom-ethereum": {
-        const signedMessage = await signPhantomMessage({
-          chain: "ethereum",
-          message: msgData.request.message,
-          display: "utf8",
-        });
-        if (!signedMessage) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const signature = signedMessage;
-        if (!signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature,
-        };
-        return request;
-      }
-      case "phantom-sui": {
-        const signedMessage = await signPhantomMessage({
-          chain: "sui",
-          message: msgData.request.message,
-          display: "utf8",
-        });
-        const publicKey = (signedMessage as any)?.publicKey?.toString();
-        console.log("Sui Public key", publicKey);
-        const signature = (signedMessage as any)?.signature?.toString("hex");
-        if (!signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature,
-        };
-        return request;
-      }
-      case "slush-sui": {
-        const availableWallets = getWallets().get();
-        const wallet = availableWallets.find(
-          (wallet) => wallet.name === "Slush"
-        ) as any;
-        const connected = await wallet?.features["standard:connect"].connect(); // connect call
-        const connectedAddress = connected?.accounts[0]?.address;
-        if (!connectedAddress) {
-          console.error("Address not found");
-          return undefined;
-        }
-        if (connectedAddress !== address) {
-          console.error("Address mismatch");
-          return undefined;
-        }
-        const message = new TextEncoder().encode(msgData.request.message);
-        console.log("signing message with slush", {
-          message,
-          address,
-          connectedAddress,
-        });
-        const signedMessage = await wallet?.features[
-          "sui:signPersonalMessage"
-        ].signPersonalMessage({
-          message,
-          account: connected?.accounts[0],
-          chain: "sui:mainnet",
-        });
-        if (!signedMessage) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        console.log("Slush Signed message", signedMessage);
-        if (!signedMessage?.signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature: signedMessage?.signature,
-        };
-        return request;
-      }
-      case "phantom-solana": {
-        const signedMessage = await signPhantomMessage({
-          chain: "solana",
-          message: msgData.request.message,
-          display: "utf8",
-        });
-        const publicKey = (signedMessage as any)?.publicKey?.toString();
-        console.log("Solana Public key", publicKey);
-        const signature = (signedMessage as any)?.signature?.toString("hex");
-        if (!signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature,
-        };
-        return request;
-      }
-      case "solflare-solana": {
-        const signedMessage = await signSolflareMessage({
-          message: msgData.request.message,
-        });
-        const signature = signedMessage?.signature;
-        if (!signature) {
-          console.error("User rejected message");
-          return undefined;
-        }
-        const request: LoginRequest = {
-          ...msgData.request,
-          signature,
-        };
-        return request;
-      }
+      case "loop-canton":
+        // Loop wallet signing is handled via Loop SDK
+        // This is a placeholder - actual signing uses apiFunctions.signMessage
+        return undefined;
       default:
         return undefined;
     }
