@@ -14,13 +14,35 @@ import {
   Coins,
   RefreshCw,
   ShieldCheck,
-  FileText,
   Send,
+  UserCheck,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useUserState } from "@/context/userState";
-import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, type ActiveContract, type TransferResult } from "@/lib/loop";
+import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
+import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments } from "@/lib/blob";
 import type { Holding } from "@fivenorth/loop-sdk";
+
+// Type for preapproval contract with decoded details
+interface PreapprovalContract {
+  contractId: string;
+  templateId: string;
+  provider: string;
+  receiver: string;
+  expiresAt?: string;
+  createdAt?: string;
+}
+
+// Type for Amulet contract with decoded details from Lighthouse API
+interface AmuletContract {
+  contractId: string;
+  templateId: string;
+  packageName: string;
+  owner: string;
+  dso: string;
+  amount: AmuletCreateArguments["amount"];
+  createdAt?: string;
+}
 
 interface LoopWalletDashboardProps {
   loopPartyId?: string | null;
@@ -49,8 +71,8 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
 
-  // Active Contracts state
-  const [activeContracts, setActiveContracts] = useState<ActiveContract[]>([]);
+  // Active Contracts state (enriched with Lighthouse API data)
+  const [amuletContracts, setAmuletContracts] = useState<AmuletContract[]>([]);
   const [contractsLoading, setContractsLoading] = useState(false);
   const [contractsError, setContractsError] = useState<string | null>(null);
 
@@ -63,6 +85,15 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const [transferDescription, setTransferDescription] = useState("");
   const [transferStatus, setTransferStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
+
+  // Preapproval state
+  const [preapprovalProvider, setPreapprovalProvider] = useState("");
+  const [preapprovalStatus, setPreapprovalStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [preapprovalResult, setPreapprovalResult] = useState<PreapprovalResult | null>(null);
+
+  // Preapproval contracts state (from Loop SDK)
+  const [acceptedPreapprovals, setAcceptedPreapprovals] = useState<PreapprovalContract[]>([]);
+  const [preapprovalContractsLoading, setPreapprovalContractsLoading] = useState(false);
 
   // Capitalize first letter for display
   const networkDisplay = network.charAt(0).toUpperCase() + network.slice(1);
@@ -90,7 +121,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     }
   }, [isConnected]);
 
-  // Fetch active contracts when connected (only Amulet contracts)
+  // Fetch active contracts when connected (Amulet contracts enriched with Lighthouse API)
   const fetchActiveContracts = useCallback(async () => {
     console.log("[LoopWallet] fetchActiveContracts called, isConnected:", isConnected);
     if (!isConnected) return;
@@ -102,16 +133,34 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
         templateId: "#splice-amulet:Splice.Amulet:Amulet"
       });
       console.log("[LoopWallet] Active contracts result:", result);
+
       if (result && result.length > 0) {
-        console.log("[LoopWallet] First contract full structure:", JSON.stringify(result[0], null, 2));
-        console.log("[LoopWallet] contractEntry:", result[0].contractEntry);
-        console.log("[LoopWallet] JsActiveContract:", result[0].contractEntry?.JsActiveContract);
-        console.log("[LoopWallet] createdEvent:", result[0].contractEntry?.JsActiveContract?.createdEvent);
-      }
-      if (result) {
-        setActiveContracts(result);
+        // Fetch details from Lighthouse API for each contract
+        const enrichedContracts: AmuletContract[] = await Promise.all(
+          result.map(async (contract) => {
+            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+
+            // Fetch full details from Lighthouse API
+            const details = await fetchContractDetails(contractId, network);
+            const args = details?.create_arguments as AmuletCreateArguments | undefined;
+
+            return {
+              contractId,
+              templateId: details?.template_id || createdEvent?.templateId || "",
+              packageName: details?.package_name || createdEvent?.packageName || "",
+              owner: args?.owner || "",
+              dso: args?.dso || "",
+              amount: args?.amount || { initialAmount: "0", createdAt: { number: "0" }, ratePerRound: { rate: "0" } },
+              createdAt: createdEvent?.createdAt,
+            };
+          })
+        );
+
+        console.log("[LoopWallet] Enriched Amulet contracts:", enrichedContracts);
+        setAmuletContracts(enrichedContracts);
       } else {
-        setActiveContracts([]);
+        setAmuletContracts([]);
       }
     } catch (error: any) {
       console.error("[LoopWallet] Failed to fetch active contracts:", error);
@@ -119,14 +168,66 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setContractsLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, network]);
+
+  // Fetch preapproval contracts from Loop SDK and enrich with Lighthouse API
+  const fetchPreapprovalContracts = useCallback(async () => {
+    console.log("[LoopWallet] fetchPreapprovalContracts called, isConnected:", isConnected, "partyId:", loopPartyId);
+    if (!isConnected || !loopPartyId) return;
+
+    setPreapprovalContractsLoading(true);
+    try {
+      // Fetch TransferPreapproval contracts directly from Loop SDK
+      // This gives us all preapprovals where user is receiver (has visibility)
+      const contracts = await getLoopActiveContracts({
+        templateId: "#splice-amulet:Splice.AmuletRules:TransferPreapproval"
+      });
+
+      console.log("[LoopWallet] TransferPreapproval contracts from Loop SDK:", contracts);
+
+      if (contracts && contracts.length > 0) {
+        // Extract contract IDs and fetch details from Lighthouse API
+        const preapprovals: PreapprovalContract[] = await Promise.all(
+          contracts.map(async (contract) => {
+            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+
+            // Fetch full details from Lighthouse API
+            const details = await fetchContractDetails(contractId, network);
+            const args = details?.create_arguments as TransferPreapprovalCreateArguments | undefined;
+
+            return {
+              contractId,
+              templateId: createdEvent?.templateId || createdEvent?.template_id || contract.template_id,
+              provider: args?.provider || "",
+              receiver: args?.receiver || loopPartyId,
+              expiresAt: args?.expiresAt,
+              createdAt: createdEvent?.createdAt,
+            };
+          })
+        );
+
+        console.log("[LoopWallet] Mapped preapprovals with Lighthouse details:", preapprovals);
+        setAcceptedPreapprovals(preapprovals);
+      } else {
+        console.log("[LoopWallet] No TransferPreapproval contracts found");
+        setAcceptedPreapprovals([]);
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Failed to fetch preapproval contracts:", error);
+      setAcceptedPreapprovals([]);
+    } finally {
+      setPreapprovalContractsLoading(false);
+    }
+  }, [isConnected, loopPartyId, network]);
 
   useEffect(() => {
     if (isConnected) {
       fetchHoldings();
       fetchActiveContracts();
+      fetchPreapprovalContracts();
     }
-  }, [isConnected, fetchHoldings, fetchActiveContracts]);
+  }, [isConnected, fetchHoldings, fetchActiveContracts, fetchPreapprovalContracts]);
 
   // Verify partyId matches public key when connected
   useEffect(() => {
@@ -220,6 +321,31 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
       console.error("[LoopWallet] Transfer error:", error);
       setTransferResult({ success: false, error: error?.message || "Transfer failed" });
       setTransferStatus("error");
+    }
+  };
+
+  const handleCreatePreapproval = async () => {
+    if (!isConnected || !preapprovalProvider.trim()) return;
+
+    setPreapprovalStatus("loading");
+    setPreapprovalResult(null);
+
+    try {
+      const result = await createTransferPreapprovalProposal({
+        provider: preapprovalProvider.trim()
+      });
+      setPreapprovalResult(result);
+      setPreapprovalStatus(result.success ? "success" : "error");
+
+      if (result.success) {
+        // Clear input and refresh preapproval contracts after successful creation
+        setPreapprovalProvider("");
+        fetchPreapprovalContracts();
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Preapproval error:", error);
+      setPreapprovalResult({ success: false, error: error?.message || "Failed to create preapproval" });
+      setPreapprovalStatus("error");
     }
   };
 
@@ -377,12 +503,12 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
           )}
         </div>
 
-        {/* Active Contracts Section */}
+        {/* Canton Coin Holdings Section */}
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
-              <FileText className="w-4 h-4 mr-2" />
-              Active Contracts
+              <Coins className="w-4 h-4 mr-2" />
+              Canton Coin Holdings
             </h4>
             <Button
               type="button"
@@ -399,7 +525,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
           {contractsLoading && (
             <div className="flex flex-col items-center justify-center py-4 gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">Loading contracts (may take up to 20s)...</p>
+              <p className="text-xs text-muted-foreground">Loading holdings...</p>
             </div>
           )}
 
@@ -410,69 +536,145 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
             </Alert>
           )}
 
-          {!contractsLoading && !contractsError && activeContracts.length === 0 && (
+          {!contractsLoading && !contractsError && amuletContracts.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-2">
-              No active contracts found
+              No Canton Coin holdings found
             </p>
           )}
 
-          {!contractsLoading && !contractsError && activeContracts.length > 0 && (
+          {!contractsLoading && !contractsError && amuletContracts.length > 0 && (
             <div className="space-y-2">
-              {activeContracts.map((contract, index) => {
-                // Handle nested JsActiveContract.createdEvent structure from API
-                // API returns: { contractEntry: { JsActiveContract: { createdEvent: { templateId, contractId, ... } } } }
-                const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
-                const templateId = createdEvent?.templateId || createdEvent?.template_id || contract.template_id;
-                const contractId = createdEvent?.contractId || createdEvent?.contract_id || contract.contract_id;
-                const packageName = createdEvent?.packageName || createdEvent?.package_name;
-                const createdAt = createdEvent?.createdAt;
-
-                return (
-                  <div
-                    key={`${contractId}-${index}`}
-                    className="p-2 rounded-md bg-background/50 border border-border/50"
-                  >
-                    <div className="space-y-1">
-                      {packageName && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Package:</span>
-                          <span className="text-xs font-medium">{packageName}</span>
-                        </div>
-                      )}
-                      {templateId && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Template:</span>
-                          <span className="text-xs font-mono truncate flex-1" title={templateId}>
-                            {templateId.split(":").slice(-2).join(":")}
-                          </span>
-                        </div>
-                      )}
-                      {contractId && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
-                          <span
-                            className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
-                            title="Click to copy"
-                            onClick={() => {
-                              navigator.clipboard.writeText(contractId);
-                            }}
-                          >
-                            {contractId}
-                          </span>
-                        </div>
-                      )}
-                      {createdAt && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Created:</span>
-                          <span className="text-xs">
-                            {new Date(createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                      )}
+              {amuletContracts.map((contract, index) => (
+                <div
+                  key={`${contract.contractId}-${index}`}
+                  className="p-2 rounded-md bg-background/50 border border-border/50"
+                >
+                  <div className="space-y-1">
+                    {/* Amount prominently displayed */}
+                    <div className="flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-brand-yellow" />
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatBalance(contract.amount.initialAmount)} CC
+                      </span>
                     </div>
+                    {contract.packageName && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Package:</span>
+                        <span className="text-xs font-medium">{contract.packageName}</span>
+                      </div>
+                    )}
+                    {contract.templateId && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Template:</span>
+                        <span className="text-xs font-mono truncate flex-1" title={contract.templateId}>
+                          {contract.templateId.split(":").slice(-2).join(":")}
+                        </span>
+                      </div>
+                    )}
+                    {contract.contractId && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(contract.contractId)}
+                        >
+                          {contract.contractId}
+                        </span>
+                      </div>
+                    )}
+                    {contract.createdAt && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Created:</span>
+                        <span className="text-xs">
+                          {new Date(contract.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Preapproval Contracts Section */}
+        <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <UserCheck className="w-4 h-4 mr-2" />
+              Preapproval Status
+            </h4>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchPreapprovalContracts()}
+              disabled={preapprovalContractsLoading}
+              className="h-6 w-6 p-0"
+            >
+              <RefreshCw className={`h-3 w-3 ${preapprovalContractsLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+
+          {preapprovalContractsLoading && (
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Loading preapproval status...</p>
+            </div>
+          )}
+
+          {!preapprovalContractsLoading && acceptedPreapprovals.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              No active preapproval found. Create a proposal below.
+            </p>
+          )}
+
+          {/* Active Preapprovals */}
+          {!preapprovalContractsLoading && acceptedPreapprovals.length > 0 && (
+            <div className="space-y-2">
+              {acceptedPreapprovals.map((preapproval, index) => (
+                <div key={preapproval.contractId || index} className="p-2 rounded-md bg-brand-green/10 border border-brand-green/30">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Status:</span>
+                      <span className="text-xs font-medium text-brand-green">Active</span>
+                    </div>
+                    {preapproval.provider && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Provider:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(preapproval.provider)}
+                        >
+                          {preapproval.provider}
+                        </span>
+                      </div>
+                    )}
+                    {preapproval.expiresAt && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Expires:</span>
+                        <span className="text-xs">
+                          {new Date(preapproval.expiresAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                    {preapproval.contractId && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(preapproval.contractId)}
+                        >
+                          {preapproval.contractId}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -552,6 +754,72 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                   <DataRow
                     label="Update ID"
                     value={transferResult.updateId}
+                    truncate={true}
+                    className="border-none py-0.5"
+                    valueClassName="text-xs font-mono"
+                  />
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        {/* Preapprove Transfers Section */}
+        <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+          <h4 className="text-sm font-semibold text-foreground flex items-center">
+            <UserCheck className="w-4 h-4 mr-2" />
+            Preapprove Transfers
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            Create a transfer preapproval proposal.
+          </p>
+          <div>
+            <label className="text-xs text-muted-foreground">Provider Party ID</label>
+            <Input
+              placeholder="Enter provider's party ID..."
+              value={preapprovalProvider}
+              onChange={(e) => setPreapprovalProvider(e.target.value)}
+              className="bg-input border-border focus:border-primary text-foreground text-xs placeholder:text-muted-foreground h-8 mt-1"
+            />
+          </div>
+          <Button
+            onClick={handleCreatePreapproval}
+            disabled={!preapprovalProvider.trim() || preapprovalStatus === "loading"}
+            className="w-full bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue hover:brightness-105 text-white h-8 text-xs"
+          >
+            {preapprovalStatus === "loading" && (
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+            )}
+            <UserCheck className="mr-2 h-3 w-3" />
+            Create Preapproval Proposal
+          </Button>
+          {preapprovalStatus === "error" && preapprovalResult && (
+            <Alert variant="destructive" className="mt-2 p-2">
+              <XCircle className="h-4 w-4" />
+              <AlertTitle className="text-sm">Preapproval Failed</AlertTitle>
+              <AlertDescription className="text-xs">
+                {preapprovalResult.error || "Unknown error occurred"}
+              </AlertDescription>
+            </Alert>
+          )}
+          {preapprovalStatus === "success" && preapprovalResult && (
+            <Alert
+              variant="default"
+              className="mt-2 p-2 bg-muted/30 border-border"
+            >
+              <CheckCircle className="h-4 w-4 text-brand-green" />
+              <AlertTitle className="text-sm text-foreground">
+                Proposal Created
+              </AlertTitle>
+              <AlertDescription className="space-y-1 text-xs">
+                <p className="text-muted-foreground">
+                  Transfer preapproval proposal has been created.
+                  The provider needs to accept it to complete the preapproval.
+                </p>
+                {preapprovalResult.updateId && (
+                  <DataRow
+                    label="Update ID"
+                    value={preapprovalResult.updateId}
                     truncate={true}
                     className="border-none py-0.5"
                     valueClassName="text-xs font-mono"

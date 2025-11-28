@@ -298,6 +298,19 @@ export interface TransferResult {
   error?: string;
 }
 
+// Preapproval result structure
+export interface PreapprovalResult {
+  success: boolean;
+  updateId?: string;
+  submissionId?: string;
+  commandId?: string;
+  error?: string;
+}
+
+// Hardcoded constants for devnet
+const DEVNET_DSO_PARTY = "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a";
+const ORDERBOOK_OPERATOR_PARTY = "orderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae";
+
 /**
  * Extracts the Canton updateId from Loop's base64-encoded transaction_data.
  * The transaction_data is a protobuf-encoded Transaction or TransactionTree message.
@@ -574,6 +587,77 @@ export async function transferCC(params: {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Transfer failed"
+    };
+  }
+}
+
+/**
+ * Creates a TransferPreapprovalProposal contract.
+ *
+ * This is Step 1 of the preapproval process:
+ * 1. Receiver creates TransferPreapprovalProposal (this function)
+ * 2. Provider accepts the proposal (separate process)
+ *
+ * The logged-in user becomes the receiver who will be able to receive
+ * transfers from the specified provider once the proposal is accepted.
+ *
+ * @param params.provider - The provider's partyId (e.g., orderbook-operator-1::...)
+ *                          Defaults to ORDERBOOK_OPERATOR_PARTY if not specified
+ */
+export async function createTransferPreapprovalProposal(params?: {
+  provider?: string;
+}): Promise<PreapprovalResult> {
+  const loopProvider = getProvider();
+  if (!loopProvider) {
+    return { success: false, error: "Not connected to Loop wallet" };
+  }
+
+  const receiver = loopProvider.party_id;
+  const provider = params?.provider || ORDERBOOK_OPERATOR_PARTY;
+
+  console.log("[loop.ts] createTransferPreapprovalProposal called:", { receiver, provider });
+
+  try {
+    // Build the CreateCommand for TransferPreapprovalProposal
+    const command = {
+      commands: [{
+        CreateCommand: {
+          templateId: "#splice-wallet:Splice.Wallet.TransferPreapproval:TransferPreapprovalProposal",
+          createArguments: {
+            provider,
+            receiver,
+            expectedDso: DEVNET_DSO_PARTY
+          }
+        }
+      }],
+      // No disclosedContracts needed for CreateCommand
+      disclosedContracts: []
+    };
+
+    console.log("[loop.ts] Submitting TransferPreapprovalProposal command:", JSON.stringify(command, null, 2));
+
+    // Submit the transaction
+    const result = await loopProvider.submitTransaction(command);
+    console.log("[loop.ts] Preapproval proposal result:", result);
+
+    // Extract Canton updateId from transaction_data
+    let updateId: string | undefined;
+    if (result?.transaction_data) {
+      updateId = extractUpdateId(result.transaction_data);
+      console.log("[loop.ts] Extracted updateId:", updateId);
+    }
+
+    return {
+      success: true,
+      updateId,
+      submissionId: result?.submission_id,
+      commandId: result?.command_id,
+    };
+  } catch (error) {
+    console.error("[loop.ts] Preapproval proposal error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create preapproval proposal"
     };
   }
 }
