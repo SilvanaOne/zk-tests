@@ -13,6 +13,7 @@
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@canton-network/wallet-sdk": "^0.18.0",
     "@emotion/is-prop-valid": "latest",
     "@fivenorth/loop-sdk": "^0.3.0",
     "@hookform/resolvers": "^5.1.1",

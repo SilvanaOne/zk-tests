@@ -16,11 +16,13 @@ import {
   ShieldCheck,
   Send,
   UserCheck,
+  ExternalLink,
+  Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useUserState } from "@/context/userState";
 import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
-import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments } from "@/lib/blob";
+import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails } from "@/lib/blob";
 import type { Holding } from "@fivenorth/loop-sdk";
 
 // Type for preapproval contract with decoded details
@@ -42,6 +44,8 @@ interface AmuletContract {
   dso: string;
   amount: AmuletCreateArguments["amount"];
   createdAt?: string;
+  createdEventBlob: string;  // Base64-encoded protobuf blob for disclosed contracts
+  blob: ContractDetails | null;  // Decoded contract details from Lighthouse API
 }
 
 interface LoopWalletDashboardProps {
@@ -83,12 +87,12 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const [transferReceiver, setTransferReceiver] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const [transferDescription, setTransferDescription] = useState("");
-  const [transferStatus, setTransferStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [transferStatus, setTransferStatus] = useState<"idle" | "awaiting" | "loading" | "success" | "error">("idle");
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
 
   // Preapproval state
   const [preapprovalProvider, setPreapprovalProvider] = useState("");
-  const [preapprovalStatus, setPreapprovalStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [preapprovalStatus, setPreapprovalStatus] = useState<"idle" | "awaiting" | "loading" | "success" | "error">("idle");
   const [preapprovalResult, setPreapprovalResult] = useState<PreapprovalResult | null>(null);
 
   // Preapproval contracts state (from Loop SDK)
@@ -153,6 +157,8 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
               dso: args?.dso || "",
               amount: args?.amount || { initialAmount: "0", createdAt: { number: "0" }, ratePerRound: { rate: "0" } },
               createdAt: createdEvent?.createdAt,
+              createdEventBlob: createdEvent?.createdEventBlob || "",
+              blob: details,
             };
           })
         );
@@ -243,6 +249,18 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     verifyPartyId();
   }, [loopPartyId]);
 
+  // Wallet URLs by network
+  const walletUrls: Record<string, string> = {
+    devnet: "https://devnet.cantonloop.com",
+    testnet: "https://testnet.cantonloop.com",
+    mainnet: "https://cantonloop.com",
+  };
+
+  // Open Loop wallet in new tab (or focus if already open with same name)
+  const openLoopWallet = () => {
+    window.open(walletUrls[network] || walletUrls.devnet, "loop-wallet");
+  };
+
   // Format balance - the API returns decimal strings like "10000.000000"
   const formatBalance = (amount: string): string => {
     const num = parseFloat(amount);
@@ -252,6 +270,23 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
       minimumFractionDigits: 0,
       maximumFractionDigits: 4,
     });
+  };
+
+  // Download contract data as JSON file for use as disclosed contract in transactions
+  const downloadContractJson = (contract: AmuletContract) => {
+    const data = {
+      templateId: contract.templateId,
+      contractId: contract.contractId,
+      createdEventBlob: contract.createdEventBlob,  // Base64-encoded protobuf for disclosed contracts
+      create_arguments: contract.blob?.create_arguments,  // Decoded payload for reference
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contract-${contract.contractId.slice(0, 8)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleSignMessage = async () => {
@@ -295,7 +330,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const handleTransfer = async () => {
     if (!transferReceiver || !transferAmount || !isConnected) return;
 
-    setTransferStatus("loading");
+    setTransferStatus("awaiting");
     setTransferResult(null);
 
     try {
@@ -327,7 +362,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const handleCreatePreapproval = async () => {
     if (!isConnected || !preapprovalProvider.trim()) return;
 
-    setPreapprovalStatus("loading");
+    setPreapprovalStatus("awaiting");
     setPreapprovalResult(null);
 
     try {
@@ -550,12 +585,24 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                   className="p-2 rounded-md bg-background/50 border border-border/50"
                 >
                   <div className="space-y-1">
-                    {/* Amount prominently displayed */}
-                    <div className="flex items-center gap-2">
-                      <Coins className="w-4 h-4 text-brand-yellow" />
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatBalance(contract.amount.initialAmount)} CC
-                      </span>
+                    {/* Amount prominently displayed with download button */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-brand-yellow" />
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatBalance(contract.amount.initialAmount)} CC
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => downloadContractJson(contract)}
+                        className="h-6 w-6 p-0"
+                        title="Download contract JSON"
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
                     </div>
                     {contract.packageName && (
                       <div className="flex items-center gap-2">
@@ -719,7 +766,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
           </div>
           <Button
             onClick={handleTransfer}
-            disabled={!transferReceiver || !transferAmount || transferStatus === "loading"}
+            disabled={!transferReceiver || !transferAmount || transferStatus === "loading" || transferStatus === "awaiting"}
             className="w-full bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue hover:brightness-105 text-white h-8 text-xs"
           >
             {transferStatus === "loading" && (
@@ -728,6 +775,26 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
             <Send className="mr-2 h-3 w-3" />
             Send CC
           </Button>
+          {transferStatus === "awaiting" && (
+            <Alert className="mt-2 p-2 bg-brand-yellow/10 border-brand-yellow/30">
+              <Loader2 className="h-4 w-4 animate-spin text-brand-yellow" />
+              <AlertTitle className="text-sm text-foreground">Awaiting Approval</AlertTitle>
+              <AlertDescription className="text-xs">
+                <p className="text-muted-foreground mb-2">
+                  Please approve this transaction in your Loop Wallet.
+                </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={openLoopWallet}
+                  className="h-6 p-0 text-xs text-brand-yellow hover:text-brand-yellow/80"
+                >
+                  Open Loop Wallet
+                  <ExternalLink className="ml-1 h-3 w-3" />
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {transferStatus === "error" && transferResult && (
             <Alert variant="destructive" className="mt-2 p-2">
               <XCircle className="h-4 w-4" />
@@ -784,7 +851,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
           </div>
           <Button
             onClick={handleCreatePreapproval}
-            disabled={!preapprovalProvider.trim() || preapprovalStatus === "loading"}
+            disabled={!preapprovalProvider.trim() || preapprovalStatus === "loading" || preapprovalStatus === "awaiting"}
             className="w-full bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue hover:brightness-105 text-white h-8 text-xs"
           >
             {preapprovalStatus === "loading" && (
@@ -793,6 +860,26 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
             <UserCheck className="mr-2 h-3 w-3" />
             Create Preapproval Proposal
           </Button>
+          {preapprovalStatus === "awaiting" && (
+            <Alert className="mt-2 p-2 bg-brand-yellow/10 border-brand-yellow/30">
+              <Loader2 className="h-4 w-4 animate-spin text-brand-yellow" />
+              <AlertTitle className="text-sm text-foreground">Awaiting Approval</AlertTitle>
+              <AlertDescription className="text-xs">
+                <p className="text-muted-foreground mb-2">
+                  Please approve this transaction in your Loop Wallet.
+                </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={openLoopWallet}
+                  className="h-6 p-0 text-xs text-brand-yellow hover:text-brand-yellow/80"
+                >
+                  Open Loop Wallet
+                  <ExternalLink className="ml-1 h-3 w-3" />
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {preapprovalStatus === "error" && preapprovalResult && (
             <Alert variant="destructive" className="mt-2 p-2">
               <XCircle className="h-4 w-4" />
