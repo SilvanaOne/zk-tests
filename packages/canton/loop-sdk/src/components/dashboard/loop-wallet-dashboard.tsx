@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { StatusCard, DataRow, StatusPill } from "./status-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,7 @@ interface LoopWalletDashboardProps {
 export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWalletDashboardProps) {
   const { state: userState } = useUserState();
 
-  const publicKey = userState.selectedAuthMethod?.minaPublicKey;
+  const publicKey = userState.selectedAuthMethod?.publicKey;
   const isConnected = !!loopPartyId;
   const [messageToSign, setMessageToSign] = useState("Hello Loop world!");
   const [signedMessage, setSignedMessage] = useState<{
@@ -505,13 +506,16 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                   className="flex items-center gap-3 p-2 rounded-md bg-background/50 border border-border/50"
                 >
                   {holding.image && (
-                    <img
+                    <Image
                       src={holding.image}
                       alt={holding.symbol}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                       }}
+                      unoptimized
                     />
                   )}
                   <div className="flex-1 min-w-0">
@@ -817,15 +821,6 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                 <p className="text-muted-foreground">
                   Your CC has been sent successfully.
                 </p>
-                {transferResult.updateId && (
-                  <DataRow
-                    label="Update ID"
-                    value={transferResult.updateId}
-                    truncate={true}
-                    className="border-none py-0.5"
-                    valueClassName="text-xs font-mono"
-                  />
-                )}
               </AlertDescription>
             </Alert>
           )}
@@ -903,15 +898,6 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                   Transfer preapproval proposal has been created.
                   The provider needs to accept it to complete the preapproval.
                 </p>
-                {preapprovalResult.updateId && (
-                  <DataRow
-                    label="Update ID"
-                    value={preapprovalResult.updateId}
-                    truncate={true}
-                    className="border-none py-0.5"
-                    valueClassName="text-xs font-mono"
-                  />
-                )}
               </AlertDescription>
             </Alert>
           )}

@@ -20,8 +20,7 @@ export interface UserStatus {
   isConnected: boolean;
   isConnectionFailed: boolean;
   isConnecting: boolean;
-  minaPublicKey?: string;
-  shamirShares?: number[]; // Array of share numbers used (1-16)
+  publicKey?: string;
   icon?: React.ElementType;
 }
 
@@ -53,30 +52,6 @@ export interface WalletConnectionResult {
   state: WalletConnectionState;
   error?: string;
   address?: string;
-  shamirShares?: string[];
-}
-
-export interface ApiFunctions {
-  getPrivateKeyId: () => Promise<{
-    privateKeyId: string;
-    publicKey: string;
-  } | null>;
-  decryptShares: (
-    data: string[],
-    privateKeyId: string
-  ) => Promise<string | null>;
-  signMessage: (params: {
-    publicKey: string;
-    message: string;
-  }) => Promise<{ signature: string | null; error: string | null }>;
-  signPayment: (params: {
-    publicKey: string;
-    payment: string;
-  }) => Promise<{ signature: string | null; error: string | null }>;
-  verifyAttestation: (attestation: string) => Promise<{
-    verifiedAttestation: string | null;
-    error: string | null;
-  } | null>;
 }
 
 export interface UnifiedUserState {

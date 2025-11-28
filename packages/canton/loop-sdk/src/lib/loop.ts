@@ -143,6 +143,11 @@ export async function signLoopMessage(message: string): Promise<any> {
   return provider.signMessage(message);
 }
 
+export function getLoopPartyId(): string | null {
+  const provider = getProvider();
+  return provider?.party_id || null;
+}
+
 export function getLoopPublicKey(): string | null {
   return getProvider()?.public_key ?? null;
 }
@@ -292,7 +297,6 @@ export interface TransferContext {
 // Transfer result structure
 export interface TransferResult {
   success: boolean;
-  updateId?: string;         // Canton Ledger API updateId (1220... format)
   submissionId?: string;     // Loop-specific submission ID
   commandId?: string;        // Loop-specific command ID
   error?: string;
@@ -301,7 +305,6 @@ export interface TransferResult {
 // Preapproval result structure
 export interface PreapprovalResult {
   success: boolean;
-  updateId?: string;
   submissionId?: string;
   commandId?: string;
   error?: string;
@@ -310,70 +313,6 @@ export interface PreapprovalResult {
 // Hardcoded constants for devnet
 const DEVNET_DSO_PARTY = "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a";
 const ORDERBOOK_OPERATOR_PARTY = "orderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae";
-
-/**
- * Extracts the Canton updateId from Loop's base64-encoded transaction_data.
- * The transaction_data is a protobuf-encoded Transaction or TransactionTree message.
- * update_id is field 1 (string) in the protobuf schema.
- *
- * Canton updateId format: 1220 + 64 hex chars (multihash SHA-256)
- *
- * Protobuf wire format for field 1 string:
- * - Tag byte: 0x0a (field 1, wire type 2 = length-delimited)
- * - Length: varint encoding
- * - Value: UTF-8 string bytes
- */
-function extractUpdateId(transactionDataBase64: string): string | undefined {
-  try {
-    // Decode base64 to binary
-    const binaryString = atob(transactionDataBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    // Parse protobuf field 1 (update_id)
-    // The message starts with tag 0x0a (field 1, wire type 2)
-    let pos = 0;
-
-    // Read tag byte - should be 0x0a for field 1, wire type 2 (length-delimited)
-    if (bytes[pos] !== 0x0a) {
-      console.warn("[loop.ts] Expected protobuf tag 0x0a at position 0, got:", bytes[pos]?.toString(16));
-      return undefined;
-    }
-    pos++;
-
-    // Read varint length
-    let length = 0;
-    let shift = 0;
-    while (pos < bytes.length) {
-      const b = bytes[pos++];
-      length |= (b & 0x7f) << shift;
-      if ((b & 0x80) === 0) break;
-      shift += 7;
-    }
-
-    // Read the string value
-    if (pos + length > bytes.length) {
-      console.warn("[loop.ts] Protobuf string length exceeds buffer");
-      return undefined;
-    }
-
-    const updateIdBytes = bytes.slice(pos, pos + length);
-    const updateId = new TextDecoder('utf-8').decode(updateIdBytes);
-
-    // Validate it matches Canton updateId format: 1220 + 64 hex chars
-    if (/^1220[a-f0-9]{64}$/i.test(updateId)) {
-      return updateId;
-    }
-
-    console.warn("[loop.ts] Extracted field 1 doesn't match updateId format:", updateId);
-    return undefined;
-  } catch (e) {
-    console.warn("[loop.ts] Could not extract updateId from transaction_data:", e);
-    return undefined;
-  }
-}
 
 /**
  * Fetches transfer context from Scan API via our Next.js server route
@@ -569,16 +508,8 @@ export async function transferCC(params: {
     const result = await provider.submitTransaction(command);
     console.log("[loop.ts] Transfer result:", result);
 
-    // 8. Extract Canton updateId from transaction_data
-    let updateId: string | undefined;
-    if (result?.transaction_data) {
-      updateId = extractUpdateId(result.transaction_data);
-      console.log("[loop.ts] Extracted updateId:", updateId);
-    }
-
     return {
       success: true,
-      updateId,
       submissionId: result?.submission_id,
       commandId: result?.command_id,
     };
@@ -640,16 +571,8 @@ export async function createTransferPreapprovalProposal(params?: {
     const result = await loopProvider.submitTransaction(command);
     console.log("[loop.ts] Preapproval proposal result:", result);
 
-    // Extract Canton updateId from transaction_data
-    let updateId: string | undefined;
-    if (result?.transaction_data) {
-      updateId = extractUpdateId(result.transaction_data);
-      console.log("[loop.ts] Extracted updateId:", updateId);
-    }
-
     return {
       success: true,
-      updateId,
       submissionId: result?.submission_id,
       commandId: result?.command_id,
     };

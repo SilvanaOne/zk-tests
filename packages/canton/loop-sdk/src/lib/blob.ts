@@ -117,7 +117,7 @@ export async function fetchAmuletContract(
 
   return {
     contract,
-    args: contract.create_arguments as AmuletCreateArguments,
+    args: contract.create_arguments as unknown as AmuletCreateArguments,
   };
 }
 
@@ -140,7 +140,7 @@ export async function fetchTransferPreapprovalContract(
 
   return {
     contract,
-    args: contract.create_arguments as TransferPreapprovalCreateArguments,
+    args: contract.create_arguments as unknown as TransferPreapprovalCreateArguments,
   };
 }
 

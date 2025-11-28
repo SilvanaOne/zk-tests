@@ -1,5 +1,4 @@
 "use client";
-import { getMessage, LoginRequest, LoginResponse } from "./login";
 import { WalletChain, WalletProvider, WalletType } from "./types";
 
 export interface WalletOptionBase {
@@ -16,7 +15,7 @@ export interface WalletOptionWallet extends WalletOptionBase {
 
 export interface WalletOptionSocial extends WalletOptionBase {
   type: "social";
-  provider: WalletProvider; // For social logins
+  provider: WalletProvider;
 }
 
 export type WalletOption = WalletOptionWallet | WalletOptionSocial;
@@ -71,55 +70,8 @@ export async function connectWallet(
   switch (walletId) {
     case "loop-canton":
       // Loop wallet connection is handled via Loop SDK
-      // This function returns undefined as Loop uses a different connection flow
       return undefined;
     default:
       throw new Error(`Unsupported wallet id: ${walletId}`);
-  }
-}
-
-export async function signWalletMessage(params: {
-  walletId: string;
-  address: string;
-  publicKey: string;
-}): Promise<LoginRequest | undefined> {
-  const { walletId, address, publicKey } = params;
-  console.log("signWalletMessage called with", params);
-  if (!address || !publicKey) {
-    console.error("Address or public key not found");
-    return undefined;
-  }
-  try {
-    const wallet = getWalletById(walletId);
-    console.log("wallet", wallet);
-    if (!wallet) {
-      console.error(`Wallet with id ${walletId} not found`);
-      return undefined;
-    }
-    if (wallet.type === "social") {
-      return undefined;
-    }
-    const msgData = await getMessage({
-      login_type: "wallet",
-      chain: wallet.chain,
-      wallet: wallet.name,
-      address,
-      publicKey,
-    });
-    if (!msgData) {
-      console.error("Failed to get message data");
-      return undefined;
-    }
-    switch (walletId) {
-      case "loop-canton":
-        // Loop wallet signing is handled via Loop SDK
-        // This is a placeholder - actual signing uses apiFunctions.signMessage
-        return undefined;
-      default:
-        return undefined;
-    }
-  } catch (error) {
-    console.error("signWalletMessage error:", error);
-    throw error;
   }
 }

@@ -1,5 +1,3 @@
-import { withLogtail } from '@logtail/next';
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack(config) {
@@ -11,4 +9,4 @@ const nextConfig = {
   },
 }
 
-export default withLogtail(nextConfig);
+export default nextConfig;

@@ -15,7 +15,7 @@ declare module "@fivenorth/loop-sdk" {
     [key: string]: any;
   }
 
-  export interface TransactionCommand {
+  export interface ExerciseCommand {
     ExerciseCommand: {
       templateId: string;
       contractId: string;
@@ -23,6 +23,15 @@ declare module "@fivenorth/loop-sdk" {
       choiceArgument: Record<string, any>;
     };
   }
+
+  export interface CreateCommand {
+    CreateCommand: {
+      templateId: string;
+      createArguments: Record<string, any>;
+    };
+  }
+
+  export type TransactionCommand = ExerciseCommand | CreateCommand;
 
   export interface TransactionPayload {
     commands: TransactionCommand[];

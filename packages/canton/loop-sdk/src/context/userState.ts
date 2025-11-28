@@ -6,24 +6,18 @@ import React, {
   useContext,
   ReactNode,
   useCallback,
+  useState,
 } from "react";
-import { connectWallet, signWalletMessage, getWalletById } from "@/lib/wallet";
-import { getMessage, login, LoginRequest } from "@/lib/login";
+import { getWalletById } from "@/lib/wallet";
 import type {
   UnifiedUserState,
   UserConnectionStatus,
   UserWalletStatus,
   UserSocialLoginStatus,
   WalletConnectionResult,
-  ApiFunctions,
-  SocialLoginData,
   WalletType,
 } from "@/lib/types";
-import { Logger } from "@logtail/next";
-
-const log = new Logger({
-  source: "UserState",
-});
+import { initLoop, connectLoop as loopConnect, getLoopPartyId as getPartyId } from "@/lib/loop";
 
 const initialUserState: UnifiedUserState = {
   connections: {} as { [key: string]: UserConnectionStatus },
@@ -157,12 +151,10 @@ const userStateReducer = (
 interface UserStateContextType {
   state: UnifiedUserState;
   dispatch: React.Dispatch<UserStateAction>;
-  apiFunctions: ApiFunctions;
-  // Action methods
-  connect: (params: {
-    walletId: string;
-    socialLoginData?: SocialLoginData;
-  }) => Promise<void>;
+  // Loop-specific methods
+  connectLoop: (network: "devnet" | "testnet" | "mainnet") => Promise<void>;
+  getLoopPartyId: () => string | null;
+  // Legacy action methods (kept for compatibility)
   getConnectionState: (walletId: string) => WalletConnectionResult;
   setConnecting: (walletId: string, walletType: WalletType) => void;
   setConnectionFailed: (walletId: string) => void;
@@ -184,11 +176,11 @@ const UserStateContext = createContext<UserStateContextType>({
     );
     return null;
   },
-  apiFunctions: {} as ApiFunctions,
-  connect: async () => {},
+  connectLoop: async () => {},
+  getLoopPartyId: () => null,
   getConnectionState: () => ({ state: "idle" }),
-  setConnecting: (walletId: string, walletType: WalletType) => {},
-  setConnectionFailed: (walletId: string) => {},
+  setConnecting: () => {},
+  setConnectionFailed: () => {},
   resetConnection: () => {},
   resetFailedConnections: () => {},
   setSelectedAuthMethod: () => {},
@@ -201,292 +193,73 @@ const UserStateContext = createContext<UserStateContextType>({
 // Provider component
 export const UserStateProvider: React.FC<{
   children: ReactNode;
-  apiFunctions: ApiFunctions;
-}> = ({ children, apiFunctions }) => {
+}> = ({ children }) => {
   const [state, dispatch] = useReducer(userStateReducer, initialUserState);
+  const [loopPartyId, setLoopPartyId] = useState<string | null>(null);
 
-  const connect = useCallback(
-    async (params: {
-      walletId: string;
-      socialLoginData?: SocialLoginData;
-    }): Promise<void> => {
-      const { walletId, socialLoginData } = params;
-      // Get wallet information from the wallet registry
-      const walletInfo = getWalletById(walletId);
-      if (!walletInfo) {
-        log.error("Wallet not found T101", {
-          walletId,
-        });
-        return;
-      }
+  // Loop connection
+  const connectLoop = useCallback(
+    async (network: "devnet" | "testnet" | "mainnet"): Promise<void> => {
+      const walletId = "loop-canton";
 
-      // Set connecting state first
       dispatch({
         type: "SET_CONNECTING",
-        payload: {
-          walletId,
-          loginType: walletInfo.type,
-        },
+        payload: { walletId, loginType: "wallet" },
       });
 
       try {
-        let address: string | undefined;
-        if (walletInfo.type === "social") {
-          console.log("Signing in with social provider", walletInfo.provider);
-          console.log("social login data", socialLoginData);
+        // Initialize Loop SDK
+        initLoop(
+          {
+            onConnect: (provider) => {
+              console.log("[userState] Loop connected:", provider.party_id);
+              setLoopPartyId(provider.party_id);
 
-          if (!socialLoginData) {
-            log.error("Social login not completed T102", {
-              walletId,
-              provider: walletInfo.provider,
-            });
-            dispatch({
-              type: "SET_CONNECTION_FAILED",
-              payload: { walletId },
-            });
-            return;
-          }
-          address = socialLoginData.id;
-        } else {
-          address = await connectWallet(walletId);
-          if (!address) {
-            log.error("Connection rejected T103", {
-              walletId,
-            });
-            dispatch({
-              type: "SET_CONNECTION_FAILED",
-              payload: { walletId },
-            });
-            return;
-          }
-        }
-
-        console.log("Connected to wallet", walletId, address);
-
-        // If API functions are provided, use them for actual connection logic
-        if (apiFunctions) {
-          console.log(`Attempting to connect ${walletId} with API functions`);
-
-          // Get private key ID
-          const keyResult = await apiFunctions.getPrivateKeyId();
-          if (!keyResult) {
-            console.log(`Failed to get private key ID for ${walletId}`);
-            dispatch({
-              type: "SET_CONNECTION_FAILED",
-              payload: { walletId },
-            });
-            return;
-          }
-
-          console.log(
-            `Got private key ID for ${walletId}:`,
-            keyResult.privateKeyId
-          );
-
-          // For social logins, we don't need to sign a wallet message
-          if (walletInfo.type === "social") {
-            const msgData = await getMessage({
-              login_type: "social",
-              chain: walletInfo.provider,
-              wallet: walletInfo.provider,
-              address: address,
-              publicKey: keyResult.publicKey,
-            });
-            if (!msgData || !socialLoginData) {
-              console.error("Failed to get message");
-              dispatch({
-                type: "SET_CONNECTION_FAILED",
-                payload: { walletId },
-              });
-              return;
-            }
-            const signature =
-              walletInfo.provider === "google"
-                ? socialLoginData.idToken
-                : socialLoginData.accessToken;
-            if (!signature) {
-              console.error("No access token found");
-              dispatch({
-                type: "SET_CONNECTION_FAILED",
-                payload: { walletId },
-              });
-              log.error("No access token found T104", {
-                walletId,
-              });
-              return;
-            }
-            const loginRequest: LoginRequest = {
-              ...msgData.request,
-              signature: signature,
-              public_key: keyResult.publicKey,
-            };
-            const result = await login(loginRequest);
-
-            if (result.success && result.data) {
-              const publicKey = await apiFunctions.decryptShares(
-                result.data,
-                keyResult.privateKeyId
-              );
-              if (!publicKey) {
-                console.error("Failed to decrypt shares");
-                dispatch({
-                  type: "SET_CONNECTION_FAILED",
-                  payload: { walletId },
-                });
-                return;
-              }
-
-              // Create social login connection
-              const newConnection: UserSocialLoginStatus = {
-                loginType: "social",
-                provider: walletInfo.provider,
+              const newConnection: UserWalletStatus = {
+                loginType: "wallet",
+                chain: "canton",
+                wallet: "Loop",
                 walletId,
                 isConnected: true,
                 isConnectionFailed: false,
                 isConnecting: false,
-                address: address,
-                minaPublicKey: publicKey,
-                shamirShares: loginRequest.share_indexes,
-                isLoggedIn: true,
-                username: socialLoginData.name ?? undefined,
-                email: socialLoginData.email ?? undefined,
-                sessionExpires: new Date(
-                  Date.now() + 3600 * 1000
-                ).toLocaleString(),
+                address: provider.party_id,
+                publicKey: provider.public_key,
               };
 
               dispatch({
-                type: "SET_SOCIAL_CONNECTED",
+                type: "SET_WALLET_CONNECTED",
                 payload: { walletId, connection: newConnection },
               });
-              log.info("Social login connected T103", {
-                walletId,
-                address,
-              });
-              return;
-            }
-          } else {
-            // Handle wallet connections
-            const loginRequest = await signWalletMessage({
-              walletId,
-              address: address!,
-              publicKey: keyResult.publicKey,
-            });
-            console.log("loginRequest", loginRequest);
-
-            if (!loginRequest) {
-              console.error("Failed to sign message");
+            },
+            onReject: () => {
+              console.log("[userState] Loop connection rejected");
+              setLoopPartyId(null);
               dispatch({
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
               });
-              log.error("Failed to login T105", {
-                walletId,
-                address,
-              });
-              return;
-            }
+            },
+          },
+          network
+        );
 
-            const result = await login(loginRequest);
-            if (!result) {
-              console.error("Failed to login");
-              dispatch({
-                type: "SET_CONNECTION_FAILED",
-                payload: { walletId },
-              });
-              log.error("Failed to login T106", {
-                walletId,
-                address,
-              });
-              return;
-            }
-
-            if (
-              result.success === false ||
-              result.data === null ||
-              result.data === undefined
-            ) {
-              console.error("Login error", result.error);
-              dispatch({
-                type: "SET_CONNECTION_FAILED",
-                payload: { walletId },
-              });
-              log.error("Login error T107", {
-                walletId,
-                address,
-              });
-              return;
-            }
-
-            const publicKey = await apiFunctions.decryptShares(
-              result.data,
-              keyResult.privateKeyId
-            );
-            if (!publicKey) {
-              console.error("Failed to decrypt shares");
-              dispatch({
-                type: "SET_CONNECTION_FAILED",
-                payload: { walletId },
-              });
-              log.error("Failed to decrypt shares T108", {
-                walletId,
-                address,
-              });
-              return;
-            }
-
-            // Create wallet connection using wallet info
-            console.log("Creating wallet connection", walletId, address);
-            const newConnection: UserWalletStatus = {
-              loginType: "wallet",
-              chain: walletInfo.chain as "canton",
-              wallet: walletInfo.name,
-              walletId,
-              isConnected: true,
-              isConnectionFailed: false,
-              isConnecting: false,
-              address,
-              minaPublicKey: publicKey,
-              shamirShares: loginRequest.share_indexes,
-            };
-
-            console.log("newConnection", newConnection);
-            dispatch({
-              type: "SET_WALLET_CONNECTED",
-              payload: { walletId, connection: newConnection },
-            });
-            log.info("Wallet connection created T109", {
-              walletId,
-              address,
-            });
-            return;
-          }
-
-          return;
-        } else {
-          console.log("No API functions provided, setting connection to false");
-          dispatch({
-            type: "SET_CONNECTION_FAILED",
-            payload: { walletId },
-          });
-          log.error("No API functions provided T110", {
-            walletId,
-          });
-        }
+        // Trigger the connection popup
+        loopConnect();
       } catch (error: any) {
-        console.error(`Wallet connection error for ${walletId}:`, error);
-        log.error("Wallet connection error T111", {
-          walletId,
-          error: error?.message,
-        });
+        console.error("[userState] Loop connection error:", error);
         dispatch({
           type: "SET_CONNECTION_FAILED",
           payload: { walletId },
         });
       }
     },
-    [dispatch, apiFunctions]
+    [dispatch]
   );
+
+  const getLoopPartyIdValue = useCallback(() => {
+    return loopPartyId || getPartyId();
+  }, [loopPartyId]);
 
   const getConnectionState = useCallback(
     (walletId: string): WalletConnectionResult => {
@@ -504,7 +277,6 @@ export const UserStateProvider: React.FC<{
           ? "error"
           : "idle",
         address: connection.address,
-        shamirShares: connection.shamirShares?.map(String),
       };
     },
     [state.connections]
@@ -582,8 +354,8 @@ export const UserStateProvider: React.FC<{
   const contextValue: UserStateContextType = {
     state,
     dispatch,
-    apiFunctions,
-    connect,
+    connectLoop,
+    getLoopPartyId: getLoopPartyIdValue,
     getConnectionState,
     setConnecting,
     setConnectionFailed,
