@@ -21,9 +21,8 @@ import {
   Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useUserState } from "@/context/userState";
 import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
-import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails } from "@/lib/blob";
+import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
 import type { Holding } from "@fivenorth/loop-sdk";
 
 // Type for preapproval contract with decoded details
@@ -49,15 +48,28 @@ interface AmuletContract {
   blob: ContractDetails | null;  // Decoded contract details from Lighthouse API
 }
 
+// Type for CIP-56 compatible holding contract (with Lighthouse API data)
+interface CIP56Holding {
+  contractId: string;
+  templateId: string;
+  packageName: string;
+  createdAt?: string;
+  createdEventBlob: string;
+  // Data from Lighthouse API create_arguments
+  owner: string;
+  instrumentId: string;      // The instrument ID (e.g., "WBTC")
+  instrumentAdmin: string;   // The admin/registrar party
+  amount: string;
+  label: string;
+  isLocked: boolean;
+}
+
 interface LoopWalletDashboardProps {
   loopPartyId?: string | null;
   network?: "devnet" | "testnet" | "mainnet";
 }
 
 export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWalletDashboardProps) {
-  const { state: userState } = useUserState();
-
-  const publicKey = userState.selectedAuthMethod?.publicKey;
   const isConnected = !!loopPartyId;
   const [messageToSign, setMessageToSign] = useState("Hello Loop world!");
   const [signedMessage, setSignedMessage] = useState<{
@@ -99,6 +111,11 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   // Preapproval contracts state (from Loop SDK)
   const [acceptedPreapprovals, setAcceptedPreapprovals] = useState<PreapprovalContract[]>([]);
   const [preapprovalContractsLoading, setPreapprovalContractsLoading] = useState(false);
+
+  // CIP-56 Holdings state
+  const [cip56Holdings, setCip56Holdings] = useState<CIP56Holding[]>([]);
+  const [cip56HoldingsLoading, setCip56HoldingsLoading] = useState(false);
+  const [cip56HoldingsError, setCip56HoldingsError] = useState<string | null>(null);
 
   // Capitalize first letter for display
   const networkDisplay = network.charAt(0).toUpperCase() + network.slice(1);
@@ -228,13 +245,68 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     }
   }, [isConnected, loopPartyId, network]);
 
+  // Fetch CIP-56 compatible holdings using interface filter
+  const fetchCIP56Holdings = useCallback(async () => {
+    console.log("[LoopWallet] fetchCIP56Holdings called, isConnected:", isConnected);
+    if (!isConnected) return;
+
+    setCip56HoldingsLoading(true);
+    setCip56HoldingsError(null);
+    try {
+      // Query contracts implementing the CIP-56 Holding interface
+      const result = await getLoopActiveContracts({
+        interfaceId: "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding"
+      });
+      console.log("[LoopWallet] CIP-56 Holdings result:", result);
+
+      if (result && result.length > 0) {
+        // Fetch details from Lighthouse API for each contract
+        const holdings: CIP56Holding[] = await Promise.all(
+          result.map(async (contract) => {
+            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+
+            // Fetch full details from Lighthouse API
+            const details = await fetchContractDetails(contractId, network);
+            const args = details?.create_arguments as CIP56HoldingCreateArguments | undefined;
+
+            return {
+              contractId,
+              templateId: details?.template_id || createdEvent?.templateId || "",
+              packageName: details?.package_name || "",
+              createdAt: createdEvent?.createdAt,
+              createdEventBlob: createdEvent?.createdEventBlob || "",
+              owner: args?.owner || "",
+              instrumentId: args?.instrument?.id || "",
+              instrumentAdmin: args?.instrument?.admin || args?.registrar || "",
+              amount: args?.amount || "0",
+              label: args?.label || "",
+              isLocked: args?.lock !== null && args?.lock !== undefined,
+            };
+          })
+        );
+
+        console.log("[LoopWallet] Parsed CIP-56 holdings with Lighthouse data:", holdings);
+        setCip56Holdings(holdings);
+      } else {
+        setCip56Holdings([]);
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Failed to fetch CIP-56 holdings:", error);
+      setCip56HoldingsError(error?.message || "Failed to fetch CIP-56 holdings");
+    } finally {
+      setCip56HoldingsLoading(false);
+    }
+  }, [isConnected, network]);
+
   useEffect(() => {
     if (isConnected) {
       fetchHoldings();
       fetchActiveContracts();
       fetchPreapprovalContracts();
+      fetchCIP56Holdings();
     }
-  }, [isConnected, fetchHoldings, fetchActiveContracts, fetchPreapprovalContracts]);
+  }, [isConnected, fetchHoldings, fetchActiveContracts, fetchPreapprovalContracts, fetchCIP56Holdings]);
 
   // Verify partyId matches public key when connected
   useEffect(() => {
@@ -639,6 +711,153 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                         <span className="text-xs text-muted-foreground">Created:</span>
                         <span className="text-xs">
                           {new Date(contract.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* CIP-56 Holdings Section */}
+        <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <Coins className="w-4 h-4 mr-2" />
+              CIP-56 Holdings
+            </h4>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchCIP56Holdings()}
+              disabled={cip56HoldingsLoading}
+              className="h-6 w-6 p-0"
+            >
+              <RefreshCw className={`h-3 w-3 ${cip56HoldingsLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+
+          {cip56HoldingsLoading && (
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Loading CIP-56 holdings...</p>
+            </div>
+          )}
+
+          {cip56HoldingsError && (
+            <Alert variant="destructive" className="p-2">
+              <XCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">{cip56HoldingsError}</AlertDescription>
+            </Alert>
+          )}
+
+          {!cip56HoldingsLoading && !cip56HoldingsError && cip56Holdings.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              No CIP-56 compatible holdings found
+            </p>
+          )}
+
+          {!cip56HoldingsLoading && !cip56HoldingsError && cip56Holdings.length > 0 && (
+            <div className="space-y-2">
+              {cip56Holdings.map((holding, index) => (
+                <div
+                  key={`${holding.contractId}-${index}`}
+                  className="p-2 rounded-md bg-background/50 border border-border/50"
+                >
+                  <div className="space-y-1">
+                    {/* Amount and instrument prominently displayed */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-brand-purple" />
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatBalance(holding.amount)} {holding.instrumentId || holding.label || "Token"}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const data = {
+                            templateId: holding.templateId,
+                            contractId: holding.contractId,
+                            createdEventBlob: holding.createdEventBlob,
+                            instrumentId: holding.instrumentId,
+                            instrumentAdmin: holding.instrumentAdmin,
+                            amount: holding.amount,
+                            owner: holding.owner,
+                            label: holding.label,
+                          };
+                          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `cip56-holding-${holding.contractId.slice(0, 8)}.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="h-6 w-6 p-0"
+                        title="Download contract JSON"
+                      >
+                        <Download className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {holding.label && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Label:</span>
+                        <span className="text-xs font-medium">{holding.label}</span>
+                      </div>
+                    )}
+                    {holding.instrumentAdmin && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Admin:</span>
+                        <span
+                          className="text-xs font-mono truncate flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(holding.instrumentAdmin)}
+                        >
+                          {holding.instrumentAdmin}
+                        </span>
+                      </div>
+                    )}
+                    {holding.owner && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Owner:</span>
+                        <span
+                          className="text-xs font-mono truncate flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(holding.owner)}
+                        >
+                          {holding.owner}
+                        </span>
+                      </div>
+                    )}
+                    {holding.isLocked && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Status:</span>
+                        <span className="text-xs text-brand-yellow">Locked</span>
+                      </div>
+                    )}
+                    {holding.templateId && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Template:</span>
+                        <span className="text-xs font-mono truncate flex-1" title={holding.templateId}>
+                          {holding.templateId.split(":").slice(-2).join(":")}
+                        </span>
+                      </div>
+                    )}
+                    {holding.contractId && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(holding.contractId)}
+                        >
+                          {holding.contractId}
                         </span>
                       </div>
                     )}

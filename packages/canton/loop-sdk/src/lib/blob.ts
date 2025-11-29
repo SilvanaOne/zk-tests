@@ -70,6 +70,24 @@ export interface TransferPreapprovalProposalCreateArguments {
 }
 
 /**
+ * CIP-56 Holding contract create_arguments structure (Utility Registry Holding)
+ */
+export interface CIP56HoldingCreateArguments {
+  operator: string;
+  provider: string;
+  registrar: string;
+  owner: string;
+  instrument: {
+    admin: string;
+    id: string;
+    version: string;
+  };
+  label: string;
+  amount: string;
+  lock: unknown | null;
+}
+
+/**
  * Fetches contract details from Lighthouse API
  *
  * @param contractId - The full contract ID
