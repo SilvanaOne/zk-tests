@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
-import { fetchContractDetails, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
+import { fetchContractDetails, decodeCIP56HoldingBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
 import type { Holding } from "@fivenorth/loop-sdk";
 
 // Type for preapproval contract with decoded details
@@ -260,33 +260,33 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
       console.log("[LoopWallet] CIP-56 Holdings result:", result);
 
       if (result && result.length > 0) {
-        // Fetch details from Lighthouse API for each contract
-        const holdings: CIP56Holding[] = await Promise.all(
-          result.map(async (contract) => {
-            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
-            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+        // Decode contract data from createdEventBlob using protobuf
+        const holdings: CIP56Holding[] = result.map((contract) => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+          const createdEventBlob = createdEvent?.createdEventBlob || "";
 
-            // Fetch full details from Lighthouse API
-            const details = await fetchContractDetails(contractId, network);
-            const args = details?.create_arguments as CIP56HoldingCreateArguments | undefined;
+          // Decode the blob directly using protobuf (no Lighthouse API needed)
+          const args = createdEventBlob ? decodeCIP56HoldingBlob(createdEventBlob) : null;
 
-            return {
-              contractId,
-              templateId: details?.template_id || createdEvent?.templateId || "",
-              packageName: details?.package_name || "",
-              createdAt: createdEvent?.createdAt,
-              createdEventBlob: createdEvent?.createdEventBlob || "",
-              owner: args?.owner || "",
-              instrumentId: args?.instrument?.id || "",
-              instrumentAdmin: args?.instrument?.admin || args?.registrar || "",
-              amount: args?.amount || "0",
-              label: args?.label || "",
-              isLocked: args?.lock !== null && args?.lock !== undefined,
-            };
-          })
-        );
+          console.log("[LoopWallet] Decoded CIP-56 holding blob:", { contractId, args });
 
-        console.log("[LoopWallet] Parsed CIP-56 holdings with Lighthouse data:", holdings);
+          return {
+            contractId,
+            templateId: createdEvent?.templateId || "",
+            packageName: createdEvent?.packageName || "",
+            createdAt: createdEvent?.createdAt,
+            createdEventBlob,
+            owner: args?.owner || "",
+            instrumentId: args?.instrument?.id || "",
+            instrumentAdmin: args?.instrument?.admin || args?.registrar || "",
+            amount: args?.amount || "0",
+            label: args?.label || "",
+            isLocked: args?.lock !== null && args?.lock !== undefined,
+          };
+        });
+
+        console.log("[LoopWallet] Parsed CIP-56 holdings from blob:", holdings);
         setCip56Holdings(holdings);
       } else {
         setCip56Holdings([]);
@@ -297,7 +297,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setCip56HoldingsLoading(false);
     }
-  }, [isConnected, network]);
+  }, [isConnected]);
 
   useEffect(() => {
     if (isConnected) {

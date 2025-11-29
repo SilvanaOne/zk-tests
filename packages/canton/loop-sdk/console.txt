@@ -1,294 +1,1363 @@
 addToWindow.js:1413 Adding midenWallet to window
 webhook.js:1 Auro Wallet initialized.
-hot-reloader-client.tsx:306 [Fast Refresh] rebuilding
-report-hmr-latency.ts:26 [Fast Refresh] done in 195ms
-loop.ts:64 [loop.ts] onAccept called with provider: Provider
-silvana-tee-dashboard.tsx:68 Loop wallet connected: 1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583
-loop-wallet-dashboard.tsx:91 [LoopWallet] fetchHoldings called, isConnected: true
-loop.ts:116 [loop.ts] getLoopHoldings called, loopProvider: Provider
-loop-wallet-dashboard.tsx:114 [LoopWallet] fetchActiveContracts called, isConnected: true
-loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider
-loop-wallet-dashboard.tsx:145 [LoopWallet] fetchPreapprovalContracts called, isConnected: true partyId: 1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583
-loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider
-loop.ts:200 [loop.ts] PartyId verification: Object
-loop-wallet-dashboard.tsx:98 [LoopWallet] Holdings result: Array(3)
-hot-reloader-client.tsx:306 [Fast Refresh] rebuilding
-loop-wallet-dashboard.tsx:156 [LoopWallet] TransferPreapproval contracts from Loop SDK: Array(2)
-loop-wallet-dashboard.tsx:179 [LoopWallet] Mapped preapprovals: Array(2)
-loop-wallet-dashboard.tsx:123 [LoopWallet] Active contracts result: Array(1)
-loop-wallet-dashboard.tsx:125 [LoopWallet] First contract full structure: {
-  "workflowId": "",
-  "contractEntry": {
-    "JsActiveContract": {
-      "createdEvent": {
-        "offset": 142068,
-        "nodeId": 12,
-        "contractId": "00b19a5aeb75f03a13b3e68dbd4c96c3a8c3c40e01472d24f2b9f8f25d78e29810ca1212201388b29e1112eea5c705216c08ea8d6c9d364e6f7e443beb4b951e69ba219605",
-        "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.Amulet:Amulet",
-        "createdEventBlob": "CgMyLjESnQUKRQCxmlrrdfA6E7Pmjb1MlsOow8QOAUctJPK5+PJdeOKYEMoSEiATiLKeERLupccFIWwI6o1snTZOb35EO+tLlR5puiGWBRINc3BsaWNlLWFtdWxldBpaCkAzY2ExMzQzYWIyNmI0NTNkMzhjOGFkYjcwZGNhNWYxZWFkODQ0MGM0MmI1OWI2OGYwNzA3ODY5NTVjYmY5ZWMxEgZTcGxpY2USBkFtdWxldBoGQW11bGV0IoACav0BCk0KSzpJRFNPOjoxMjIwYmU1OGMyOWU2NWRlNDBiZjI3M2JlMWRjMmIyNjZkNDNhOWEwMDJlYTViMTg5NTVhZWVmN2FhYzg4MWJiNDcxYQpqCmg6ZjFlNmI5ZTMwZGUwM2M4ZGYyYzBiNWY1YzUwY2NhYjE3OjoxMjIwZmYyNWEzZTk3NmJlNGJlMmM2OWI1NzYyNWEwOGQ5N2Y4NDdiZjI0NzM2NmFjZDcwZWRjY2NlYjI5N2I3ZTU4MwpACj5qPAoUChIyEDE5NTUwLjAwMDAwMDAwMDAKDAoKaggKBgoEGIzGAgoWChRqEgoQCg4yDDAuMDAwMjE2MjAzNCpmMWU2YjllMzBkZTAzYzhkZjJjMGI1ZjVjNTBjY2FiMTc6OjEyMjBmZjI1YTNlOTc2YmU0YmUyYzY5YjU3NjI1YTA4ZDk3Zjg0N2JmMjQ3MzY2YWNkNzBlZGNjY2ViMjk3YjdlNTgzKklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhOSyYYw2kRAYAQioKJgokCAESIPXS0eR2LePXqjvR+OCaD7azI59XYxdO3nls8KPZJGo3EB4=",
-        "witnessParties": [
-          "1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583"
-        ],
-        "signatories": [
-          "1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583",
-          "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
-        ],
-        "observers": [],
-        "createdAt": "2025-11-28T09:14:10.220076Z",
-        "packageName": "splice-amulet"
-      },
-      "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-      "reassignmentCounter": 0
-    }
-  }
-}
-loop-wallet-dashboard.tsx:126 [LoopWallet] contractEntry: Object
-loop-wallet-dashboard.tsx:127 [LoopWallet] JsActiveContract: Object
-loop-wallet-dashboard.tsx:128 [LoopWallet] createdEvent: Object
-index.js:2186 Connected to ticket server.
-report-hmr-latency.ts:26 [Fast Refresh] done in 130ms
-logo.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
-logo.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
-content_script.js:1 Uncaught TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at elementWasFocused (content_script.js:1:423712)
-    at HTMLDocument.focusInEventHandler (content_script.js:1:423069)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at elementWasFocused (content_script.js:1:423712)
-    at HTMLDocument.focusInEventHandler (content_script.js:1:423069)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at elementWasFocused (content_script.js:1:423712)
-    at HTMLDocument.focusInEventHandler (content_script.js:1:423069)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-content_script.js:1 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'control')
-    at content_script.js:1:422999
-    at Array.some (<anonymous>)
-    at shouldOfferCompletionListForField (content_script.js:1:422984)
-    at processInputEvent (content_script.js:1:426332)
-loop.ts:421 [loop.ts] transferCC called: Object
-loop.ts:425 [loop.ts] Fetching transfer context for receiver: cbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae
-hot-reloader-client.tsx:306 [Fast Refresh] rebuilding
-report-hmr-latency.ts:26 [Fast Refresh] done in 130ms
-loop.ts:427 [loop.ts] Transfer context: Object
-loop.ts:438 [loop.ts] Found 1 Amulet contracts
-loop.ts:449 [loop.ts] Prepared 1 input contracts for transfer
-loop.ts:566 [loop.ts] Submitting TransferFactory_Transfer command: {
-  "commands": [
-    {
-      "ExerciseCommand": {
-        "templateId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
-        "contractId": "009f00e5bf00640118d849080aaf22bc963a8458d322585cebf1119cb7bf37a955ca11122065b775fb8a4199904ed32fa9277fd9c0e82bb82319a7151249df124182072381",
-        "choice": "TransferFactory_Transfer",
-        "choiceArgument": {
-          "expectedAdmin": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-          "transfer": {
-            "sender": "1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583",
-            "receiver": "cbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae",
-            "amount": "135.0",
-            "instrumentId": {
-              "admin": "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-              "id": "Amulet"
-            },
-            "inputHoldingCids": [
-              "00b19a5aeb75f03a13b3e68dbd4c96c3a8c3c40e01472d24f2b9f8f25d78e29810ca1212201388b29e1112eea5c705216c08ea8d6c9d364e6f7e443beb4b951e69ba219605"
-            ],
-            "requestedAt": "2025-11-28T09:22:47.784000Z",
-            "executeBefore": "2025-11-28T09:23:17.784Z",
-            "meta": {
-              "values": {
-                "splice.lfdecentralizedtrust.org/reason": "test 7"
-              }
-            }
-          },
-          "extraArgs": {
-            "context": {
-              "values": {
-                "amulet-rules": {
-                  "tag": "AV_ContractId",
-                  "value": "00554dd41d43438d8ee88312085c79447a16efe55a7fc941cc4f67af2fe268ed73ca11122016f7f9e1b0549120f942f63c249c55c27f7bd4ebde1c869cb9d7b0ede5084f6a"
-                },
-                "open-round": {
-                  "tag": "AV_ContractId",
-                  "value": "008932484b0390299b34ad5ffb8e502c5f871738a99b01f8cbd7b7ff4bb0dcad37ca1212205316421e7ff0a50a93010b2d87d4cf88b92675b7f7b897326cd4aeef08289379"
-                },
-                "featured-app-right": {
-                  "tag": "AV_ContractId",
-                  "value": "00d42315e5c0cee0f008d6b2c13bc437f6465dffc0aa83bd4b98ec92c1888b4807ca121220f8c50e256fd6eb24e3ec9492473ec2f899f33238ea020327d16a6a18eeca721b"
-                },
-                "transfer-preapproval": {
-                  "tag": "AV_ContractId",
-                  "value": "000e27f08338593c47e246fcc8d4e9d56035896f398a8e8f489785166988352d85ca121220a6b6fec29915193a2a029f3a5b4364627b861fe931fd2c2faee0452ba73729a6"
-                }
-              }
-            },
-            "meta": {
-              "values": {}
-            }
-          }
-        }
-      }
-    }
-  ],
-  "disclosedContracts": [
-    {
-      "contractId": "00554dd41d43438d8ee88312085c79447a16efe55a7fc941cc4f67af2fe268ed73ca11122016f7f9e1b0549120f942f63c249c55c27f7bd4ebde1c869cb9d7b0ede5084f6a",
-      "createdEventBlob": "CgMyLjESzg8KRQBVTdQdQ0ONjuiDEghceUR6Fu/lWn/JQcxPZ68v4mjtc8oREiAW9/nhsFSRIPlC9jwknFXCf3vU694chpy517Dt5QhPahINc3BsaWNlLWFtdWxldBpkCkAzY2ExMzQzYWIyNmI0NTNkMzhjOGFkYjcwZGNhNWYxZWFkODQ0MGM0MmI1OWI2OGYwNzA3ODY5NTVjYmY5ZWMxEgZTcGxpY2USC0FtdWxldFJ1bGVzGgtBbXVsZXRSdWxlcyKPDWqMDQpNCks6SURTTzo6MTIyMGJlNThjMjllNjVkZTQwYmYyNzNiZTFkYzJiMjY2ZDQzYTlhMDAyZWE1YjE4OTU1YWVlZjdhYWM4ODFiYjQ3MWEKtAwKsQxqrgwKpQwKogxqnwwKmwIKmAJqlQIKFgoUahIKEAoOMgwwLjAwMDAwMDAwMDAKFgoUahIKEAoOMgwwLjAwMDAxOTAyNTkKpAEKoQFqngEKEAoOMgwwLjAwMDAwMDAwMDAKiQEKhgFagwEKKGomChIKEDIOMTAwLjAwMDAwMDAwMDAKEAoOMgwwLjAwMDAwMDAwMDAKKWonChMKETIPMTAwMC4wMDAwMDAwMDAwChAKDjIMMC4wMDAwMDAwMDAwCixqKgoWChQyEjEwMDAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDAwMDAwMDAwMAoWChRqEgoQCg4yDDAuMDAwMDAwMDAwMAoQCg4yDDEuMDAwMDAwMDAwMAoFCgMYyAEKBQoDGMgBCgQKAhhkCvUGCvIGau8GCpgBCpUBapIBChoKGDIWNDAwMDAwMDAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuMDUwMDAwMDAwMAoQCg4yDDAuMTUwMDAwMDAwMAoQCg4yDDAuMjAwMDAwMDAwMAoUChIyEDIwMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjYwMDAwMDAwMDAKFgoUUhIKEDIONTcwLjAwMDAwMDAwMDAK0QUKzgVaywUKsAFqrQEKEAoOagwKCgoIGIDAz+DolQcKmAEKlQFqkgEKGgoYMhYyMDAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4xMjAwMDAwMDAwChAKDjIMMC40MDAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAqwAWqtAQoQCg5qDAoKCggYgMDuobrBFQqYAQqVAWqSAQoaChgyFjEwMDAwMDAwMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjE4MDAwMDAwMDAKEAoOMgwwLjYyMDAwMDAwMDAKEAoOMgwwLjIwMDAwMDAwMDAKFAoSMhAyMDAwMC4wMDAwMDAwMDAwChAKDjIMMC42MDAwMDAwMDAwChYKFFISChAyDjU3MC4wMDAwMDAwMDAwCq8BaqwBChAKDmoMCgoKCBiAgJvGl9pHCpcBCpQBapEBChkKFzIVNTAwMDAwMDAwMC4wMDAwMDAwMDAwChAKDjIMMC4yMTAwMDAwMDAwChAKDjIMMC42OTAwMDAwMDAwChAKDjIMMC4yMDAwMDAwMDAwChQKEjIQMjAwMDAuMDAwMDAwMDAwMAoQCg4yDDAuNjAwMDAwMDAwMAoWChRSEgoQMg41NzAuMDAwMDAwMDAwMAqwAWqtAQoRCg9qDQoLCgkYgIC2jK+0jwEKlwEKlAFqkQEKGQoXMhUyNTAwMDAwMDAwLjAwMDAwMDAwMDAKEAoOMgwwLjIwMDAwMDAwMDAKEAoOMgwwLjc1MDAwMDAwMDAKEAoOMgwwLjIwMDAwMDAwMDAKFAoSMhAyMDAwMC4wMDAwMDAwMDAwChAKDjIMMC42MDAwMDAwMDAwChYKFFISChAyDjU3MC4wMDAwMDAwMDAwCo0CCooCaocCCmcKZWpjCmEKX2JdClsKVUJTZ2xvYmFsLWRvbWFpbjo6MTIyMGJlNThjMjllNjVkZTQwY
-index.js:2366 [LoopSDK] WS message received: Object
-index.js:2232 Received response: Object
-loop.ts:570 [loop.ts] Transfer result: Object
-installHook.js:1 [loop.ts] Extracted field 1 doesn't match updateId format: 
-2.10�	
-12�>�	
-�	
-2.1B0041b56115776d13437ac2435db9a6ad4c94d3fd934712308a3aab745277f27389
-splice-amulet"Y
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1
-Splice.AmuletAmulet*�r�
-Y
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1
-Splice.AmuletAmuletR
-dsoK:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471aq
-ownerh:f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583�
-amount�r�
-_
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.FeesExpiringAmount#
-
-initialAmount219415.0000000000x
-	createdAtkri
-W
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.TypesRound
-number���
-ratePerRoundyrw
-]
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.FeesRatePerRound
-rate20.00021620342f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e5832IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a:f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a�
-3�>��
-2.1�00b19a5aeb75f03a13b3e68dbd4c96c3a8c3c40e01472d24f2b9f8f25d78e29810ca1212201388b29e1112eea5c705216c08ea8d6c9d364e6f7e443beb4b951e69ba219605
-splice-amulet"Y
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1
-Splice.AmuletAmulet*f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583*IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a2f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e5832IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a:f1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471aBg
-@718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35bSplice.Api.Token.HoldingV1Holding�	
-11�>�	
-�	
-2.1B0066f51ed5834acd0b7a6d7441ced945426e02966e17afed9d81415d827c039d84
-splice-amulet"Y
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1
-Splice.AmuletAmulet*�r�
-Y
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1
-Splice.AmuletAmuletR
-dsoK:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a^
-ownerU:Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae�
-amount�r�
-_
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.FeesExpiringAmount!
-
-initialAmount2135.0000000000x
-	createdAtkri
-W
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.TypesRound
-number���
-ratePerRoundyrw
-]
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.FeesRatePerRound
-rate20.00021620342IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a2Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a:Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae�
-1�>��
-2.1�000e27f08338593c47e246fcc8d4e9d56035896f398a8e8f489785166988352d85ca121220a6b6fec29915193a2a029f3a5b4364627b861fe931fd2c2faee0452ba73729a6
-splice-amulet"k
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.AmuletRulesTransferPreapproval*IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a*Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae*Zorderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae2IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a2Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae2Zorderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae:IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a�#
-4�>�#�#
-2.1�000e27f08338593c47e246fcc8d4e9d56035896f398a8e8f489785166988352d85ca121220a6b6fec29915193a2a029f3a5b4364627b861fe931fd2c2faee0452ba73729a6
-splice-amulet"k
-@3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1Splice.AmuletRulesTransferPreapproval*IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a*Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae*Zorderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae2IDSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a2Scbtc-holder-2::122034faf8f4af71d107a42441f8bc90cabfd63ab4386fc7f17d15d6e3b01c5bd2ae2Zorderbook-operator-1::122034faf8f4af71d107a42441f8bc90cabfd63ab43
+loop.ts:64 [loop.ts] onAccept called with provider: Provider {connection: Connection, party_id: '1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be…2c69b57625a08d97f847bf247366acd70edccceb297b7e583', public_key: 'aade08efb9163f760c3222b477273555890c8476108d26d8797f87cf74112a29', email: 'mk@dfst.io', auth_token: 'd4ktjr1fsrqs73eua0i0', …}
+userState.ts:215 [userState] Loop connected: 1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583
+loop-wallet-dashboard.tsx:125 [LoopWallet] fetchHoldings called, isConnected: true
+loop.ts:116 [loop.ts] getLoopHoldings called, loopProvider: Provider {connection: Connection, party_id: '1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be…2c69b57625a08d97f847bf247366acd70edccceb297b7e583', public_key: 'aade08efb9163f760c3222b477273555890c8476108d26d8797f87cf74112a29', email: 'mk@dfst.io', auth_token: 'd4ktjr1fsrqs73eua0i0', …}
+loop-wallet-dashboard.tsx:148 [LoopWallet] fetchActiveContracts called, isConnected: true
+loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider {connection: Connection, party_id: '1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be…2c69b57625a08d97f847bf247366acd70edccceb297b7e583', public_key: 'aade08efb9163f760c3222b477273555890c8476108d26d8797f87cf74112a29', email: 'mk@dfst.io', auth_token: 'd4ktjr1fsrqs73eua0i0', …}
+loop-wallet-dashboard.tsx:199 [LoopWallet] fetchPreapprovalContracts called, isConnected: true partyId: 1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583
+loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider {connection: Connection, party_id: '1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be…2c69b57625a08d97f847bf247366acd70edccceb297b7e583', public_key: 'aade08efb9163f760c3222b477273555890c8476108d26d8797f87cf74112a29', email: 'mk@dfst.io', auth_token: 'd4ktjr1fsrqs73eua0i0', …}
+loop-wallet-dashboard.tsx:250 [LoopWallet] fetchCIP56Holdings called, isConnected: true
+loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider {connection: Connection, party_id: '1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be…2c69b57625a08d97f847bf247366acd70edccceb297b7e583', public_key: 'aade08efb9163f760c3222b477273555890c8476108d26d8797f87cf74112a29', email: 'mk@dfst.io', auth_token: 'd4ktjr1fsrqs73eua0i0', …}
+loop.ts:205 [loop.ts] PartyId verification: {expected: 'ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583', computed: 'ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583', isValid: true}
+loop-wallet-dashboard.tsx:132 [LoopWallet] Holdings result: (3) [{…}, {…}, {…}]
+loop-wallet-dashboard.tsx:157 [LoopWallet] Active contracts result: [{…}]
+loop-wallet-dashboard.tsx:210 [LoopWallet] TransferPreapproval contracts from Loop SDK: (2) [{…}, {…}]
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/fivenorth-devnet-1::12208c929c3f012c663323ed675b2eaea7d7c6e1a9be35d6b20bc39f311c6aa7cc54/LOOP/logo.png 404 (Not Found)
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff/CBTC/logo.png 404 (Not Found)
+loop-wallet-dashboard.tsx:260 [LoopWallet] CIP-56 Holdings result: (2) [{…}, {…}]
+installHook.js:1 [blob.ts] Failed to decode CIP-56 holding: no fields
 overrideMethod @ installHook.js:1
-loop.ts:576 [loop.ts] Extracted updateId: undefined
-loop-wallet-dashboard.tsx:91 [LoopWallet] fetchHoldings called, isConnected: true
-loop.ts:116 [loop.ts] getLoopHoldings called, loopProvider: Provider
-loop-wallet-dashboard.tsx:114 [LoopWallet] fetchActiveContracts called, isConnected: true
-loop.ts:128 [loop.ts] getLoopActiveContracts called, loopProvider: Provider
-loop-wallet-dashboard.tsx:98 [LoopWallet] Holdings result: Array(3)
-loop-wallet-dashboard.tsx:123 [LoopWallet] Active contracts result: Array(1)
-loop-wallet-dashboard.tsx:125 [LoopWallet] First contract full structure: {
-  "workflowId": "",
-  "contractEntry": {
-    "JsActiveContract": {
-      "createdEvent": {
-        "offset": 142068,
-        "nodeId": 12,
-        "contractId": "00b19a5aeb75f03a13b3e68dbd4c96c3a8c3c40e01472d24f2b9f8f25d78e29810ca1212201388b29e1112eea5c705216c08ea8d6c9d364e6f7e443beb4b951e69ba219605",
-        "templateId": "3ca1343ab26b453d38c8adb70dca5f1ead8440c42b59b68f070786955cbf9ec1:Splice.Amulet:Amulet",
-        "createdEventBlob": "CgMyLjESnQUKRQCxmlrrdfA6E7Pmjb1MlsOow8QOAUctJPK5+PJdeOKYEMoSEiATiLKeERLupccFIWwI6o1snTZOb35EO+tLlR5puiGWBRINc3BsaWNlLWFtdWxldBpaCkAzY2ExMzQzYWIyNmI0NTNkMzhjOGFkYjcwZGNhNWYxZWFkODQ0MGM0MmI1OWI2OGYwNzA3ODY5NTVjYmY5ZWMxEgZTcGxpY2USBkFtdWxldBoGQW11bGV0IoACav0BCk0KSzpJRFNPOjoxMjIwYmU1OGMyOWU2NWRlNDBiZjI3M2JlMWRjMmIyNjZkNDNhOWEwMDJlYTViMTg5NTVhZWVmN2FhYzg4MWJiNDcxYQpqCmg6ZjFlNmI5ZTMwZGUwM2M4ZGYyYzBiNWY1YzUwY2NhYjE3OjoxMjIwZmYyNWEzZTk3NmJlNGJlMmM2OWI1NzYyNWEwOGQ5N2Y4NDdiZjI0NzM2NmFjZDcwZWRjY2NlYjI5N2I3ZTU4MwpACj5qPAoUChIyEDE5NTUwLjAwMDAwMDAwMDAKDAoKaggKBgoEGIzGAgoWChRqEgoQCg4yDDAuMDAwMjE2MjAzNCpmMWU2YjllMzBkZTAzYzhkZjJjMGI1ZjVjNTBjY2FiMTc6OjEyMjBmZjI1YTNlOTc2YmU0YmUyYzY5YjU3NjI1YTA4ZDk3Zjg0N2JmMjQ3MzY2YWNkNzBlZGNjY2ViMjk3YjdlNTgzKklEU086OjEyMjBiZTU4YzI5ZTY1ZGU0MGJmMjczYmUxZGMyYjI2NmQ0M2E5YTAwMmVhNWIxODk1NWFlZWY3YWFjODgxYmI0NzFhOSyYYw2kRAYAQioKJgokCAESIPXS0eR2LePXqjvR+OCaD7azI59XYxdO3nls8KPZJGo3EB4=",
-        "witnessParties": [
-          "1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583"
-        ],
-        "signatories": [
-          "1e6b9e30de03c8df2c0b5f5c50ccab17::1220ff25a3e976be4be2c69b57625a08d97f847bf247366acd70edccceb297b7e583",
-          "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a"
-        ],
-        "observers": [],
-        "createdAt": "2025-11-28T09:14:10.220076Z",
-        "packageName": "splice-amulet"
-      },
-      "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-      "reassignmentCounter": 0
-    }
-  }
-}
-loop-wallet-dashboard.tsx:126 [LoopWallet] contractEntry: Object
-loop-wallet-dashboard.tsx:127 [LoopWallet] JsActiveContract: Object
-loop-wallet-dashboard.tsx:128 [LoopWallet] createdEvent: Object
-logo.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
-logo.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
-index.js:2189 Disconnected from ticket server.
+error @ intercept-console-error.ts:40
+decodeCIP56HoldingBlob @ blob.ts:358
+LoopWalletDashboard.useCallback[fetchCIP56Holdings].holdings @ loop-wallet-dashboard.tsx:270
+LoopWalletDashboard.useCallback[fetchCIP56Holdings] @ loop-wallet-dashboard.tsx:264
+await in LoopWalletDashboard.useCallback[fetchCIP56Holdings]
+LoopWalletDashboard.useEffect @ loop-wallet-dashboard.tsx:307
+react-stack-bottom-frame @ react-dom-client.development.js:23054
+runWithFiberInDEV @ react-dom-client.development.js:844
+commitHookEffectListMount @ react-dom-client.development.js:11977
+commitHookPassiveMountEffects @ react-dom-client.development.js:12098
+commitPassiveMountOnFiber @ react-dom-client.development.js:13928
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13940
+flushPassiveEffects @ react-dom-client.development.js:15868
+eval @ react-dom-client.development.js:15504
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9
+loop-wallet-dashboard.tsx:272 [LoopWallet] Decoded CIP-56 holding blob: {contractId: '0082f6adbd58bb016469e35b3a42c29d292baabb68ea5df343…cda3e3abe344525298610e4016f75bfb1489fdafea5ac77d4', args: null}
+installHook.js:1 [blob.ts] Failed to decode CIP-56 holding: no fields
+overrideMethod @ installHook.js:1
+error @ intercept-console-error.ts:40
+decodeCIP56HoldingBlob @ blob.ts:358
+LoopWalletDashboard.useCallback[fetchCIP56Holdings].holdings @ loop-wallet-dashboard.tsx:270
+LoopWalletDashboard.useCallback[fetchCIP56Holdings] @ loop-wallet-dashboard.tsx:264
+await in LoopWalletDashboard.useCallback[fetchCIP56Holdings]
+LoopWalletDashboard.useEffect @ loop-wallet-dashboard.tsx:307
+react-stack-bottom-frame @ react-dom-client.development.js:23054
+runWithFiberInDEV @ react-dom-client.development.js:844
+commitHookEffectListMount @ react-dom-client.development.js:11977
+commitHookPassiveMountEffects @ react-dom-client.development.js:12098
+commitPassiveMountOnFiber @ react-dom-client.development.js:13928
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13931
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13921
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:14047
+recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:13901
+commitPassiveMountOnFiber @ react-dom-client.development.js:13940
+flushPassiveEffects @ react-dom-client.development.js:15868
+eval @ react-dom-client.development.js:15504
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9
+loop-wallet-dashboard.tsx:272 [LoopWallet] Decoded CIP-56 holding blob: {contractId: '00440fa1cadc57f3449463dddc6b11633f2dfe36033a54bf82…67ac6b596c3093297aa31eb6b69a0feb68b47cc4e2b8cf7b6', args: null}
+loop-wallet-dashboard.tsx:289 [LoopWallet] Parsed CIP-56 holdings from blob: (2) [{…}, {…}]
+loop-wallet-dashboard.tsx:184 [LoopWallet] Enriched Amulet contracts: [{…}]
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/fivenorth-devnet-1::12208c929c3f012c663323ed675b2eaea7d7c6e1a9be35d6b20bc39f311c6aa7cc54/LOOP/logo.png 404 (Not Found)
+Image
+eval @ image-component.tsx:220
+applyRef @ use-merged-ref.ts:55
+eval @ use-merged-ref.ts:42
+commitAttachRef @ react-dom-client.development.js:12245
+runWithFiberInDEV @ react-dom-client.development.js:844
+safelyAttachRef @ react-dom-client.development.js:12263
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12804
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12768
+flushLayoutEffects @ react-dom-client.development.js:15686
+commitRoot @ react-dom-client.development.js:15527
+commitRootWhenReady @ react-dom-client.development.js:14758
+performWorkOnRoot @ react-dom-client.development.js:14681
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<img>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:259
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:404
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+eval @ loop-wallet-dashboard.tsx:581
+LoopWalletDashboard @ loop-wallet-dashboard.tsx:575
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff/CBTC/logo.png 404 (Not Found)
+Image
+eval @ image-component.tsx:220
+applyRef @ use-merged-ref.ts:55
+eval @ use-merged-ref.ts:42
+commitAttachRef @ react-dom-client.development.js:12245
+runWithFiberInDEV @ react-dom-client.development.js:844
+safelyAttachRef @ react-dom-client.development.js:12263
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12804
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12768
+flushLayoutEffects @ react-dom-client.development.js:15686
+commitRoot @ react-dom-client.development.js:15527
+commitRootWhenReady @ react-dom-client.development.js:14758
+performWorkOnRoot @ react-dom-client.development.js:14681
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<img>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:259
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:404
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+eval @ loop-wallet-dashboard.tsx:581
+LoopWalletDashboard @ loop-wallet-dashboard.tsx:575
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9
+index.js:2186 Connected to ticket server.
+loop-wallet-dashboard.tsx:234 [LoopWallet] Mapped preapprovals with Lighthouse details: (2) [{…}, {…}]
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/fivenorth-devnet-1::12208c929c3f012c663323ed675b2eaea7d7c6e1a9be35d6b20bc39f311c6aa7cc54/LOOP/logo.png 404 (Not Found)
+Image
+eval @ image-component.tsx:220
+applyRef @ use-merged-ref.ts:55
+eval @ use-merged-ref.ts:42
+commitAttachRef @ react-dom-client.development.js:12245
+runWithFiberInDEV @ react-dom-client.development.js:844
+safelyAttachRef @ react-dom-client.development.js:12263
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12804
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12768
+flushLayoutEffects @ react-dom-client.development.js:15686
+commitRoot @ react-dom-client.development.js:15527
+commitRootWhenReady @ react-dom-client.development.js:14758
+performWorkOnRoot @ react-dom-client.development.js:14681
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<img>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:259
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:404
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+eval @ loop-wallet-dashboard.tsx:581
+LoopWalletDashboard @ loop-wallet-dashboard.tsx:575
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9
+logo.png:1  GET http://localhost:3000/api/v1/assets/instrument/cbtc-network::12202a83c6f4082217c175e29bc53da5f2703ba2675778ab99217a5a881a949203ff/CBTC/logo.png 404 (Not Found)
+Image
+eval @ image-component.tsx:220
+applyRef @ use-merged-ref.ts:55
+eval @ use-merged-ref.ts:42
+commitAttachRef @ react-dom-client.development.js:12245
+runWithFiberInDEV @ react-dom-client.development.js:844
+safelyAttachRef @ react-dom-client.development.js:12263
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12804
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12802
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12691
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12686
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12866
+recursivelyTraverseLayoutEffects @ react-dom-client.development.js:13672
+commitLayoutEffectOnFiber @ react-dom-client.development.js:12768
+flushLayoutEffects @ react-dom-client.development.js:15686
+commitRoot @ react-dom-client.development.js:15527
+commitRootWhenReady @ react-dom-client.development.js:14758
+performWorkOnRoot @ react-dom-client.development.js:14681
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<img>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:259
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsx @ react-jsx-runtime.development.js:339
+eval @ image-component.tsx:404
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateForwardRef @ react-dom-client.development.js:8678
+beginWork @ react-dom-client.development.js:10894
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<ForwardRef>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+eval @ loop-wallet-dashboard.tsx:581
+LoopWalletDashboard @ loop-wallet-dashboard.tsx:575
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopSync @ react-dom-client.development.js:15077
+renderRootSync @ react-dom-client.development.js:15057
+performWorkOnRoot @ react-dom-client.development.js:14525
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<LoopWalletDashboard>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:346
+HomePage @ page.tsx:79
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10555
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+<HomePage>
+exports.jsx @ react-jsx-runtime.development.js:339
+ClientPageRoot @ client-page.tsx:60
+react-stack-bottom-frame @ react-dom-client.development.js:22973
+renderWithHooksAgain @ react-dom-client.development.js:6766
+renderWithHooks @ react-dom-client.development.js:6678
+updateFunctionComponent @ react-dom-client.development.js:8930
+beginWork @ react-dom-client.development.js:10504
+runWithFiberInDEV @ react-dom-client.development.js:844
+performUnitOfWork @ react-dom-client.development.js:15257
+workLoopConcurrentByScheduler @ react-dom-client.development.js:15251
+renderRootConcurrent @ react-dom-client.development.js:15226
+performWorkOnRoot @ react-dom-client.development.js:14524
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:16349
+performWorkUntilDeadline @ scheduler.development.js:45
+"use client"
+eval @ react-server-dom-webpack-client.browser.development.js:2354
+initializeModelChunk @ react-server-dom-webpack-client.browser.development.js:1054
+resolveModelChunk @ react-server-dom-webpack-client.browser.development.js:1031
+resolveModel @ react-server-dom-webpack-client.browser.development.js:1599
+processFullStringRow @ react-server-dom-webpack-client.browser.development.js:2288
+processFullBinaryRow @ react-server-dom-webpack-client.browser.development.js:2233
+progress @ react-server-dom-webpack-client.browser.development.js:2479
+"use server"
+ResponseInstance @ react-server-dom-webpack-client.browser.development.js:1587
+createResponseFromOptions @ react-server-dom-webpack-client.browser.development.js:2396
+exports.createFromReadableStream @ react-server-dom-webpack-client.browser.development.js:2717
+eval @ app-index.tsx:157
+(app-pages-browser)/./node_modules/next/dist/client/app-index.js @ main-app.js?v=1764437767541:160
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+fn @ webpack.js?v=1764437767541:369
+eval @ app-next-dev.ts:11
+eval @ app-bootstrap.ts:78
+loadScriptsInSequence @ app-bootstrap.ts:20
+appBootstrap @ app-bootstrap.ts:60
+eval @ app-next-dev.ts:10
+(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js @ main-app.js?v=1764437767541:182
+options.factory @ webpack.js?v=1764437767541:712
+__webpack_require__ @ webpack.js?v=1764437767541:37
+__webpack_exec__ @ main-app.js?v=1764437767541:2824
+(anonymous) @ main-app.js?v=1764437767541:2825
+webpackJsonpCallback @ webpack.js?v=1764437767541:1388
+(anonymous) @ main-app.js?v=1764437767541:9

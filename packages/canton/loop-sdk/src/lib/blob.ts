@@ -2,13 +2,15 @@
  * Canton Contract Blob Decoder
  *
  * Utilities for fetching and decoding Canton contract data.
- * Uses the Lighthouse API to get decoded contract details since the
- * createdEventBlob from Loop SDK is a protobuf-encoded binary that
- * requires the Daml-LF value encoding schema to decode.
+ * Uses protobuf decoding for createdEventBlob and Lighthouse API as fallback.
  *
- * The Lighthouse API returns the decoded create_arguments which contains
- * the contract payload (amount, parties, expiration dates, etc.)
+ * The createdEventBlob contains a FatContractInstance protobuf message which
+ * includes the contract arguments encoded as a Value.Record.
  */
+
+import { fromBinary } from "@bufbuild/protobuf";
+import { FatContractInstanceSchema, VersionedSchema } from "../proto/com/digitalasset/daml/lf/transaction_pb";
+import { ValueSchema, type Value, type Value_Record } from "../proto/com/digitalasset/daml/lf/value_pb";
 
 export type LoopNetwork = "devnet" | "testnet" | "mainnet";
 
@@ -250,4 +252,188 @@ export function isDsoParty(partyId: string): boolean {
  */
 export function getPartyIdentifier(partyId: string): string {
   return partyId.split("::")[0] || partyId;
+}
+
+/**
+ * Helper to extract string value from a Value
+ */
+function extractStringValue(value: Value | undefined): string {
+  if (!value) return "";
+  switch (value.sum.case) {
+    case "party":
+    case "text":
+    case "numeric":
+      return value.sum.value;
+    default:
+      return "";
+  }
+}
+
+/**
+ * Helper to extract record fields from a Value
+ */
+function extractRecord(value: Value | undefined): Value_Record | null {
+  if (!value || value.sum.case !== "record") return null;
+  return value.sum.value;
+}
+
+/**
+ * Decoded blob result for any contract
+ */
+export interface DecodedContractBlob {
+  contractId: Uint8Array;
+  packageName: string;
+  templateId: {
+    packageId: string;
+    moduleName: string[];
+    name: string[];
+  } | null;
+  fields: Value_Record | null;
+}
+
+/**
+ * Decodes a createdEventBlob from Loop SDK into a structured object
+ *
+ * @param base64Blob - The base64-encoded createdEventBlob
+ * @returns Decoded contract data or null if decoding fails
+ */
+export function decodeContractBlob(base64Blob: string): DecodedContractBlob | null {
+  try {
+    // Base64 decode to Uint8Array
+    const binaryString = atob(base64Blob);
+    const binaryData = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+
+    // The blob is wrapped in a Versioned message (version + payload)
+    const versioned = fromBinary(VersionedSchema, binaryData);
+
+    // Parse the payload as FatContractInstance
+    const fatContract = fromBinary(FatContractInstanceSchema, versioned.payload);
+
+    // Parse create_arg directly as Value (NOT wrapped in VersionedValue)
+    const value = fromBinary(ValueSchema, fatContract.createArg);
+    const fields = extractRecord(value);
+
+    return {
+      contractId: fatContract.contractId,
+      packageName: fatContract.packageName,
+      templateId: fatContract.templateId ? {
+        packageId: fatContract.templateId.packageId,
+        moduleName: fatContract.templateId.moduleName,
+        name: fatContract.templateId.name,
+      } : null,
+      fields,
+    };
+  } catch (error) {
+    console.error("[blob.ts] Failed to decode contract blob:", error);
+    return null;
+  }
+}
+
+/**
+ * Decodes a CIP-56 Holding contract from its createdEventBlob
+ *
+ * Supports two template types:
+ *
+ * 1. Utility.Registry.Holding.V0.Holding:Holding fields (in order):
+ *    0: operator (Party)
+ *    1: provider (Party)
+ *    2: registrar (Party)
+ *    3: owner (Party)
+ *    4: instrument (Record: admin, id, version)
+ *    5: label (Text)
+ *    6: amount (Decimal/Numeric)
+ *    7: lock (Optional Lock)
+ *
+ * 2. Splice.Amulet:Amulet fields (in order):
+ *    0: dso (Party)
+ *    1: owner (Party)
+ *    2: amount (Record: initialAmount, createdAt, ratePerRound)
+ *
+ * @param base64Blob - The base64-encoded createdEventBlob
+ * @returns Decoded CIP-56 holding arguments or null if decoding fails
+ */
+export function decodeCIP56HoldingBlob(base64Blob: string): CIP56HoldingCreateArguments | null {
+  try {
+    const decoded = decodeContractBlob(base64Blob);
+    if (!decoded || !decoded.fields) {
+      console.error("[blob.ts] Failed to decode CIP-56 holding: no fields");
+      return null;
+    }
+
+    const fields = decoded.fields.fields;
+    const templateName = decoded.templateId?.name?.join(":") || "";
+
+    console.log("[blob.ts] Decoding template:", templateName, "fields count:", fields.length);
+
+    // Check if this is an Amulet contract (implements Holding interface but different structure)
+    if (templateName === "Amulet" || decoded.packageName === "splice-amulet") {
+      // Amulet fields: 0=dso, 1=owner, 2=amount (ExpiringAmount record)
+      if (fields.length < 3) {
+        console.error(`[blob.ts] Amulet has insufficient fields: ${fields.length}`);
+        return null;
+      }
+
+      const dso = extractStringValue(fields[0]?.value);
+      const owner = extractStringValue(fields[1]?.value);
+
+      // Extract ExpiringAmount record (field 2)
+      const amountRecord = extractRecord(fields[2]?.value);
+      let amount = "0";
+      if (amountRecord && amountRecord.fields.length >= 1) {
+        amount = extractStringValue(amountRecord.fields[0]?.value); // initialAmount
+      }
+
+      return {
+        operator: dso,
+        provider: dso,
+        registrar: dso,
+        owner,
+        instrument: { admin: dso, id: "CC", version: "0" }, // Canton Coin
+        label: "Canton Coin",
+        amount,
+        lock: null,
+      };
+    }
+
+    // Standard CIP-56 Utility.Registry.Holding structure
+    if (fields.length < 7) {
+      console.error(`[blob.ts] CIP-56 holding has insufficient fields: ${fields.length}`);
+      return null;
+    }
+
+    // Extract instrument record (field 4)
+    const instrumentRecord = extractRecord(fields[4]?.value);
+    let instrument = { admin: "", id: "", version: "" };
+    if (instrumentRecord && instrumentRecord.fields.length >= 3) {
+      instrument = {
+        admin: extractStringValue(instrumentRecord.fields[0]?.value),
+        id: extractStringValue(instrumentRecord.fields[1]?.value),
+        version: extractStringValue(instrumentRecord.fields[2]?.value),
+      };
+    }
+
+    // Extract lock (field 7) - Optional
+    let lock: unknown | null = null;
+    if (fields.length > 7 && fields[7]?.value?.sum.case === "optional") {
+      const optionalValue = fields[7].value.sum.value;
+      if (optionalValue.value) {
+        // Lock is present, extract it
+        lock = optionalValue.value;
+      }
+    }
+
+    return {
+      operator: extractStringValue(fields[0]?.value),
+      provider: extractStringValue(fields[1]?.value),
+      registrar: extractStringValue(fields[2]?.value),
+      owner: extractStringValue(fields[3]?.value),
+      instrument,
+      label: extractStringValue(fields[5]?.value),
+      amount: extractStringValue(fields[6]?.value),
+      lock,
+    };
+  } catch (error) {
+    console.error("[blob.ts] Failed to decode CIP-56 holding blob:", error);
+    return null;
+  }
 }
