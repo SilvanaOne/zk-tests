@@ -22,7 +22,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
+import { createPhantomPreapprovalProposal } from "@/lib/phantom-preapproval";
+import { createSolflarePreapprovalProposal } from "@/lib/solflare-preapproval";
+import { createSolflareTransfer } from "@/lib/solflare-transfer";
+import { signSolflareTransactionHash } from "@/lib/solflare";
 import { fetchContractDetails, decodeCIP56HoldingBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
+import { getHoldingsFromLedger, getActiveContractsFromLedger, getPreapprovalsFromLedger } from "@/lib/ledger-api";
+import type { LedgerHolding, LedgerActiveContract } from "@/lib/ledger-api-types";
 import type { Holding } from "@fivenorth/loop-sdk";
 
 // Type for preapproval contract with decoded details
@@ -67,9 +73,11 @@ interface CIP56Holding {
 interface LoopWalletDashboardProps {
   loopPartyId?: string | null;
   network?: "devnet" | "testnet" | "mainnet";
+  walletName?: string;
+  walletType?: "loop" | "phantom" | "solflare" | null;
 }
 
-export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWalletDashboardProps) {
+export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletName = "Loop", walletType = "loop" }: LoopWalletDashboardProps) {
   const isConnected = !!loopPartyId;
   const [messageToSign, setMessageToSign] = useState("Hello Loop world!");
   const [signedMessage, setSignedMessage] = useState<{
@@ -81,6 +89,16 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   >("idle");
   const [verifyStatus, setVerifyStatus] = useState<
     "idle" | "loading" | "valid" | "invalid"
+  >("idle");
+
+  // Sign Multihash state (Solflare only)
+  const [multihashToSign, setMultihashToSign] = useState("");
+  const [signedMultihash, setSignedMultihash] = useState<{
+    multihash: string;
+    signature: string;
+  } | null>(null);
+  const [signMultihashStatus, setSignMultihashStatus] = useState<
+    "idle" | "loading" | "success" | "error"
   >("idle");
 
   // Holdings state
@@ -117,23 +135,54 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   const [cip56HoldingsLoading, setCip56HoldingsLoading] = useState(false);
   const [cip56HoldingsError, setCip56HoldingsError] = useState<string | null>(null);
 
+  // Ledger API holdings state (for Solflare/Phantom)
+  const [ledgerHoldings, setLedgerHoldings] = useState<LedgerHolding[]>([]);
+  const [ledgerContracts, setLedgerContracts] = useState<LedgerActiveContract[]>([]);
+
   // Capitalize first letter for display
   const networkDisplay = network.charAt(0).toUpperCase() + network.slice(1);
 
   // Fetch holdings when connected
   const fetchHoldings = useCallback(async () => {
-    console.log("[LoopWallet] fetchHoldings called, isConnected:", isConnected);
-    if (!isConnected) return;
+    console.log("[LoopWallet] fetchHoldings called, isConnected:", isConnected, "walletType:", walletType);
+    if (!isConnected || !loopPartyId) return;
 
     setHoldingsLoading(true);
     setHoldingsError(null);
     try {
-      const result = await getLoopHoldings();
-      console.log("[LoopWallet] Holdings result:", result);
-      if (result) {
-        setHoldings(result);
+      // Use Ledger API for Solflare/Phantom, Loop SDK for Loop wallet
+      if (walletType === "solflare" || walletType === "phantom") {
+        console.log("[LoopWallet] Using Ledger API for holdings...");
+        const ledgerResult = await getHoldingsFromLedger(loopPartyId);
+        console.log("[LoopWallet] Ledger holdings result:", ledgerResult);
+        setLedgerHoldings(ledgerResult);
+        setHoldings([]); // Clear Loop holdings
+
+        // Also derive CIP-56 holdings from ledger result (non-CC tokens)
+        const cip56FromLedger = ledgerResult.filter(h => h.tokenId !== "CC");
+        const cip56Holdings: CIP56Holding[] = cip56FromLedger.map(h => ({
+          contractId: h.contractId,
+          templateId: h.templateId,
+          packageName: h.templateId.split(":")[0] || "",
+          createdAt: undefined,
+          createdEventBlob: "",
+          owner: "",
+          instrumentId: h.tokenId,
+          instrumentAdmin: "",
+          amount: h.amount,
+          label: h.tokenId,
+          isLocked: h.isLocked,
+        }));
+        setCip56Holdings(cip56Holdings);
       } else {
-        setHoldings([]);
+        const result = await getLoopHoldings();
+        console.log("[LoopWallet] Holdings result:", result);
+        if (result) {
+          setHoldings(result);
+        } else {
+          setHoldings([]);
+        }
+        setLedgerHoldings([]); // Clear Ledger holdings
       }
     } catch (error: any) {
       console.error("[LoopWallet] Failed to fetch holdings:", error);
@@ -141,50 +190,74 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setHoldingsLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, loopPartyId, walletType]);
 
   // Fetch active contracts when connected (Amulet contracts enriched with Lighthouse API)
   const fetchActiveContracts = useCallback(async () => {
-    console.log("[LoopWallet] fetchActiveContracts called, isConnected:", isConnected);
-    if (!isConnected) return;
+    console.log("[LoopWallet] fetchActiveContracts called, isConnected:", isConnected, "walletType:", walletType);
+    if (!isConnected || !loopPartyId) return;
 
     setContractsLoading(true);
     setContractsError(null);
     try {
-      const result = await getLoopActiveContracts({
-        templateId: "#splice-amulet:Splice.Amulet:Amulet"
-      });
-      console.log("[LoopWallet] Active contracts result:", result);
+      // Use Ledger API for Solflare/Phantom, Loop SDK for Loop wallet
+      if (walletType === "solflare" || walletType === "phantom") {
+        console.log("[LoopWallet] Using Ledger API for active contracts...");
+        const allContracts = await getActiveContractsFromLedger(loopPartyId);
+        console.log("[LoopWallet] Ledger contracts result:", allContracts);
+        setLedgerContracts(allContracts);
 
-      if (result && result.length > 0) {
-        // Fetch details from Lighthouse API for each contract
-        const enrichedContracts: AmuletContract[] = await Promise.all(
-          result.map(async (contract) => {
-            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
-            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
-
-            // Fetch full details from Lighthouse API
-            const details = await fetchContractDetails(contractId, network);
-            const args = details?.create_arguments as AmuletCreateArguments | undefined;
-
-            return {
-              contractId,
-              templateId: details?.template_id || createdEvent?.templateId || "",
-              packageName: details?.package_name || createdEvent?.packageName || "",
-              owner: args?.owner || "",
-              dso: args?.dso || "",
-              amount: args?.amount || { initialAmount: "0", createdAt: { number: "0" }, ratePerRound: { rate: "0" } },
-              createdAt: createdEvent?.createdAt,
-              createdEventBlob: createdEvent?.createdEventBlob || "",
-              blob: details,
-            };
-          })
-        );
-
-        console.log("[LoopWallet] Enriched Amulet contracts:", enrichedContracts);
+        // Filter for Amulet contracts and convert to AmuletContract format
+        const amulets = allContracts.filter(c => c.templateId.includes("Splice.Amulet:Amulet"));
+        const enrichedContracts: AmuletContract[] = amulets.map(contract => ({
+          contractId: contract.contractId,
+          templateId: contract.templateId,
+          packageName: contract.templateId.split(":")[0] || "",
+          owner: contract.createArgument?.owner || "",
+          dso: contract.createArgument?.dso || "",
+          amount: contract.createArgument?.amulet?.amount || contract.createArgument?.amount || { initialAmount: "0", createdAt: { number: "0" }, ratePerRound: { rate: "0" } },
+          createdAt: undefined,
+          createdEventBlob: contract.createdEventBlob || "",
+          blob: null,
+        }));
         setAmuletContracts(enrichedContracts);
       } else {
-        setAmuletContracts([]);
+        const result = await getLoopActiveContracts({
+          templateId: "#splice-amulet:Splice.Amulet:Amulet"
+        });
+        console.log("[LoopWallet] Active contracts result:", result);
+
+        if (result && result.length > 0) {
+          // Fetch details from Lighthouse API for each contract
+          const enrichedContracts: AmuletContract[] = await Promise.all(
+            result.map(async (contract) => {
+              const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+              const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+
+              // Fetch full details from Lighthouse API
+              const details = await fetchContractDetails(contractId, network);
+              const args = details?.create_arguments as AmuletCreateArguments | undefined;
+
+              return {
+                contractId,
+                templateId: details?.template_id || createdEvent?.templateId || "",
+                packageName: details?.package_name || createdEvent?.packageName || "",
+                owner: args?.owner || "",
+                dso: args?.dso || "",
+                amount: args?.amount || { initialAmount: "0", createdAt: { number: "0" }, ratePerRound: { rate: "0" } },
+                createdAt: createdEvent?.createdAt,
+                createdEventBlob: createdEvent?.createdEventBlob || "",
+                blob: details,
+              };
+            })
+          );
+
+          console.log("[LoopWallet] Enriched Amulet contracts:", enrichedContracts);
+          setAmuletContracts(enrichedContracts);
+        } else {
+          setAmuletContracts([]);
+        }
+        setLedgerContracts([]); // Clear Ledger contracts
       }
     } catch (error: any) {
       console.error("[LoopWallet] Failed to fetch active contracts:", error);
@@ -192,50 +265,71 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setContractsLoading(false);
     }
-  }, [isConnected, network]);
+  }, [isConnected, loopPartyId, walletType, network]);
 
   // Fetch preapproval contracts from Loop SDK and enrich with Lighthouse API
   const fetchPreapprovalContracts = useCallback(async () => {
-    console.log("[LoopWallet] fetchPreapprovalContracts called, isConnected:", isConnected, "partyId:", loopPartyId);
+    console.log("[LoopWallet] fetchPreapprovalContracts called, isConnected:", isConnected, "partyId:", loopPartyId, "walletType:", walletType);
     if (!isConnected || !loopPartyId) return;
 
     setPreapprovalContractsLoading(true);
     try {
-      // Fetch TransferPreapproval contracts directly from Loop SDK
-      // This gives us all preapprovals where user is receiver (has visibility)
-      const contracts = await getLoopActiveContracts({
-        templateId: "#splice-amulet:Splice.AmuletRules:TransferPreapproval"
-      });
+      // Use Ledger API for Solflare/Phantom, Loop SDK for Loop wallet
+      if (walletType === "solflare" || walletType === "phantom") {
+        console.log("[LoopWallet] Using Ledger API for preapprovals...");
+        const ledgerPreapprovals = await getPreapprovalsFromLedger(loopPartyId);
+        console.log("[LoopWallet] Ledger preapprovals result:", ledgerPreapprovals);
 
-      console.log("[LoopWallet] TransferPreapproval contracts from Loop SDK:", contracts);
+        const preapprovals: PreapprovalContract[] = ledgerPreapprovals
+          .filter(c => c.templateId.includes("TransferPreapproval:TransferPreapproval"))
+          .map(contract => ({
+            contractId: contract.contractId,
+            templateId: contract.templateId,
+            provider: contract.createArgument?.provider || "",
+            receiver: contract.createArgument?.receiver || loopPartyId,
+            expiresAt: contract.createArgument?.expiresAt,
+            createdAt: undefined,
+          }));
 
-      if (contracts && contracts.length > 0) {
-        // Extract contract IDs and fetch details from Lighthouse API
-        const preapprovals: PreapprovalContract[] = await Promise.all(
-          contracts.map(async (contract) => {
-            const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
-            const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
-
-            // Fetch full details from Lighthouse API
-            const details = await fetchContractDetails(contractId, network);
-            const args = details?.create_arguments as TransferPreapprovalCreateArguments | undefined;
-
-            return {
-              contractId,
-              templateId: createdEvent?.templateId || createdEvent?.template_id || contract.template_id,
-              provider: args?.provider || "",
-              receiver: args?.receiver || loopPartyId,
-              expiresAt: args?.expiresAt,
-              createdAt: createdEvent?.createdAt,
-            };
-          })
-        );
-
-        console.log("[LoopWallet] Mapped preapprovals with Lighthouse details:", preapprovals);
+        console.log("[LoopWallet] Mapped ledger preapprovals:", preapprovals);
         setAcceptedPreapprovals(preapprovals);
       } else {
-        console.log("[LoopWallet] No TransferPreapproval contracts found");
-        setAcceptedPreapprovals([]);
+        // Fetch TransferPreapproval contracts directly from Loop SDK
+        // This gives us all preapprovals where user is receiver (has visibility)
+        const contracts = await getLoopActiveContracts({
+          templateId: "#splice-amulet:Splice.AmuletRules:TransferPreapproval"
+        });
+
+        console.log("[LoopWallet] TransferPreapproval contracts from Loop SDK:", contracts);
+
+        if (contracts && contracts.length > 0) {
+          // Extract contract IDs and fetch details from Lighthouse API
+          const preapprovals: PreapprovalContract[] = await Promise.all(
+            contracts.map(async (contract) => {
+              const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+              const contractId = createdEvent?.contractId || createdEvent?.contract_id || "";
+
+              // Fetch full details from Lighthouse API
+              const details = await fetchContractDetails(contractId, network);
+              const args = details?.create_arguments as TransferPreapprovalCreateArguments | undefined;
+
+              return {
+                contractId,
+                templateId: createdEvent?.templateId || createdEvent?.template_id || contract.template_id,
+                provider: args?.provider || "",
+                receiver: args?.receiver || loopPartyId,
+                expiresAt: args?.expiresAt,
+                createdAt: createdEvent?.createdAt,
+              };
+            })
+          );
+
+          console.log("[LoopWallet] Mapped preapprovals with Lighthouse details:", preapprovals);
+          setAcceptedPreapprovals(preapprovals);
+        } else {
+          console.log("[LoopWallet] No TransferPreapproval contracts found");
+          setAcceptedPreapprovals([]);
+        }
       }
     } catch (error: any) {
       console.error("[LoopWallet] Failed to fetch preapproval contracts:", error);
@@ -243,12 +337,19 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setPreapprovalContractsLoading(false);
     }
-  }, [isConnected, loopPartyId, network]);
+  }, [isConnected, loopPartyId, walletType, network]);
 
   // Fetch CIP-56 compatible holdings using interface filter
+  // Note: For Solflare/Phantom, CIP-56 holdings are derived in fetchHoldings
   const fetchCIP56Holdings = useCallback(async () => {
-    console.log("[LoopWallet] fetchCIP56Holdings called, isConnected:", isConnected);
-    if (!isConnected) return;
+    console.log("[LoopWallet] fetchCIP56Holdings called, isConnected:", isConnected, "walletType:", walletType);
+    if (!isConnected || !loopPartyId) return;
+
+    // Skip for Solflare/Phantom - CIP-56 holdings are derived from ledger holdings in fetchHoldings
+    if (walletType === "solflare" || walletType === "phantom") {
+      console.log("[LoopWallet] Skipping CIP-56 fetch for Solflare/Phantom (handled by fetchHoldings)");
+      return;
+    }
 
     setCip56HoldingsLoading(true);
     setCip56HoldingsError(null);
@@ -297,7 +398,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     } finally {
       setCip56HoldingsLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, loopPartyId, walletType]);
 
   useEffect(() => {
     if (isConnected) {
@@ -400,18 +501,62 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
     }
   };
 
+  // Sign Multihash handler (Solflare only)
+  const handleSignMultihash = async () => {
+    if (!multihashToSign || walletType !== "solflare") return;
+
+    setSignMultihashStatus("loading");
+    setSignedMultihash(null);
+
+    try {
+      const signature = await signSolflareTransactionHash(multihashToSign);
+
+      if (signature) {
+        setSignedMultihash({
+          multihash: multihashToSign,
+          signature,
+        });
+        setSignMultihashStatus("success");
+      } else {
+        setSignMultihashStatus("error");
+      }
+    } catch (error) {
+      console.error("[LoopWallet] Sign multihash error:", error);
+      setSignMultihashStatus("error");
+    }
+  };
+
   const handleTransfer = async () => {
-    if (!transferReceiver || !transferAmount || !isConnected) return;
+    if (!transferReceiver || !transferAmount || !isConnected || !loopPartyId) return;
 
     setTransferStatus("awaiting");
     setTransferResult(null);
 
     try {
-      const result = await transferCC({
-        receiver: transferReceiver,
-        amount: transferAmount,
-        description: transferDescription || undefined,
-      });
+      let result: TransferResult;
+
+      if (walletType === "phantom") {
+        // Phantom transfer not yet supported due to signing restrictions
+        console.log("[LoopWallet] Phantom transfer not supported");
+        result = { success: false, error: "Transfer CC is not yet supported for Phantom wallet. Please use Solflare or Loop wallet." };
+      } else if (walletType === "solflare") {
+        // Use Solflare signing flow (interactive submission)
+        console.log("[LoopWallet] Using Solflare transfer flow");
+        result = await createSolflareTransfer({
+          senderPartyId: loopPartyId,
+          receiverPartyId: transferReceiver,
+          amount: transferAmount,
+          description: transferDescription || undefined,
+        });
+      } else {
+        // Use Loop SDK flow (standard submission)
+        console.log("[LoopWallet] Using Loop transfer flow");
+        result = await transferCC({
+          receiver: transferReceiver,
+          amount: transferAmount,
+          description: transferDescription || undefined,
+        });
+      }
 
       setTransferResult(result);
       setTransferStatus(result.success ? "success" : "error");
@@ -433,15 +578,36 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   };
 
   const handleCreatePreapproval = async () => {
-    if (!isConnected || !preapprovalProvider.trim()) return;
+    if (!isConnected || !preapprovalProvider.trim() || !loopPartyId) return;
 
     setPreapprovalStatus("awaiting");
     setPreapprovalResult(null);
 
     try {
-      const result = await createTransferPreapprovalProposal({
-        provider: preapprovalProvider.trim()
-      });
+      let result: PreapprovalResult;
+
+      if (walletType === "phantom") {
+        // Use Phantom signing flow (interactive submission)
+        console.log("[LoopWallet] Using Phantom preapproval flow");
+        result = await createPhantomPreapprovalProposal({
+          phantomPartyId: loopPartyId,
+          provider: preapprovalProvider.trim()
+        });
+      } else if (walletType === "solflare") {
+        // Use Solflare signing flow (interactive submission)
+        console.log("[LoopWallet] Using Solflare preapproval flow");
+        result = await createSolflarePreapprovalProposal({
+          solflarePartyId: loopPartyId,
+          provider: preapprovalProvider.trim()
+        });
+      } else {
+        // Use Loop SDK flow (standard submission)
+        console.log("[LoopWallet] Using Loop preapproval flow");
+        result = await createTransferPreapprovalProposal({
+          provider: preapprovalProvider.trim()
+        });
+      }
+
       setPreapprovalResult(result);
       setPreapprovalStatus(result.success ? "success" : "error");
 
@@ -460,18 +626,18 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
   if (!isConnected) {
     return (
       <StatusCard
-        title="Loop Wallet"
+        title={`${walletName} Wallet`}
         icon={Activity}
-        description="Connect a wallet to manage your Loop assets."
+        description={`Connect a wallet to manage your ${walletName} assets.`}
         className="h-full"
       >
         <div className="text-center py-4">
           <StatusPill
             status="info"
-            text="Loop Wallet Not Active"
+            text={`${walletName} Wallet Not Active`}
           />
           <p className="text-sm text-muted-foreground mt-2">
-            Please connect to activate Loop functionalities.
+            Please connect to activate wallet functionalities.
           </p>
         </div>
       </StatusCard>
@@ -480,9 +646,9 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
 
   return (
     <StatusCard
-      title="Loop Wallet"
+      title={`${walletName} Wallet`}
       icon={Activity}
-      description="Manage your Loop assets securely."
+      description={`Manage your ${walletName} assets securely.`}
       className="h-full"
     >
       <div className="space-y-4">
@@ -564,12 +730,13 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
             </Alert>
           )}
 
-          {!holdingsLoading && !holdingsError && holdings.length === 0 && (
+          {!holdingsLoading && !holdingsError && holdings.length === 0 && ledgerHoldings.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-2">
               No holdings found
             </p>
           )}
 
+          {/* Loop SDK Holdings (Loop wallet) */}
           {!holdingsLoading && !holdingsError && holdings.length > 0 && (
             <div className="space-y-2">
               {holdings.map((holding, index) => (
@@ -606,6 +773,36 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                           ({formatBalance(holding.total_locked_coin)} locked)
                         </span>
                       )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Ledger API Holdings (Solflare/Phantom) */}
+          {!holdingsLoading && !holdingsError && ledgerHoldings.length > 0 && (
+            <div className="space-y-2">
+              {ledgerHoldings.map((holding, index) => (
+                <div
+                  key={`${holding.contractId}-${index}`}
+                  className="flex items-center gap-3 p-2 rounded-md bg-background/50 border border-border/50"
+                >
+                  <Coins className="w-6 h-6 text-brand-yellow" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{holding.tokenId}</span>
+                      {holding.isLocked && (
+                        <span className="text-xs text-brand-yellow">(locked)</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-foreground font-medium">
+                        {formatBalance(holding.amount)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate" title={holding.contractId}>
+                      Contract: {holding.contractId.slice(0, 16)}...
                     </div>
                   </div>
                 </div>
@@ -1004,7 +1201,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
               <AlertTitle className="text-sm text-foreground">Awaiting Approval</AlertTitle>
               <AlertDescription className="text-xs">
                 <p className="text-muted-foreground mb-2">
-                  Please approve this transaction in your Loop Wallet.
+                  Please approve this transaction in your {walletName} Wallet.
                 </p>
                 <Button
                   variant="link"
@@ -1012,7 +1209,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
                   onClick={openLoopWallet}
                   className="h-6 p-0 text-xs text-brand-yellow hover:text-brand-yellow/80"
                 >
-                  Open Loop Wallet
+                  Open {walletName} Wallet
                   <ExternalLink className="ml-1 h-3 w-3" />
                 </Button>
               </AlertDescription>
@@ -1050,9 +1247,14 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
           <h4 className="text-sm font-semibold text-foreground flex items-center">
             <UserCheck className="w-4 h-4 mr-2" />
             Preapprove Transfers
+            {walletType && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                ({walletType === "phantom" ? "Phantom signing" : walletType === "solflare" ? "Solflare signing" : "Loop signing"})
+              </span>
+            )}
           </h4>
           <p className="text-xs text-muted-foreground">
-            Create a transfer preapproval proposal.
+            Create a transfer preapproval proposal{walletType === "phantom" || walletType === "solflare" ? ` using ${walletType === "phantom" ? "Phantom" : "Solflare"} wallet signature` : ""}.
           </p>
           <div>
             <label className="text-xs text-muted-foreground">Provider Party ID</label>
@@ -1079,18 +1281,26 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
               <Loader2 className="h-4 w-4 animate-spin text-brand-yellow" />
               <AlertTitle className="text-sm text-foreground">Awaiting Approval</AlertTitle>
               <AlertDescription className="text-xs">
-                <p className="text-muted-foreground mb-2">
-                  Please approve this transaction in your Loop Wallet.
-                </p>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={openLoopWallet}
-                  className="h-6 p-0 text-xs text-brand-yellow hover:text-brand-yellow/80"
-                >
-                  Open Loop Wallet
-                  <ExternalLink className="ml-1 h-3 w-3" />
-                </Button>
+                {walletType === "phantom" || walletType === "solflare" ? (
+                  <p className="text-muted-foreground">
+                    Please sign the transaction in the {walletType === "phantom" ? "Phantom" : "Solflare"} popup.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground mb-2">
+                      Please approve this transaction in your {walletName} Wallet.
+                    </p>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={openLoopWallet}
+                      className="h-6 p-0 text-xs text-brand-yellow hover:text-brand-yellow/80"
+                    >
+                      Open {walletName} Wallet
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Button>
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -1211,6 +1421,71 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet" }: LoopWal
             </Alert>
           )}
         </div>
+
+        {/* Sign Multihash Section (Solflare only) */}
+        {walletType === "solflare" && (
+          <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <Edit3 className="w-4 h-4 mr-2" />
+              Sign Multihash
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Sign a base64-encoded multihash for topology transactions
+            </p>
+            <Input
+              placeholder="e.g., EiCCb4H1HHMWsFhlXVI9LKbvX/nOZ2tbDgLxLymO6jxZiQ=="
+              value={multihashToSign}
+              onChange={(e) => setMultihashToSign(e.target.value)}
+              className="bg-input border-border focus:border-primary text-foreground font-mono text-xs placeholder:text-muted-foreground h-8"
+            />
+            <Button
+              onClick={handleSignMultihash}
+              disabled={!multihashToSign || signMultihashStatus === "loading"}
+              className="w-full bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue hover:brightness-105 text-white h-8 text-xs"
+            >
+              {signMultihashStatus === "loading" && (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              )}
+              Sign Multihash
+            </Button>
+            {signMultihashStatus === "error" && (
+              <Alert variant="destructive" className="mt-2 p-2">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle className="text-sm">Signing Failed</AlertTitle>
+                <AlertDescription className="text-xs">
+                  User rejected or signing failed
+                </AlertDescription>
+              </Alert>
+            )}
+            {signedMultihash && signMultihashStatus === "success" && (
+              <Alert
+                variant="default"
+                className="mt-2 p-2 bg-muted/30 border-border"
+              >
+                <CheckCircle className="h-4 w-4 text-brand-green" />
+                <AlertTitle className="text-sm text-foreground">
+                  Multihash Signed
+                </AlertTitle>
+                <AlertDescription className="space-y-2 text-xs">
+                  <DataRow
+                    label="Multihash"
+                    value={signedMultihash.multihash}
+                    truncate={true}
+                    className="border-none py-0.5"
+                    valueClassName="text-xs"
+                  />
+                  <DataRow
+                    label="Signature"
+                    value={signedMultihash.signature}
+                    truncate={true}
+                    className="border-none py-0.5"
+                    valueClassName="text-xs"
+                  />
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
 
       </div>
     </StatusCard>

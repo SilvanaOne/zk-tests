@@ -1,5 +1,6 @@
 "use client";
 import { WalletChain, WalletProvider, WalletType } from "./types";
+import { connectPhantom } from "./phantom";
 
 export interface WalletOptionBase {
   id: string;
@@ -29,6 +30,15 @@ export const walletOptions: WalletOption[] = [
     logo: "/loop.svg",
     type: "wallet",
     description: "Canton Network",
+  },
+  // Phantom wallet (Solana)
+  {
+    id: "phantom-solana",
+    name: "Phantom",
+    chain: "solana",
+    logo: "/phantom.svg",
+    type: "wallet",
+    description: "Solana",
   },
 ];
 
@@ -71,6 +81,8 @@ export async function connectWallet(
     case "loop-canton":
       // Loop wallet connection is handled via Loop SDK
       return undefined;
+    case "phantom-solana":
+      return connectPhantom();
     default:
       throw new Error(`Unsupported wallet id: ${walletId}`);
   }

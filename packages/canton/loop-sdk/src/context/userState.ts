@@ -18,6 +18,9 @@ import type {
   WalletType,
 } from "@/lib/types";
 import { initLoop, connectLoop as loopConnect, getLoopPartyId as getPartyId } from "@/lib/loop";
+import { connectPhantom as phantomConnect, disconnectPhantom } from "@/lib/phantom";
+import { connectSolflare as solflareConnect, disconnectSolflare } from "@/lib/solflare";
+import { getPartyIdFromSolanaKey } from "@/lib/phantom-mapping";
 
 const initialUserState: UnifiedUserState = {
   connections: {} as { [key: string]: UserConnectionStatus },
@@ -147,6 +150,15 @@ const userStateReducer = (
   }
 };
 
+// Connected wallet info type
+export interface ConnectedWalletInfo {
+  walletType: "loop" | "phantom" | "solflare" | null;
+  walletName: string | null;
+  partyId: string | null;
+  publicKey: string | null;
+  solanaPublicKey?: string | null;
+}
+
 // Context type
 interface UserStateContextType {
   state: UnifiedUserState;
@@ -154,6 +166,15 @@ interface UserStateContextType {
   // Loop-specific methods
   connectLoop: (network: "devnet" | "testnet" | "mainnet") => Promise<void>;
   getLoopPartyId: () => string | null;
+  // Phantom-specific methods
+  connectPhantom: () => Promise<void>;
+  getPhantomPartyId: () => string | null;
+  // Solflare-specific methods
+  connectSolflare: () => Promise<void>;
+  getSolflarePartyId: () => string | null;
+  // Unified wallet info
+  getConnectedWalletInfo: () => ConnectedWalletInfo;
+  disconnectWallet: () => void;
   // Legacy action methods (kept for compatibility)
   getConnectionState: (walletId: string) => WalletConnectionResult;
   setConnecting: (walletId: string, walletType: WalletType) => void;
@@ -178,6 +199,17 @@ const UserStateContext = createContext<UserStateContextType>({
   },
   connectLoop: async () => {},
   getLoopPartyId: () => null,
+  connectPhantom: async () => {},
+  getPhantomPartyId: () => null,
+  connectSolflare: async () => {},
+  getSolflarePartyId: () => null,
+  getConnectedWalletInfo: () => ({
+    walletType: null,
+    walletName: null,
+    partyId: null,
+    publicKey: null,
+  }),
+  disconnectWallet: () => {},
   getConnectionState: () => ({ state: "idle" }),
   setConnecting: () => {},
   setConnectionFailed: () => {},
@@ -196,6 +228,12 @@ export const UserStateProvider: React.FC<{
 }> = ({ children }) => {
   const [state, dispatch] = useReducer(userStateReducer, initialUserState);
   const [loopPartyId, setLoopPartyId] = useState<string | null>(null);
+  const [loopPublicKey, setLoopPublicKey] = useState<string | null>(null);
+  const [phantomPartyId, setPhantomPartyId] = useState<string | null>(null);
+  const [phantomSolanaKey, setPhantomSolanaKey] = useState<string | null>(null);
+  const [solflarePartyId, setSolflarePartyId] = useState<string | null>(null);
+  const [solflareSolanaKey, setSolflareSolanaKey] = useState<string | null>(null);
+  const [connectedWalletType, setConnectedWalletType] = useState<"loop" | "phantom" | "solflare" | null>(null);
 
   // Loop connection
   const connectLoop = useCallback(
@@ -214,6 +252,11 @@ export const UserStateProvider: React.FC<{
             onConnect: (provider) => {
               console.log("[userState] Loop connected:", provider.party_id);
               setLoopPartyId(provider.party_id);
+              setLoopPublicKey(provider.public_key);
+              setConnectedWalletType("loop");
+              // Clear phantom state
+              setPhantomPartyId(null);
+              setPhantomSolanaKey(null);
 
               const newConnection: UserWalletStatus = {
                 loginType: "wallet",
@@ -235,6 +278,7 @@ export const UserStateProvider: React.FC<{
             onReject: () => {
               console.log("[userState] Loop connection rejected");
               setLoopPartyId(null);
+              setLoopPublicKey(null);
               dispatch({
                 type: "SET_CONNECTION_FAILED",
                 payload: { walletId },
@@ -260,6 +304,204 @@ export const UserStateProvider: React.FC<{
   const getLoopPartyIdValue = useCallback(() => {
     return loopPartyId || getPartyId();
   }, [loopPartyId]);
+
+  // Phantom connection
+  const connectPhantom = useCallback(async (): Promise<void> => {
+    const walletId = "phantom-solana";
+
+    dispatch({
+      type: "SET_CONNECTING",
+      payload: { walletId, loginType: "wallet" },
+    });
+
+    try {
+      const solanaPublicKey = await phantomConnect();
+
+      if (!solanaPublicKey) {
+        console.log("[userState] Phantom connection rejected or failed");
+        dispatch({
+          type: "SET_CONNECTION_FAILED",
+          payload: { walletId },
+        });
+        return;
+      }
+
+      // Look up the Canton party ID from the mapping
+      const cantonPartyId = getPartyIdFromSolanaKey(solanaPublicKey);
+
+      if (!cantonPartyId) {
+        console.error("[userState] No Canton party ID found for Solana key:", solanaPublicKey);
+        dispatch({
+          type: "SET_CONNECTION_FAILED",
+          payload: { walletId },
+        });
+        return;
+      }
+
+      console.log("[userState] Phantom connected:", solanaPublicKey, "->", cantonPartyId);
+      setPhantomSolanaKey(solanaPublicKey);
+      setPhantomPartyId(cantonPartyId);
+      setConnectedWalletType("phantom");
+      // Clear loop state
+      setLoopPartyId(null);
+      setLoopPublicKey(null);
+
+      const newConnection: UserWalletStatus = {
+        loginType: "wallet",
+        chain: "solana",
+        wallet: "Phantom",
+        walletId,
+        isConnected: true,
+        isConnectionFailed: false,
+        isConnecting: false,
+        address: cantonPartyId,
+        publicKey: solanaPublicKey,
+      };
+
+      dispatch({
+        type: "SET_WALLET_CONNECTED",
+        payload: { walletId, connection: newConnection },
+      });
+    } catch (error: any) {
+      console.error("[userState] Phantom connection error:", error);
+      dispatch({
+        type: "SET_CONNECTION_FAILED",
+        payload: { walletId },
+      });
+    }
+  }, [dispatch]);
+
+  const getPhantomPartyIdValue = useCallback(() => {
+    return phantomPartyId;
+  }, [phantomPartyId]);
+
+  // Solflare connection
+  const connectSolflare = useCallback(async (): Promise<void> => {
+    const walletId = "solflare-solana";
+
+    dispatch({
+      type: "SET_CONNECTING",
+      payload: { walletId, loginType: "wallet" },
+    });
+
+    try {
+      const solanaPublicKey = await solflareConnect();
+
+      if (!solanaPublicKey) {
+        console.log("[userState] Solflare connection rejected or failed");
+        dispatch({
+          type: "SET_CONNECTION_FAILED",
+          payload: { walletId },
+        });
+        return;
+      }
+
+      // Look up the Canton party ID from the mapping
+      const cantonPartyId = getPartyIdFromSolanaKey(solanaPublicKey);
+
+      if (!cantonPartyId) {
+        console.error("[userState] No Canton party ID found for Solana key:", solanaPublicKey);
+        dispatch({
+          type: "SET_CONNECTION_FAILED",
+          payload: { walletId },
+        });
+        return;
+      }
+
+      console.log("[userState] Solflare connected:", solanaPublicKey, "->", cantonPartyId);
+      setSolflareSolanaKey(solanaPublicKey);
+      setSolflarePartyId(cantonPartyId);
+      setConnectedWalletType("solflare");
+      // Clear other wallet states
+      setLoopPartyId(null);
+      setLoopPublicKey(null);
+      setPhantomPartyId(null);
+      setPhantomSolanaKey(null);
+
+      const newConnection: UserWalletStatus = {
+        loginType: "wallet",
+        chain: "solana",
+        wallet: "Solflare",
+        walletId,
+        isConnected: true,
+        isConnectionFailed: false,
+        isConnecting: false,
+        address: cantonPartyId,
+        publicKey: solanaPublicKey,
+      };
+
+      dispatch({
+        type: "SET_WALLET_CONNECTED",
+        payload: { walletId, connection: newConnection },
+      });
+    } catch (error: any) {
+      console.error("[userState] Solflare connection error:", error);
+      dispatch({
+        type: "SET_CONNECTION_FAILED",
+        payload: { walletId },
+      });
+    }
+  }, [dispatch]);
+
+  const getSolflarePartyIdValue = useCallback(() => {
+    return solflarePartyId;
+  }, [solflarePartyId]);
+
+  // Unified wallet info
+  const getConnectedWalletInfo = useCallback((): ConnectedWalletInfo => {
+    if (connectedWalletType === "loop" && loopPartyId) {
+      return {
+        walletType: "loop",
+        walletName: "Loop",
+        partyId: loopPartyId,
+        publicKey: loopPublicKey,
+      };
+    }
+    if (connectedWalletType === "phantom" && phantomPartyId) {
+      return {
+        walletType: "phantom",
+        walletName: "Phantom",
+        partyId: phantomPartyId,
+        publicKey: phantomPartyId, // For Phantom, publicKey in dashboard context is partyId
+        solanaPublicKey: phantomSolanaKey,
+      };
+    }
+    if (connectedWalletType === "solflare" && solflarePartyId) {
+      return {
+        walletType: "solflare",
+        walletName: "Solflare",
+        partyId: solflarePartyId,
+        publicKey: solflarePartyId, // For Solflare, publicKey in dashboard context is partyId
+        solanaPublicKey: solflareSolanaKey,
+      };
+    }
+    return {
+      walletType: null,
+      walletName: null,
+      partyId: null,
+      publicKey: null,
+    };
+  }, [connectedWalletType, loopPartyId, loopPublicKey, phantomPartyId, phantomSolanaKey, solflarePartyId, solflareSolanaKey]);
+
+  // Disconnect current wallet
+  const disconnectWallet = useCallback(() => {
+    if (connectedWalletType === "phantom") {
+      disconnectPhantom();
+      setPhantomPartyId(null);
+      setPhantomSolanaKey(null);
+    }
+    if (connectedWalletType === "solflare") {
+      disconnectSolflare();
+      setSolflarePartyId(null);
+      setSolflareSolanaKey(null);
+    }
+    if (connectedWalletType === "loop") {
+      setLoopPartyId(null);
+      setLoopPublicKey(null);
+    }
+    setConnectedWalletType(null);
+    dispatch({ type: "RESET_ALL_CONNECTIONS" });
+  }, [connectedWalletType, dispatch]);
 
   const getConnectionState = useCallback(
     (walletId: string): WalletConnectionResult => {
@@ -356,6 +598,12 @@ export const UserStateProvider: React.FC<{
     dispatch,
     connectLoop,
     getLoopPartyId: getLoopPartyIdValue,
+    connectPhantom,
+    getPhantomPartyId: getPhantomPartyIdValue,
+    connectSolflare,
+    getSolflarePartyId: getSolflarePartyIdValue,
+    getConnectedWalletInfo,
+    disconnectWallet,
     getConnectionState,
     setConnecting,
     setConnectionFailed,
