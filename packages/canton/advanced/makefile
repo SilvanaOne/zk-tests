@@ -3,13 +3,13 @@
 include cli/.env
 export
 
-DAR := daml/.daml/dist/advanced-payment-v3-0.0.1.dar
+DAR := daml/.daml/dist/advanced-payment-v5-0.0.1.dar
 # Extract package name from DAR filename
 PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version
 PACKAGE_BASE := $(shell echo $(PACKAGE_NAME) | sed 's/-[0-9].*//')
 
-.PHONY: help build clean upload inspect packages-user packages-provider package-status-user package-status-provider vetting-status list cli
+.PHONY: help build clean upload upload-grpc inspect packages-user packages-provider package-status-user package-status-provider vetting-status list cli
 
 help:
 	@echo "Advanced Payment - Helper Commands"
@@ -28,7 +28,8 @@ help:
 	@echo "  make inspect       - Show DAR package ID"
 	@echo ""
 	@echo "Deployment:"
-	@echo "  make upload        - Upload DAR to both user and provider nodes"
+	@echo "  make upload        - Upload DAR via HTTP (may fail if DAR > 1MB)"
+	@echo "  make upload-grpc   - Upload DAR via gRPC (bypasses nginx size limits)"
 	@echo ""
 	@echo "Package Management:"
 	@echo "  make packages-user             - List packages on app-user node"
@@ -81,6 +82,26 @@ upload:
 		-X POST $(APP_USER_API_URL)v2/packages \
 		--data-binary "@$(DAR)"); \
 	echo "App-user response: $$RESP"; \
+	echo ""; \
+	echo "Now run 'make inspect' to get the package ID and update ADVANCED_PAYMENT_PACKAGE_ID in cli/.env"
+
+# Upload DAR via gRPC (bypasses nginx size limits)
+upload-grpc:
+	@if [ -z "$(GRPC_LEDGER_API_HOST)" ] || [ -z "$(GRPC_LEDGER_API_PORT)" ]; then \
+		echo "Error: GRPC_LEDGER_API_HOST or GRPC_LEDGER_API_PORT not set in cli/.env"; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(DAR)" ]; then \
+		echo "Error: DAR file not found: $(DAR)"; \
+		echo "Build first with: make build"; \
+		exit 1; \
+	fi; \
+	echo "Uploading DAR file $(DAR) via gRPC to $(GRPC_LEDGER_API_HOST):$(GRPC_LEDGER_API_PORT)..."; \
+	daml ledger upload-dar \
+		--host $(GRPC_LEDGER_API_HOST) \
+		--port $(GRPC_LEDGER_API_PORT) \
+		--access-token-file $(ACCESS_TOKEN_FILE) \
+		$(DAR); \
 	echo ""; \
 	echo "Now run 'make inspect' to get the package ID and update ADVANCED_PAYMENT_PACKAGE_ID in cli/.env"
 

@@ -1,0 +1,54 @@
+module AppService where
+
+import AdvancedPaymentRequest (AdvancedPaymentRequest(..))
+
+-- Result types
+
+data AppService_CreatePaymentRequest_Result = AppService_CreatePaymentRequest_Result
+  with
+    requestCid : ContractId AdvancedPaymentRequest
+      -- ^ Created AdvancedPaymentRequest contract
+  deriving (Eq, Show)
+
+data AppService_Terminate_Result = AppService_Terminate_Result {}
+  deriving (Eq, Show)
+
+-- | Active service relationship between app and provider
+-- Both are signatories, providing authorization for exerciseAppTransfer
+template AppService
+  with
+    dso : Party
+      -- ^ DSO party reference
+    app : Party
+      -- ^ Application operator (signatory)
+    provider : Party
+      -- ^ Service provider (signatory, has FeaturedAppRight)
+  where
+    signatory app, provider
+
+    ensure app /= provider
+
+    nonconsuming choice AppService_CreatePaymentRequest : AppService_CreatePaymentRequest_Result
+      -- ^ App creates a payment request for an owner
+      with
+        owner : Party
+          -- ^ Amulet owner who will provide funds
+        lockedAmount : Decimal
+          -- ^ Amount to lock
+        minimumAmount : Decimal
+          -- ^ Minimum to keep for unpaid services
+        expiresAt : Time
+          -- ^ Lock expiry time
+      controller app
+      do
+        assertMsg "Owner must be different from app" $ owner /= app
+        assertMsg "Owner must be different from provider" $ owner /= provider
+        requestCid <- create AdvancedPaymentRequest with
+          dso, owner, provider, app, lockedAmount, minimumAmount, expiresAt
+        pure AppService_CreatePaymentRequest_Result with requestCid
+
+    choice AppService_Terminate : AppService_Terminate_Result
+      -- ^ Provider can terminate the service unilaterally
+      controller provider
+      do
+        pure AppService_Terminate_Result

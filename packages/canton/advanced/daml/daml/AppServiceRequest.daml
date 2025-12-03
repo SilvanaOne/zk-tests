@@ -1,0 +1,52 @@
+module AppServiceRequest where
+
+import AppService (AppService(..))
+
+-- Result types
+
+data AppServiceRequest_Accept_Result = AppServiceRequest_Accept_Result
+  with
+    appServiceCid : ContractId AppService
+      -- ^ Created AppService contract
+  deriving (Eq, Show)
+
+data AppServiceRequest_Reject_Result = AppServiceRequest_Reject_Result {}
+  deriving (Eq, Show)
+
+data AppServiceRequest_Cancel_Result = AppServiceRequest_Cancel_Result {}
+  deriving (Eq, Show)
+
+-- | Request from app to provider to establish a service relationship
+-- App creates this request, provider accepts to create an AppService
+template AppServiceRequest
+  with
+    dso : Party
+      -- ^ DSO party reference
+    app : Party
+      -- ^ Application operator (signatory)
+    provider : Party
+      -- ^ Service provider (must have FeaturedAppRight)
+  where
+    signatory app
+    observer provider
+
+    ensure app /= provider
+
+    choice AppServiceRequest_Accept : AppServiceRequest_Accept_Result
+      -- ^ Provider accepts and creates AppService
+      controller provider
+      do
+        appServiceCid <- create AppService with dso, app, provider
+        pure AppServiceRequest_Accept_Result with appServiceCid
+
+    choice AppServiceRequest_Reject : AppServiceRequest_Reject_Result
+      -- ^ Provider rejects the request
+      controller provider
+      do
+        pure AppServiceRequest_Reject_Result
+
+    choice AppServiceRequest_Cancel : AppServiceRequest_Cancel_Result
+      -- ^ App cancels the request
+      controller app
+      do
+        pure AppServiceRequest_Cancel_Result

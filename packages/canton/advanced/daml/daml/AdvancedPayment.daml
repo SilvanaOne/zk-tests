@@ -40,33 +40,41 @@ template AdvancedPayment
       -- ^ Amulet owner
     provider : Party
       -- ^ Service provider
+    app : Party
+      -- ^ Application operator (signatory, controls withdraw/cancel)
     lockedAmulet : ContractId LockedAmulet
       -- ^ Reference to locked funds
     lockedAmount : Decimal
-      -- ^ Current locked amount (approximate, actual may differ due to holding fees)
+      -- ^ Current locked amount
     minimumAmount : Decimal
       -- ^ Minimum to keep for unpaid services
     expiresAt : Time
       -- ^ Lock expiry time
-    beneficiaries : Optional [AppRewardBeneficiary]
-      -- ^ App reward beneficiaries for all transfers
   where
-    signatory owner, provider
+    signatory owner, app, provider
 
     ensure lockedAmount > 0.0
         && minimumAmount >= 0.0
+        && owner /= app
+        && owner /= provider
+        && app /= provider
 
     choice AdvancedPayment_Withdraw : AdvancedPayment_Withdraw_Result
-      -- ^ Provider withdraws amount for services rendered
+      -- ^ App withdraws amount for services rendered
       with
         amount : Decimal
           -- ^ Amount to withdraw
         appTransferContext : AppTransferContext
           -- ^ Transfer context
-      controller provider
+      controller app
       do
         assertMsg "Withdraw amount must be positive" $ amount > 0.0
         assertMsg "Withdraw amount exceeds locked amount" $ amount <= lockedAmount
+
+        -- Build beneficiaries using provider (has FeaturedAppRight)
+        let beneficiaries = Some [AppRewardBeneficiary with
+              beneficiary = provider
+              weight = 1.0]
 
         -- Unlock the locked amulet
         unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
@@ -80,9 +88,9 @@ template AdvancedPayment
         let effectiveWithdraw = min amount actualUnlockedAmount
         let remainingAmount = actualUnlockedAmount - effectiveWithdraw
 
-        -- Create outputs: payment to provider + remaining locked (if any)
-        let providerOutput = TransferOutput with
-              receiver = provider
+        -- Create outputs: payment to app + remaining locked (if any)
+        let appOutput = TransferOutput with
+              receiver = app
               receiverFeeRatio = 0.0
               amount = effectiveWithdraw
               lock = None
@@ -93,7 +101,7 @@ template AdvancedPayment
                       receiverFeeRatio = 0.0
                       amount = remainingAmount
                       lock = Some $ TimeLock with
-                        holders = [provider]
+                        holders = [app]
                         expiresAt = expiresAt
                         optContext = Some "AdvancedPayment lock"]
               else []
@@ -103,7 +111,7 @@ template AdvancedPayment
               sender = owner
               provider = provider
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
-              outputs = providerOutput :: remainingOutput
+              outputs = appOutput :: remainingOutput
               beneficiaries = beneficiaries
 
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
@@ -134,6 +142,11 @@ template AdvancedPayment
         let remainingAmount = lockedAmount - amount
         assertMsg "Must keep at least minimum amount locked" $ remainingAmount >= minimumAmount
 
+        -- Build beneficiaries using provider
+        let beneficiaries = Some [AppRewardBeneficiary with
+              beneficiary = provider
+              weight = 1.0]
+
         -- Unlock the locked amulet
         unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
           openRoundCid = appTransferContext.openMiningRound
@@ -160,7 +173,7 @@ template AdvancedPayment
               receiverFeeRatio = 0.0
               amount = actualRemaining
               lock = Some $ TimeLock with
-                holders = [provider]
+                holders = [app]
                 expiresAt = expiresAt
                 optContext = Some "AdvancedPayment lock"
 
@@ -185,12 +198,17 @@ template AdvancedPayment
         pure AdvancedPayment_Unlock_Result with advancedPaymentCid
 
     choice AdvancedPayment_Cancel : AdvancedPayment_Cancel_Result
-      -- ^ Provider cancels and returns all funds to owner
+      -- ^ App cancels and returns all funds to owner
       with
         appTransferContext : AppTransferContext
           -- ^ Transfer context
-      controller provider
+      controller app
       do
+        -- Build beneficiaries using provider (has FeaturedAppRight)
+        let beneficiaries = Some [AppRewardBeneficiary with
+              beneficiary = provider
+              weight = 1.0]
+
         -- Unlock fully and return to owner
         unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
           openRoundCid = appTransferContext.openMiningRound
@@ -208,7 +226,7 @@ template AdvancedPayment
 
         let transfer = Transfer with
               sender = owner
-              provider = provider
+              provider = provider  -- Provider has FeaturedAppRight
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = [ownerOutput]
               beneficiaries = beneficiaries
@@ -227,6 +245,11 @@ template AdvancedPayment
         now <- getTime
         assertMsg "Contract has not expired yet" $ now >= expiresAt
 
+        -- Build beneficiaries using provider (has FeaturedAppRight)
+        let beneficiaries = Some [AppRewardBeneficiary with
+              beneficiary = provider
+              weight = 1.0]
+
         -- Unlock fully and return to owner
         unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
           openRoundCid = appTransferContext.openMiningRound
@@ -244,7 +267,7 @@ template AdvancedPayment
 
         let transfer = Transfer with
               sender = owner
-              provider = provider
+              provider = provider  -- Provider has FeaturedAppRight
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = [ownerOutput]
               beneficiaries = beneficiaries
@@ -269,6 +292,11 @@ template AdvancedPayment
         assertMsg "Top-up amount must be positive" $ topUpAmount > 0.0
         assertMsg "New expiry must be after existing expiry" $ newExpiresAt > expiresAt
 
+        -- Build beneficiaries using provider
+        let beneficiaries = Some [AppRewardBeneficiary with
+              beneficiary = provider
+              weight = 1.0]
+
         -- Verify owner has sufficient funds for top-up
         inputAmount <- verifyAmulets dso topUpInputs
         assertMsg "Insufficient funds for top-up" $ inputAmount >= topUpAmount
@@ -288,7 +316,7 @@ template AdvancedPayment
               receiverFeeRatio = 0.0
               amount = totalNewAmount
               lock = Some $ TimeLock with
-                holders = [provider]
+                holders = [app]
                 expiresAt = newExpiresAt
                 optContext = Some "AdvancedPayment lock - topped up"
 
@@ -302,10 +330,8 @@ template AdvancedPayment
 
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
 
-        -- Extract the single locked output
-        let newLockedCid = case transferResult.createdAmulets of
-              [TransferResultLockedAmulet cid] -> cid
-              _ -> error "Expected single locked amulet output"
+        -- Extract the single locked output (use helper for graceful error handling)
+        let newLockedCid = extractLockedAmulet transferResult.createdAmulets
 
         -- Create new AdvancedPayment with updated amount and expiry
         advancedPaymentCid <- create this with
