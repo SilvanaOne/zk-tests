@@ -2,6 +2,7 @@ mod context;
 mod list;
 mod payment;
 mod request;
+mod service;
 mod url;
 
 use anyhow::Result;
@@ -30,12 +31,46 @@ enum Commands {
     /// AdvancedPayment commands
     #[command(subcommand)]
     Payment(PaymentCommands),
+    /// AppService management commands
+    #[command(subcommand)]
+    Service(ServiceCommands),
+}
+
+#[derive(Subcommand)]
+enum ServiceCommands {
+    /// Create an AppServiceRequest (app action)
+    Create,
+    /// List pending AppServiceRequest contracts
+    ListRequests,
+    /// Accept an AppServiceRequest (provider action)
+    Accept {
+        /// Contract ID of the AppServiceRequest
+        #[arg(short, long)]
+        request_cid: String,
+    },
+    /// Reject an AppServiceRequest (provider action)
+    Reject {
+        /// Contract ID of the AppServiceRequest
+        #[arg(short, long)]
+        request_cid: String,
+    },
+    /// List active AppService contracts
+    List,
+    /// Terminate an AppService (provider action)
+    Terminate {
+        /// Contract ID of the AppService
+        #[arg(short, long)]
+        service_cid: String,
+    },
 }
 
 #[derive(Subcommand)]
 enum RequestCommands {
-    /// Create a new AdvancedPaymentRequest (provider action)
+    /// Create a new AdvancedPaymentRequest via AppService (app action)
     Create {
+        /// Contract ID of the AppService to use
+        #[arg(short, long)]
+        service_cid: String,
         /// Amount to lock (in CC)
         #[arg(short, long)]
         amount: String,
@@ -134,6 +169,7 @@ async fn main() -> Result<()> {
         Commands::List { party } => list::handle_list(party).await?,
         Commands::Request(cmd) => match cmd {
             RequestCommands::Create {
+                service_cid,
                 amount,
                 minimum,
                 expires,
@@ -142,7 +178,7 @@ async fn main() -> Result<()> {
                     let one_day_from_now = Utc::now() + Duration::days(1);
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
-                request::handle_create_request(amount, minimum, expires).await?
+                request::handle_create_request(service_cid, amount, minimum, expires).await?
             }
             RequestCommands::Accept {
                 request_cid,
@@ -172,6 +208,20 @@ async fn main() -> Result<()> {
                 new_expires,
                 amulet_cids,
             } => payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?,
+        },
+        Commands::Service(cmd) => match cmd {
+            ServiceCommands::Create => service::handle_create_service_request().await?,
+            ServiceCommands::ListRequests => service::handle_list_service_requests().await?,
+            ServiceCommands::Accept { request_cid } => {
+                service::handle_accept_service_request(request_cid).await?
+            }
+            ServiceCommands::Reject { request_cid } => {
+                service::handle_reject_service_request(request_cid).await?
+            }
+            ServiceCommands::List => service::handle_list_services().await?,
+            ServiceCommands::Terminate { service_cid } => {
+                service::handle_terminate_service(service_cid).await?
+            }
         },
     }
 

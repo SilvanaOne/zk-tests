@@ -197,6 +197,101 @@ async fn find_advanced_payments(
     Ok(payments)
 }
 
+/// AppRewardCoupon information for display
+#[derive(Debug)]
+pub struct AppRewardCouponInfo {
+    pub contract_id: String,
+    pub amount: String,
+    pub round: String,
+}
+
+/// Find all AppRewardCoupon contracts for a specific party (beneficiary)
+async fn find_app_reward_coupons(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+) -> Result<Vec<AppRewardCouponInfo>> {
+    debug!(party = %party, "Finding AppRewardCoupon contracts");
+
+    let ledger_end_url = format!("{}/state/ledger-end", api_url);
+    let ledger_end: serde_json::Value = client
+        .get(&ledger_end_url)
+        .bearer_auth(jwt)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let offset = ledger_end["offset"]
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
+
+    let query = json!({
+        "activeAtOffset": offset,
+        "filter": {
+            "filtersByParty": {
+                party: {}
+            }
+        },
+        "verbose": true
+    });
+
+    let contracts_url = format!("{}/state/active-contracts?limit=500", api_url);
+    let contracts: Vec<serde_json::Value> = client
+        .post(&contracts_url)
+        .bearer_auth(jwt)
+        .json(&query)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let mut coupons = Vec::new();
+
+    for contract in contracts {
+        if let Some(entry) = contract.get("contractEntry") {
+            if let Some(js_contract) = entry.get("JsActiveContract") {
+                if let Some(created) = js_contract.get("createdEvent") {
+                    if let Some(template_id) = created.get("templateId").and_then(|v| v.as_str()) {
+                        if template_id.contains("Splice.Amulet:AppRewardCoupon") {
+                            let cid = created
+                                .get("contractId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?")
+                                .to_string();
+
+                            // AppRewardCoupon has amount directly at createArgument.amount (Decimal)
+                            let amount = created
+                                .pointer("/createArgument/amount")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("0")
+                                .to_string();
+
+                            let round = created
+                                .pointer("/createArgument/round/number")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("?")
+                                .to_string();
+
+                            coupons.push(AppRewardCouponInfo {
+                                contract_id: cid,
+                                amount,
+                                round,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    info!(count = coupons.len(), party = %party, "Found AppRewardCoupon contracts");
+    Ok(coupons)
+}
+
 /// Find all AdvancedPaymentRequest contracts for a specific party
 async fn find_advanced_payment_requests(
     client: &reqwest::Client,
@@ -273,6 +368,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
 
     let party_user = std::env::var("PARTY_USER")
         .map_err(|_| anyhow::anyhow!("PARTY_USER not set"))?;
+    let party_app = std::env::var("PARTY_APP")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
 
@@ -288,6 +385,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
     };
 
     let show_user = party.is_none() || party.as_deref() == Some("user");
+    let show_app = party.is_none() || party.as_deref() == Some("app");
     let show_provider = party.is_none() || party.as_deref() == Some("provider");
 
     if show_user {
@@ -393,6 +491,75 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         }
     }
 
+    if show_app {
+        println!("\n=== APP ({}) ===", party_app);
+
+        // List amulets for app (withdrawals go here)
+        let app_amulets = find_amulets(&client, &api_url, &jwt, &party_app).await?;
+
+        println!("\nAmulets:");
+        if app_amulets.is_empty() {
+            println!("  (none)");
+        } else {
+            for amulet in &app_amulets {
+                if amulet.is_locked {
+                    println!(
+                        "  [LOCKED] {} - {} CC",
+                        amulet.contract_id, amulet.amount
+                    );
+                    if !amulet.lock_holders.is_empty() {
+                        println!("           Holders: {:?}", amulet.lock_holders);
+                    }
+                    if let Some(expires) = &amulet.lock_expires_at {
+                        println!("           Expires: {}", expires);
+                    }
+                } else {
+                    println!("  {} - {} CC", amulet.contract_id, amulet.amount);
+                }
+            }
+        }
+
+        // List AdvancedPayment contracts where app is the controller
+        if !package_id.is_empty() {
+            let payments = find_advanced_payments(
+                &client,
+                &api_url,
+                &jwt,
+                &party_app,
+                &package_id,
+            )
+            .await?;
+
+            println!("\nAdvanced Payments (as app controller):");
+            if payments.is_empty() {
+                println!("  (none)");
+            } else {
+                for payment in &payments {
+                    let cid = payment
+                        .get("contractId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let locked_amount = payment
+                        .pointer("/createArgument/lockedAmount")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let owner = payment
+                        .pointer("/createArgument/owner")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let expires = payment
+                        .pointer("/createArgument/expiresAt")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+
+                    println!("  {} - {} CC locked", cid, locked_amount);
+                    println!("    Owner: {}", owner);
+                    println!("    Expires: {}", expires);
+                }
+            }
+        }
+    }
+
     if show_provider {
         println!("\n=== PROVIDER ({}) ===", party_provider);
 
@@ -490,6 +657,23 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                     println!("    To owner: {}", owner);
                 }
             }
+        }
+
+        // List AppRewardCoupons for provider (earned from app transfers)
+        let coupons =
+            find_app_reward_coupons(&client, &api_url, &jwt, &party_provider).await?;
+
+        println!("\nApp Reward Coupons:");
+        if coupons.is_empty() {
+            println!("  (none)");
+        } else {
+            let mut total_rewards: f64 = 0.0;
+            for coupon in &coupons {
+                let amount_val: f64 = coupon.amount.parse().unwrap_or(0.0);
+                total_rewards += amount_val;
+                println!("  {} - {} (round {})", coupon.contract_id, coupon.amount, coupon.round);
+            }
+            println!("\n  Total unclaimed: {} ({} coupons)", total_rewards, coupons.len());
         }
     }
 

@@ -8,12 +8,22 @@ use tracing::{debug, info};
 
 use crate::signing::{extract_user_id_from_jwt, get_fingerprint, sign_transaction_hash};
 
+/// Traffic cost estimation from PrepareSubmissionResponse
+#[derive(Debug, Clone)]
+pub struct CostEstimation {
+    pub estimation_timestamp: Option<String>,
+    pub confirmation_request_traffic_cost: Option<u64>,
+    pub confirmation_response_traffic_cost: Option<u64>,
+    pub total_traffic_cost: Option<u64>,
+}
+
 /// Result of preparing a transaction for interactive submission.
 #[derive(Debug)]
 pub struct PreparedTransaction {
     pub prepared_transaction: String,
     pub prepared_transaction_hash: String,
     pub hashing_scheme_version: String,
+    pub cost_estimation: Option<CostEstimation>,
 }
 
 /// Result of executing a transaction via interactive submission.
@@ -102,16 +112,54 @@ pub async fn prepare_transaction(
         .unwrap_or("HASHING_SCHEME_VERSION_V2")
         .to_string();
 
+    // Extract cost estimation from prepare response
+    let cost_estimation = body.get("costEstimation").map(|ce| CostEstimation {
+        estimation_timestamp: ce
+            .get("estimationTimestamp")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        confirmation_request_traffic_cost: ce
+            .get("confirmationRequestTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+        confirmation_response_traffic_cost: ce
+            .get("confirmationResponseTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+        total_traffic_cost: ce
+            .get("totalTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+    });
+
     info!(
         hash = %prepared_transaction_hash,
         scheme = %hashing_scheme_version,
         "Transaction prepared successfully"
     );
 
+    // Print cost estimation if available
+    if let Some(ref cost) = cost_estimation {
+        info!(
+            request_cost = ?cost.confirmation_request_traffic_cost,
+            response_cost = ?cost.confirmation_response_traffic_cost,
+            total_cost = ?cost.total_traffic_cost,
+            "Traffic cost estimation"
+        );
+        println!("Traffic Cost Estimation:");
+        if let Some(total) = cost.total_traffic_cost {
+            println!("  Total: {} bytes", total);
+        }
+        if let Some(req) = cost.confirmation_request_traffic_cost {
+            println!("  Request: {} bytes", req);
+        }
+        if let Some(resp) = cost.confirmation_response_traffic_cost {
+            println!("  Response: {} bytes", resp);
+        }
+    }
+
     Ok(PreparedTransaction {
         prepared_transaction,
         prepared_transaction_hash,
         hashing_scheme_version,
+        cost_estimation,
     })
 }
 

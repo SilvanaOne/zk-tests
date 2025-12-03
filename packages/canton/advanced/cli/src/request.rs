@@ -7,20 +7,19 @@ use tracing::{debug, info};
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 
-/// Create a new AdvancedPaymentRequest (provider action)
+/// Create a new AdvancedPaymentRequest via AppService choice (app action)
 pub async fn handle_create_request(
+    service_cid: String,
     amount: String,
     minimum: String,
     expires: String,
 ) -> Result<()> {
-    info!("Creating AdvancedPaymentRequest");
+    info!("Creating AdvancedPaymentRequest via AppService");
 
-    let party_app_user = std::env::var("PARTY_APP_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
-    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set"))?;
-    let party_dso =
-        std::env::var("PARTY_DSO").map_err(|_| anyhow::anyhow!("PARTY_DSO not set"))?;
+    let party_owner = std::env::var("PARTY_OWNER")
+        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_app =
+        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -35,19 +34,16 @@ pub async fn handle_create_request(
         "create-advanced-payment-request-{}",
         chrono::Utc::now().timestamp()
     );
-    let template_id = format!(
-        "{}:AdvancedPaymentRequest:AdvancedPaymentRequest",
-        package_id
-    );
+    let template_id = format!("{}:AppService:AppService", package_id);
 
     let payload = json!({
         "commands": [{
-            "CreateCommand": {
+            "ExerciseCommand": {
                 "templateId": template_id,
-                "createArguments": {
-                    "dso": party_dso,
-                    "owner": party_app_user,
-                    "provider": party_app_provider,
+                "contractId": service_cid,
+                "choice": "AppService_CreatePaymentRequest",
+                "choiceArgument": {
+                    "owner": party_owner,
                     "lockedAmount": amount,
                     "minimumAmount": minimum,
                     "expiresAt": expires
@@ -55,7 +51,7 @@ pub async fn handle_create_request(
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app_provider],
+        "actAs": [party_app],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -91,13 +87,13 @@ pub async fn handle_create_request(
 
     // Fetch update to get contract ID
     let update_payload = json!({
-        "actAs": [party_app_provider],
+        "actAs": [party_app],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app_provider: {
+                        &party_app: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -159,10 +155,8 @@ pub async fn handle_create_request(
 pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Accepting AdvancedPaymentRequest");
 
-    let party_app_user = std::env::var("PARTY_APP_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
-    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set"))?;
+    let party_owner = std::env::var("PARTY_OWNER")
+        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -186,12 +180,7 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
         package_id
     );
 
-    // Beneficiaries: Optional [AppRewardBeneficiary] - array for Some, null for None
-    let beneficiaries = json!([{
-        "beneficiary": party_app_provider,
-        "weight": "1.0"
-    }]);
-
+    // Beneficiaries are now handled internally by the DAML template
     let payload = json!({
         "commands": [{
             "ExerciseCommand": {
@@ -200,14 +189,13 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
                 "choice": "AdvancedPaymentRequest_Accept",
                 "choiceArgument": {
                     "ownerInputs": amulet_cids,
-                    "appTransferContext": context.build_app_transfer_context(),
-                    "beneficiaries": beneficiaries
+                    "appTransferContext": context.build_app_transfer_context()
                 }
             }
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_app_user],
+        "actAs": [party_owner],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -243,13 +231,13 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
 
     // Fetch update to get new AdvancedPayment contract ID
     let update_payload = json!({
-        "actAs": [party_app_user],
+        "actAs": [party_owner],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app_user: {
+                        &party_owner: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -316,8 +304,8 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
 pub async fn handle_decline_request(request_cid: String) -> Result<()> {
     info!(request_cid = %request_cid, "Declining AdvancedPaymentRequest");
 
-    let party_app_user = std::env::var("PARTY_APP_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
+    let party_owner = std::env::var("PARTY_OWNER")
+        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -347,7 +335,7 @@ pub async fn handle_decline_request(request_cid: String) -> Result<()> {
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app_user],
+        "actAs": [party_owner],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -391,8 +379,8 @@ pub async fn handle_decline_request(request_cid: String) -> Result<()> {
 pub async fn handle_cancel_request(request_cid: String) -> Result<()> {
     info!(request_cid = %request_cid, "Canceling AdvancedPaymentRequest");
 
-    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set"))?;
+    let party_provider = std::env::var("PARTY_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -422,7 +410,7 @@ pub async fn handle_cancel_request(request_cid: String) -> Result<()> {
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app_provider],
+        "actAs": [party_provider],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id

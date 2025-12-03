@@ -49,6 +49,12 @@ enum ServiceCommands {
         #[arg(short, long)]
         request_cid: String,
     },
+    /// Reject an AppServiceRequest (provider action)
+    Reject {
+        /// Contract ID of the AppServiceRequest
+        #[arg(short, long)]
+        request_cid: String,
+    },
     /// Cancel an AppServiceRequest (app action)
     Cancel {
         /// Contract ID of the AppServiceRequest
@@ -57,6 +63,12 @@ enum ServiceCommands {
     },
     /// List active AppService contracts
     List,
+    /// Terminate an AppService (provider action)
+    Terminate {
+        /// Contract ID of the AppService
+        #[arg(short, long)]
+        service_cid: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -91,7 +103,7 @@ enum RequestCommands {
         #[arg(short, long)]
         request_cid: String,
     },
-    /// Cancel an AdvancedPaymentRequest (provider action)
+    /// Cancel an AdvancedPaymentRequest (app action)
     Cancel {
         /// Contract ID of the AdvancedPaymentRequest
         #[arg(short, long)]
@@ -101,7 +113,7 @@ enum RequestCommands {
 
 #[derive(Subcommand)]
 enum PaymentCommands {
-    /// Withdraw amount from AdvancedPayment (provider action)
+    /// Withdraw amount from AdvancedPayment (app action)
     Withdraw {
         /// Contract ID of the AdvancedPayment
         #[arg(short, long)]
@@ -119,7 +131,7 @@ enum PaymentCommands {
         #[arg(short, long)]
         amount: String,
     },
-    /// Cancel AdvancedPayment and return funds to owner (provider action)
+    /// Cancel AdvancedPayment and return funds to owner (app action)
     Cancel {
         /// Contract ID of the AdvancedPayment
         #[arg(short, long)]
@@ -168,10 +180,16 @@ async fn main() -> Result<()> {
             ServiceCommands::Accept { request_cid } => {
                 service::handle_accept_service_request(request_cid).await?
             }
+            ServiceCommands::Reject { request_cid } => {
+                service::handle_reject_service_request(request_cid).await?
+            }
             ServiceCommands::Cancel { request_cid } => {
                 service::handle_cancel_service_request(request_cid).await?
             }
             ServiceCommands::List => service::handle_list_services().await?,
+            ServiceCommands::Terminate { service_cid } => {
+                service::handle_terminate_service(service_cid).await?
+            }
         },
         Commands::Request(cmd) => match cmd {
             RequestCommands::Create {

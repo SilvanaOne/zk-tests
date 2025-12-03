@@ -297,6 +297,86 @@ pub async fn handle_accept_service_request(request_cid: String) -> Result<()> {
     Ok(())
 }
 
+/// Reject an AppServiceRequest (provider action)
+/// Provider is an internal party, so we use standard submission (not interactive)
+pub async fn handle_reject_service_request(request_cid: String) -> Result<()> {
+    info!(request_cid = %request_cid, "Rejecting AppServiceRequest (devnet)");
+
+    let api_url = std::env::var("LEDGER_API_URL")
+        .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
+    let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
+
+    let party_provider = std::env::var("PARTY_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+
+    let user_id = extract_user_id_from_jwt(&jwt)?;
+
+    let client = create_client()?;
+    let template_id = format!("{}:AppServiceRequest:AppServiceRequest", package_id);
+
+    // Ensure API URL ends with /
+    let api_url = if api_url.ends_with('/') {
+        api_url
+    } else {
+        format!("{}/", api_url)
+    };
+
+    let command_id = format!("cmd-{}", chrono::Utc::now().timestamp_millis());
+
+    // Provider is an internal party - use standard submission (not interactive)
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": request_cid,
+                "choice": "AppServiceRequest_Reject",
+                "choiceArgument": {}
+            }
+        }],
+        "userId": user_id,
+        "commandId": command_id,
+        "actAs": [party_provider],
+        "readAs": [party_provider]
+    });
+
+    debug!(
+        "Reject service request payload: {}",
+        serde_json::to_string_pretty(&payload)?
+    );
+
+    let response = client
+        .post(&format!("{}commands/submit", api_url))
+        .bearer_auth(&jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Reject service request failed (HTTP {}): {}",
+            status,
+            text
+        ));
+    }
+
+    info!(response = %text, "AppServiceRequest rejected");
+
+    let response_json: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = response_json
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    println!("AppServiceRequest rejected successfully!");
+    println!("Update ID: {}", update_id);
+    Ok(())
+}
+
 /// Cancel an AppServiceRequest (app action)
 pub async fn handle_cancel_service_request(request_cid: String) -> Result<()> {
     info!(request_cid = %request_cid, "Canceling AppServiceRequest (devnet)");
@@ -538,5 +618,85 @@ pub async fn handle_list_service_requests() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Terminate an AppService (provider action)
+/// Provider is an internal party, so we use standard submission (not interactive)
+pub async fn handle_terminate_service(service_cid: String) -> Result<()> {
+    info!(service_cid = %service_cid, "Terminating AppService (devnet)");
+
+    let api_url = std::env::var("LEDGER_API_URL")
+        .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
+    let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
+
+    let party_provider = std::env::var("PARTY_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+
+    let user_id = extract_user_id_from_jwt(&jwt)?;
+
+    let client = create_client()?;
+    let template_id = format!("{}:AppService:AppService", package_id);
+
+    // Ensure API URL ends with /
+    let api_url = if api_url.ends_with('/') {
+        api_url
+    } else {
+        format!("{}/", api_url)
+    };
+
+    let command_id = format!("cmd-{}", chrono::Utc::now().timestamp_millis());
+
+    // Provider is an internal party - use standard submission (not interactive)
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": service_cid,
+                "choice": "AppService_Terminate",
+                "choiceArgument": {}
+            }
+        }],
+        "userId": user_id,
+        "commandId": command_id,
+        "actAs": [party_provider],
+        "readAs": [party_provider]
+    });
+
+    debug!(
+        "Terminate service payload: {}",
+        serde_json::to_string_pretty(&payload)?
+    );
+
+    let response = client
+        .post(&format!("{}commands/submit", api_url))
+        .bearer_auth(&jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Terminate service failed (HTTP {}): {}",
+            status,
+            text
+        ));
+    }
+
+    info!(response = %text, "AppService terminated");
+
+    let response_json: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = response_json
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    println!("AppService terminated successfully!");
+    println!("Update ID: {}", update_id);
     Ok(())
 }
