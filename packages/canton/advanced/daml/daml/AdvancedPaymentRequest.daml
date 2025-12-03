@@ -1,0 +1,109 @@
+module AdvancedPaymentRequest where
+
+import Splice.Amulet (Amulet)
+import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(..), TransferOutput(..), exerciseAppTransfer)
+import Splice.Expiry (TimeLock(..))
+
+import AdvancedPayment (AdvancedPayment(..), verifyAmulets, extractLockedAmulet)
+
+-- Result types
+
+data AdvancedPaymentRequest_Accept_Result = AdvancedPaymentRequest_Accept_Result
+  with
+    advancedPaymentCid : ContractId AdvancedPayment
+      -- ^ Created AdvancedPayment contract
+  deriving (Eq, Show)
+
+data AdvancedPaymentRequest_Decline_Result = AdvancedPaymentRequest_Decline_Result {}
+  deriving (Eq, Show)
+
+data AdvancedPaymentRequest_Cancel_Result = AdvancedPaymentRequest_Cancel_Result {}
+  deriving (Eq, Show)
+
+-- | Request from provider to owner to set up an advanced payment
+template AdvancedPaymentRequest
+  with
+    dso : Party
+      -- ^ DSO party reference
+    owner : Party
+      -- ^ Amulet owner (will provide funds)
+    provider : Party
+      -- ^ Service provider (signatory)
+    lockedAmount : Decimal
+      -- ^ Amount to lock
+    minimumAmount : Decimal
+      -- ^ Minimum to keep for unpaid services
+    expiresAt : Time
+      -- ^ Lock expiry time
+  where
+    signatory provider
+    observer owner
+
+    ensure lockedAmount > 0.0
+        && minimumAmount >= 0.0
+        && minimumAmount <= lockedAmount
+
+    choice AdvancedPaymentRequest_Accept : AdvancedPaymentRequest_Accept_Result
+      -- ^ Owner accepts the request and provides funds
+      with
+        ownerInputs : [ContractId Amulet]
+          -- ^ Amulets to lock for the payment
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller owner
+      do
+        -- Validate expiry is in the future
+        now <- getTime
+        assertMsg "Expiry must be in the future" $ expiresAt > now
+
+        -- Verify owner has sufficient funds
+        inputAmount <- verifyAmulets dso ownerInputs
+        assertMsg "Insufficient funds" $ inputAmount >= lockedAmount
+
+        -- Create locked output for the payment
+        let lockedOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = lockedAmount
+              lock = Some $ TimeLock with
+                holders = [provider]
+                expiresAt = expiresAt
+                optContext = Some "AdvancedPayment lock"
+
+        -- Create transfer to lock the funds
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = map InputAmulet ownerInputs
+              outputs = [lockedOutput]
+              beneficiaries = None
+
+        -- Execute transfer to lock funds
+        transferResult <- exerciseAppTransfer dso appTransferContext transfer
+
+        -- Extract locked amulet
+        let lockedAmuletCid = extractLockedAmulet transferResult.createdAmulets
+
+        -- Create the AdvancedPayment contract
+        advancedPaymentCid <- create AdvancedPayment with
+          dso
+          owner
+          provider
+          lockedAmulet = lockedAmuletCid
+          lockedAmount
+          minimumAmount
+          expiresAt
+
+        pure AdvancedPaymentRequest_Accept_Result with advancedPaymentCid
+
+    choice AdvancedPaymentRequest_Decline : AdvancedPaymentRequest_Decline_Result
+      -- ^ Owner declines the request
+      controller owner
+      do
+        pure AdvancedPaymentRequest_Decline_Result
+
+    choice AdvancedPaymentRequest_Cancel : AdvancedPaymentRequest_Cancel_Result
+      -- ^ Provider cancels the request
+      controller provider
+      do
+        pure AdvancedPaymentRequest_Cancel_Result

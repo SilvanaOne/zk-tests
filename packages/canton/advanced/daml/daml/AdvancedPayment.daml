@@ -1,0 +1,333 @@
+module AdvancedPayment where
+
+import Splice.Amulet (Amulet, LockedAmulet, LockedAmulet_Unlock(..))
+import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(..), TransferOutput(..), CreatedAmulet(..), exerciseAppTransfer)
+import Splice.Expiry (TimeLock(..))
+
+-- Result types
+
+data AdvancedPayment_Withdraw_Result = AdvancedPayment_Withdraw_Result
+  with
+    advancedPaymentCid : Optional (ContractId AdvancedPayment)
+      -- ^ New AdvancedPayment contract if remaining amount exists, None if fully withdrawn
+  deriving (Eq, Show)
+
+data AdvancedPayment_Unlock_Result = AdvancedPayment_Unlock_Result
+  with
+    advancedPaymentCid : ContractId AdvancedPayment
+      -- ^ Updated AdvancedPayment contract with reduced locked amount
+  deriving (Eq, Show)
+
+data AdvancedPayment_Cancel_Result = AdvancedPayment_Cancel_Result {}
+  deriving (Eq, Show)
+
+data AdvancedPayment_Expire_Result = AdvancedPayment_Expire_Result {}
+  deriving (Eq, Show)
+
+data AdvancedPayment_TopUp_Result = AdvancedPayment_TopUp_Result
+  with
+    advancedPaymentCid : ContractId AdvancedPayment
+      -- ^ Updated AdvancedPayment contract with increased locked amount
+  deriving (Eq, Show)
+
+-- | Active advanced payment contract
+template AdvancedPayment
+  with
+    dso : Party
+      -- ^ DSO party reference
+    owner : Party
+      -- ^ Amulet owner
+    provider : Party
+      -- ^ Service provider
+    lockedAmulet : ContractId LockedAmulet
+      -- ^ Reference to locked funds
+    lockedAmount : Decimal
+      -- ^ Current locked amount (approximate, actual may differ due to holding fees)
+    minimumAmount : Decimal
+      -- ^ Minimum to keep for unpaid services
+    expiresAt : Time
+      -- ^ Lock expiry time
+  where
+    signatory owner, provider
+    observer dso
+
+    ensure lockedAmount > 0.0
+        && minimumAmount >= 0.0
+
+    choice AdvancedPayment_Withdraw : AdvancedPayment_Withdraw_Result
+      -- ^ Provider withdraws amount for services rendered
+      with
+        amount : Decimal
+          -- ^ Amount to withdraw
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller provider
+      do
+        assertMsg "Withdraw amount must be positive" $ amount > 0.0
+        assertMsg "Withdraw amount exceeds locked amount" $ amount <= lockedAmount
+
+        -- Unlock the locked amulet
+        unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
+          openRoundCid = appTransferContext.openMiningRound
+
+        -- Get actual unlocked amount
+        unlockedAmulet <- fetch unlockedResult.amuletSum.amulet
+        let actualUnlockedAmount = unlockedAmulet.amount.initialAmount
+
+        -- Adjust withdrawal if actual amount is less than expected
+        let effectiveWithdraw = min amount actualUnlockedAmount
+        let remainingAmount = actualUnlockedAmount - effectiveWithdraw
+
+        -- Create outputs: payment to provider + remaining locked (if any)
+        let providerOutput = TransferOutput with
+              receiver = provider
+              receiverFeeRatio = 0.0
+              amount = effectiveWithdraw
+              lock = None
+
+        let remainingOutput = if remainingAmount > 0.0
+              then [TransferOutput with
+                      receiver = owner
+                      receiverFeeRatio = 0.0
+                      amount = remainingAmount
+                      lock = Some $ TimeLock with
+                        holders = [provider]
+                        expiresAt = expiresAt
+                        optContext = Some "AdvancedPayment lock"]
+              else []
+
+        -- Execute transfer
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = [InputAmulet unlockedResult.amuletSum.amulet]
+              outputs = providerOutput :: remainingOutput
+              beneficiaries = None
+
+        transferResult <- exerciseAppTransfer dso appTransferContext transfer
+
+        -- Create new AdvancedPayment if remaining amount exists
+        advancedPaymentCid <- if remainingAmount > 0.0
+          then do
+            -- Extract locked amulet from results (second output)
+            let newLockedCid = extractLockedAmulet transferResult.createdAmulets
+            newCid <- create this with
+              lockedAmulet = newLockedCid
+              lockedAmount = remainingAmount
+            pure $ Some newCid
+          else pure None
+
+        pure AdvancedPayment_Withdraw_Result with advancedPaymentCid
+
+    choice AdvancedPayment_Unlock : AdvancedPayment_Unlock_Result
+      -- ^ Owner unlocks partial amount (must keep minimumAmount)
+      with
+        amount : Decimal
+          -- ^ Amount to unlock
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller owner
+      do
+        assertMsg "Unlock amount must be positive" $ amount > 0.0
+        let remainingAmount = lockedAmount - amount
+        assertMsg "Must keep at least minimum amount locked" $ remainingAmount >= minimumAmount
+
+        -- Unlock the locked amulet
+        unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
+          openRoundCid = appTransferContext.openMiningRound
+
+        -- Get actual unlocked amount
+        unlockedAmulet <- fetch unlockedResult.amuletSum.amulet
+        let actualUnlockedAmount = unlockedAmulet.amount.initialAmount
+
+        -- Adjust for actual amount
+        let effectiveUnlock = min amount actualUnlockedAmount
+        let actualRemaining = actualUnlockedAmount - effectiveUnlock
+
+        assertMsg "Actual remaining must meet minimum requirement" $ actualRemaining >= minimumAmount
+
+        -- Create outputs: unlocked to owner + remaining locked
+        let ownerOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = effectiveUnlock
+              lock = None
+
+        let remainingOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = actualRemaining
+              lock = Some $ TimeLock with
+                holders = [provider]
+                expiresAt = expiresAt
+                optContext = Some "AdvancedPayment lock"
+
+        -- Execute transfer
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = [InputAmulet unlockedResult.amuletSum.amulet]
+              outputs = [ownerOutput, remainingOutput]
+              beneficiaries = None
+
+        transferResult <- exerciseAppTransfer dso appTransferContext transfer
+
+        -- Extract locked amulet (second output)
+        let newLockedCid = extractLockedAmulet transferResult.createdAmulets
+
+        -- Create new AdvancedPayment with remaining amount
+        advancedPaymentCid <- create this with
+          lockedAmulet = newLockedCid
+          lockedAmount = actualRemaining
+
+        pure AdvancedPayment_Unlock_Result with advancedPaymentCid
+
+    choice AdvancedPayment_Cancel : AdvancedPayment_Cancel_Result
+      -- ^ Provider cancels and returns all funds to owner
+      with
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller provider
+      do
+        -- Unlock fully and return to owner
+        unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
+          openRoundCid = appTransferContext.openMiningRound
+
+        -- Get actual unlocked amount
+        unlockedAmulet <- fetch unlockedResult.amuletSum.amulet
+        let actualUnlockedAmount = unlockedAmulet.amount.initialAmount
+
+        -- Transfer all to owner (unlocked)
+        let ownerOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = actualUnlockedAmount
+              lock = None
+
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = [InputAmulet unlockedResult.amuletSum.amulet]
+              outputs = [ownerOutput]
+              beneficiaries = None
+
+        _ <- exerciseAppTransfer dso appTransferContext transfer
+
+        pure AdvancedPayment_Cancel_Result
+
+    choice AdvancedPayment_Expire : AdvancedPayment_Expire_Result
+      -- ^ Owner unlocks fully after expiry
+      with
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller owner
+      do
+        now <- getTime
+        assertMsg "Contract has not expired yet" $ now >= expiresAt
+
+        -- Unlock fully and return to owner
+        unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
+          openRoundCid = appTransferContext.openMiningRound
+
+        -- Get actual unlocked amount
+        unlockedAmulet <- fetch unlockedResult.amuletSum.amulet
+        let actualUnlockedAmount = unlockedAmulet.amount.initialAmount
+
+        -- Transfer all to owner (unlocked)
+        let ownerOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = actualUnlockedAmount
+              lock = None
+
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = [InputAmulet unlockedResult.amuletSum.amulet]
+              outputs = [ownerOutput]
+              beneficiaries = None
+
+        _ <- exerciseAppTransfer dso appTransferContext transfer
+
+        pure AdvancedPayment_Expire_Result
+
+    choice AdvancedPayment_TopUp : AdvancedPayment_TopUp_Result
+      -- ^ Owner adds more funds and extends expiry
+      with
+        topUpInputs : [ContractId Amulet]
+          -- ^ Additional amulets to add
+        topUpAmount : Decimal
+          -- ^ Amount to add
+        newExpiresAt : Time
+          -- ^ New expiry time (must be after existing)
+        appTransferContext : AppTransferContext
+          -- ^ Transfer context
+      controller owner
+      do
+        assertMsg "Top-up amount must be positive" $ topUpAmount > 0.0
+        assertMsg "New expiry must be after existing expiry" $ newExpiresAt > expiresAt
+
+        -- Verify owner has sufficient funds for top-up
+        inputAmount <- verifyAmulets dso topUpInputs
+        assertMsg "Insufficient funds for top-up" $ inputAmount >= topUpAmount
+
+        -- Unlock existing locked amulet
+        unlockedResult <- exercise lockedAmulet LockedAmulet_Unlock with
+          openRoundCid = appTransferContext.openMiningRound
+
+        -- Get actual unlocked amount
+        unlockedAmulet <- fetch unlockedResult.amuletSum.amulet
+        let actualUnlockedAmount = unlockedAmulet.amount.initialAmount
+
+        -- Create combined locked output (actual existing + top-up)
+        let totalNewAmount = actualUnlockedAmount + topUpAmount
+        let combinedLockOutput = TransferOutput with
+              receiver = owner
+              receiverFeeRatio = 0.0
+              amount = totalNewAmount
+              lock = Some $ TimeLock with
+                holders = [provider]
+                expiresAt = newExpiresAt
+                optContext = Some "AdvancedPayment lock - topped up"
+
+        -- Execute transfer combining existing + new funds
+        let transfer = Transfer with
+              sender = owner
+              provider = provider
+              inputs = InputAmulet unlockedResult.amuletSum.amulet :: map InputAmulet topUpInputs
+              outputs = [combinedLockOutput]
+              beneficiaries = None
+
+        transferResult <- exerciseAppTransfer dso appTransferContext transfer
+
+        -- Extract the single locked output
+        let newLockedCid = case transferResult.createdAmulets of
+              [TransferResultLockedAmulet cid] -> cid
+              _ -> error "Expected single locked amulet output"
+
+        -- Create new AdvancedPayment with updated amount and expiry
+        advancedPaymentCid <- create this with
+          lockedAmulet = newLockedCid
+          lockedAmount = totalNewAmount
+          expiresAt = newExpiresAt
+
+        pure AdvancedPayment_TopUp_Result with advancedPaymentCid
+
+-- | Helper function to extract locked amulet from transfer results
+-- Handles case where there may be change amulets before the locked one
+extractLockedAmulet : [CreatedAmulet] -> ContractId LockedAmulet
+extractLockedAmulet [] = error "No locked amulet in transfer results"
+extractLockedAmulet (TransferResultLockedAmulet cid :: _) = cid
+extractLockedAmulet (_ :: rest) = extractLockedAmulet rest
+
+-- | Helper function to verify amulets and return total amount
+verifyAmulets : Party -> [ContractId Amulet] -> Update Decimal
+verifyAmulets dso amulets = do
+  let
+    verifyAmulet amuletCid = do
+      amulet <- fetch amuletCid
+      assertMsg "Amulet DSO must match" $ amulet.dso == dso
+      pure amulet.amount.initialAmount
+
+  amounts <- mapA verifyAmulet amulets
+  pure $ sum amounts
