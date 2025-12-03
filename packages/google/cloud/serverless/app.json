@@ -1,12 +1,26 @@
 {
-  "name": "signer-serverless",
+  "name": "cloud-signer",
   "env": {
-    "GCP_PROJECT_ID": {
-      "description": "Your Google Cloud Project ID",
-      "required": true
+    "SIGNER_NAME": {
+      "description": "Name (copy from Silvana setup page)",
+      "required": true,
+      "order": 1
+    },
+    "SIGNER_PRIVATE_KEY": {
+      "description": "Private key base64 (copy from Silvana setup page)",
+      "required": true,
+      "order": 2
     }
   },
   "options": {
     "allow-unauthenticated": true
+  },
+  "hooks": {
+    "precreate": {
+      "commands": ["./deploy.sh"]
+    }
+  },
+  "build": {
+    "skip": true
   }
 }

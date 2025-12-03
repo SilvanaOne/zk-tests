@@ -5,7 +5,9 @@ import * as ed25519 from '@noble/ed25519'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Card } from '@/shared/ui/card'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, ExternalLink } from 'lucide-react'
+
+const CLOUD_RUN_BUTTON_URL = 'https://deploy.cloud.run/?git_repo=https://github.com/SilvanaOne/zk-tests&dir=packages/google/cloud/serverless'
 
 interface DeployResult {
   name: string
@@ -27,7 +29,7 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -39,9 +41,10 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="p-1 rounded hover:bg-bg transition-colors text-muted hover:text-text"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded bg-accent/10 hover:bg-accent/20 transition-colors text-accent text-xs font-medium"
     >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+      {label || (copied ? 'Copied!' : 'Copy')}
     </button>
   )
 }
@@ -55,7 +58,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleDeploy = async () => {
+  const handleGenerateKeys = async () => {
     if (!name.trim()) {
       setError('Please enter a name')
       return
@@ -65,7 +68,6 @@ export default function Home() {
     setLoading(true)
 
     try {
-      // Generate ed25519 keypair in browser
       const privateKey = ed25519.utils.randomPrivateKey()
       const publicKey = await ed25519.getPublicKeyAsync(privateKey)
 
@@ -79,6 +81,10 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleDeployToCloud = () => {
+    window.open(CLOUD_RUN_BUTTON_URL, '_blank')
   }
 
   const handleSign = async () => {
@@ -134,59 +140,59 @@ export default function Home() {
               />
             </div>
 
-            <Button onClick={handleDeploy} disabled={loading} className="w-full">
-              {loading ? 'Generating...' : 'Deploy'}
+            <Button onClick={handleGenerateKeys} disabled={loading || !!deployResult} className="w-full">
+              {loading ? 'Generating...' : deployResult ? 'Keys Generated' : 'Generate Keys'}
             </Button>
           </div>
 
           {deployResult && (
-            <div className="mt-6 space-y-3">
-              <div className="text-sm text-buy font-medium">Keys Generated Successfully</div>
+            <div className="mt-6 space-y-4">
+              <div className="text-sm text-buy font-medium">Keys Generated - Follow the steps below to deploy:</div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2 p-2 bg-bg rounded">
-                  <span className="text-xs text-muted">Name</span>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono">{deployResult.name}</code>
-                    <CopyButton text={deployResult.name} />
-                  </div>
+              {/* Step 1 */}
+              <div className="p-4 bg-bg rounded-lg border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Step 1: Copy SIGNER_NAME</span>
+                  <CopyButton text={deployResult.name} />
                 </div>
-
-                <div className="flex items-center justify-between gap-2 p-2 bg-bg rounded">
-                  <span className="text-xs text-muted">Private Key (base64)</span>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono truncate max-w-[200px]">{deployResult.privateKey}</code>
-                    <CopyButton text={deployResult.privateKey} />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-2 p-2 bg-bg rounded">
-                  <span className="text-xs text-muted">Public Key (hex)</span>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono truncate max-w-[200px]">{deployResult.publicKey}</code>
-                    <CopyButton text={deployResult.publicKey} />
-                  </div>
-                </div>
+                <code className="block text-xs font-mono bg-panel p-2 rounded break-all">
+                  {deployResult.name}
+                </code>
               </div>
 
-              <div className="mt-4 p-3 bg-bg rounded border border-border">
-                <div className="text-xs text-muted mb-2">Next steps:</div>
-                <ol className="text-xs text-muted space-y-1 list-decimal list-inside">
-                  <li>Create secrets in Google Secret Manager:
-                    <ul className="ml-4 mt-1 space-y-1">
-                      <li><code className="bg-panel px-1 rounded">SIGNER_NAME</code> = {deployResult.name}</li>
-                      <li><code className="bg-panel px-1 rounded">SIGNER_PRIVATE_KEY</code> = {deployResult.privateKey}</li>
-                    </ul>
-                  </li>
-                  <li>Deploy the serverless folder to Cloud Run</li>
-                  <li>Copy the Cloud Run URL and use it below to sign messages</li>
-                </ol>
+              {/* Step 2 */}
+              <div className="p-4 bg-bg rounded-lg border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Step 2: Copy SIGNER_PRIVATE_KEY</span>
+                  <CopyButton text={deployResult.privateKey} />
+                </div>
+                <code className="block text-xs font-mono bg-panel p-2 rounded break-all">
+                  {deployResult.privateKey}
+                </code>
               </div>
 
-              <div className="mt-4 p-3 bg-bg rounded border border-border">
-                <div className="text-xs text-muted mb-2">Example curl command:</div>
-                <code className="text-xs font-mono break-all">
-                  curl -X POST https://YOUR-SERVICE.run.app/sign -H &quot;Content-Type: application/json&quot; -d &apos;{`{"message": "hello"}`}&apos;
+              {/* Step 3 */}
+              <div className="p-4 bg-bg rounded-lg border border-border">
+                <div className="mb-2">
+                  <span className="text-sm font-medium">Step 3: Deploy to Google Cloud</span>
+                </div>
+                <p className="text-xs text-muted mb-3">
+                  Click the button below. When prompted, paste the values from Steps 1 and 2.
+                </p>
+                <Button onClick={handleDeployToCloud} variant="buy" className="w-full">
+                  <ExternalLink size={16} className="mr-2" />
+                  Deploy to Google Cloud
+                </Button>
+              </div>
+
+              {/* Public Key (for reference) */}
+              <div className="p-3 bg-bg rounded border border-border">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">Public Key (hex) - for verification</span>
+                  <CopyButton text={deployResult.publicKey} />
+                </div>
+                <code className="block text-xs font-mono mt-1 truncate">
+                  {deployResult.publicKey}
                 </code>
               </div>
             </div>
@@ -203,7 +209,7 @@ export default function Home() {
               <Input
                 value={cloudRunUrl}
                 onChange={(e) => setCloudRunUrl(e.target.value)}
-                placeholder="https://your-service-xxx.run.app"
+                placeholder="https://cloud-signer-xxx.run.app"
               />
             </div>
 
