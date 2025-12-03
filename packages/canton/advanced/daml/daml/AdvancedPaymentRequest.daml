@@ -2,6 +2,7 @@ module AdvancedPaymentRequest where
 
 import Splice.Amulet (Amulet)
 import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(..), TransferOutput(..), exerciseAppTransfer)
+import Splice.Api.FeaturedAppRightV1 (AppRewardBeneficiary(..))
 import Splice.Expiry (TimeLock(..))
 
 import AdvancedPayment (AdvancedPayment(..), verifyAmulets, extractLockedAmulet)
@@ -50,6 +51,8 @@ template AdvancedPaymentRequest
           -- ^ Amulets to lock for the payment
         appTransferContext : AppTransferContext
           -- ^ Transfer context
+        beneficiaries : Optional [AppRewardBeneficiary]
+          -- ^ Optional app reward beneficiaries
       controller owner
       do
         -- Validate expiry is in the future
@@ -76,7 +79,7 @@ template AdvancedPaymentRequest
               provider = provider
               inputs = map InputAmulet ownerInputs
               outputs = [lockedOutput]
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         -- Execute transfer to lock funds
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
@@ -93,6 +96,7 @@ template AdvancedPaymentRequest
           lockedAmount
           minimumAmount
           expiresAt
+          beneficiaries
 
         pure AdvancedPaymentRequest_Accept_Result with advancedPaymentCid
 

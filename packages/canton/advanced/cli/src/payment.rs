@@ -1,0 +1,585 @@
+//! AdvancedPayment command implementations.
+
+use anyhow::Result;
+use serde_json::json;
+use tracing::{debug, info};
+
+use crate::context::ContractBlobsContext;
+use crate::url::create_client_with_localhost_resolution;
+
+/// Provider withdraws amount from AdvancedPayment
+pub async fn handle_withdraw(payment_cid: String, amount: String) -> Result<()> {
+    info!(payment_cid = %payment_cid, amount = %amount, "Withdrawing from AdvancedPayment");
+
+    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set"))?;
+    let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
+    let provider_jwt = std::env::var("APP_PROVIDER_JWT")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
+
+    // Fetch contract blobs context for AppTransferContext
+    info!("Fetching contract context from Scan API...");
+    let context = ContractBlobsContext::fetch().await?;
+
+    let client = create_client_with_localhost_resolution()?;
+    let cmdid = format!("withdraw-advanced-payment-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": payment_cid,
+                "choice": "AdvancedPayment_Withdraw",
+                "choiceArgument": {
+                    "amount": amount,
+                    "appTransferContext": context.build_app_transfer_context()
+                }
+            }
+        }],
+        "disclosedContracts": context.build_disclosed_contracts(),
+        "commandId": cmdid,
+        "actAs": [party_app_provider],
+        "readAs": [],
+        "workflowId": "AdvancedPayment",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("Withdraw payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", provider_api_url))
+        .bearer_auth(&provider_jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to withdraw from AdvancedPayment: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_resp: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json_resp
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    info!(update_id = %update_id, "Withdrawal successful");
+
+    // Fetch update to see result
+    let update_payload = json!({
+        "actAs": [party_app_provider],
+        "updateId": update_id,
+        "updateFormat": {
+            "includeTransactions": {
+                "eventFormat": {
+                    "filtersByParty": {
+                        &party_app_provider: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    },
+                    "verbose": true
+                },
+                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+            }
+        }
+    });
+
+    let update_response = client
+        .post(&format!("{}v2/updates/update-by-id", provider_api_url))
+        .bearer_auth(&provider_jwt)
+        .json(&update_payload)
+        .send()
+        .await?;
+
+    let update_text = update_response.text().await?;
+    let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
+
+    println!("Withdrawal successful!");
+    println!("Amount withdrawn: {} CC", amount);
+
+    // Check if new AdvancedPayment was created (remaining funds)
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(":AdvancedPayment:AdvancedPayment") {
+                        let new_cid = created
+                            .pointer("/contractId")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        let remaining = created
+                            .pointer("/createArgument/lockedAmount")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        println!("New AdvancedPayment contract: {}", new_cid);
+                        println!("Remaining locked: {} CC", remaining);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    println!("Contract fully withdrawn (no remaining funds)");
+    Ok(())
+}
+
+/// Owner unlocks partial amount from AdvancedPayment
+pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
+    info!(payment_cid = %payment_cid, amount = %amount, "Unlocking from AdvancedPayment");
+
+    let party_app_user = std::env::var("PARTY_APP_USER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
+    let user_api_url = std::env::var("APP_USER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
+    let user_jwt =
+        std::env::var("APP_USER_JWT").map_err(|_| anyhow::anyhow!("APP_USER_JWT not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
+
+    // Fetch contract blobs context for AppTransferContext
+    info!("Fetching contract context from Scan API...");
+    let context = ContractBlobsContext::fetch().await?;
+
+    let client = create_client_with_localhost_resolution()?;
+    let cmdid = format!("unlock-advanced-payment-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": payment_cid,
+                "choice": "AdvancedPayment_Unlock",
+                "choiceArgument": {
+                    "amount": amount,
+                    "appTransferContext": context.build_app_transfer_context()
+                }
+            }
+        }],
+        "disclosedContracts": context.build_disclosed_contracts(),
+        "commandId": cmdid,
+        "actAs": [party_app_user],
+        "readAs": [],
+        "workflowId": "AdvancedPayment",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("Unlock payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", user_api_url))
+        .bearer_auth(&user_jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to unlock from AdvancedPayment: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_resp: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json_resp
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    info!(update_id = %update_id, "Unlock successful");
+
+    // Fetch update to see new contract
+    let update_payload = json!({
+        "actAs": [party_app_user],
+        "updateId": update_id,
+        "updateFormat": {
+            "includeTransactions": {
+                "eventFormat": {
+                    "filtersByParty": {
+                        &party_app_user: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    },
+                    "verbose": true
+                },
+                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+            }
+        }
+    });
+
+    let update_response = client
+        .post(&format!("{}v2/updates/update-by-id", user_api_url))
+        .bearer_auth(&user_jwt)
+        .json(&update_payload)
+        .send()
+        .await?;
+
+    let update_text = update_response.text().await?;
+    let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
+
+    println!("Unlock successful!");
+    println!("Amount unlocked: {} CC", amount);
+
+    // Find new AdvancedPayment contract
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(":AdvancedPayment:AdvancedPayment") {
+                        let new_cid = created
+                            .pointer("/contractId")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        let remaining = created
+                            .pointer("/createArgument/lockedAmount")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        println!("New AdvancedPayment contract: {}", new_cid);
+                        println!("Remaining locked: {} CC", remaining);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Provider cancels AdvancedPayment and returns funds to owner
+pub async fn handle_cancel(payment_cid: String) -> Result<()> {
+    info!(payment_cid = %payment_cid, "Canceling AdvancedPayment");
+
+    let party_app_provider = std::env::var("PARTY_APP_PROVIDER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_PROVIDER not set"))?;
+    let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
+    let provider_jwt = std::env::var("APP_PROVIDER_JWT")
+        .map_err(|_| anyhow::anyhow!("APP_PROVIDER_JWT not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
+
+    // Fetch contract blobs context for AppTransferContext
+    info!("Fetching contract context from Scan API...");
+    let context = ContractBlobsContext::fetch().await?;
+
+    let client = create_client_with_localhost_resolution()?;
+    let cmdid = format!("cancel-advanced-payment-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": payment_cid,
+                "choice": "AdvancedPayment_Cancel",
+                "choiceArgument": {
+                    "appTransferContext": context.build_app_transfer_context()
+                }
+            }
+        }],
+        "disclosedContracts": context.build_disclosed_contracts(),
+        "commandId": cmdid,
+        "actAs": [party_app_provider],
+        "readAs": [],
+        "workflowId": "AdvancedPayment",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("Cancel payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", provider_api_url))
+        .bearer_auth(&provider_jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to cancel AdvancedPayment: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_resp: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json_resp
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    println!("AdvancedPayment canceled successfully!");
+    println!("Funds returned to owner");
+    println!("Update ID: {}", update_id);
+    Ok(())
+}
+
+/// Owner expires AdvancedPayment after lock expiry
+pub async fn handle_expire(payment_cid: String) -> Result<()> {
+    info!(payment_cid = %payment_cid, "Expiring AdvancedPayment");
+
+    let party_app_user = std::env::var("PARTY_APP_USER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
+    let user_api_url = std::env::var("APP_USER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
+    let user_jwt =
+        std::env::var("APP_USER_JWT").map_err(|_| anyhow::anyhow!("APP_USER_JWT not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
+
+    // Fetch contract blobs context for AppTransferContext
+    info!("Fetching contract context from Scan API...");
+    let context = ContractBlobsContext::fetch().await?;
+
+    let client = create_client_with_localhost_resolution()?;
+    let cmdid = format!("expire-advanced-payment-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": payment_cid,
+                "choice": "AdvancedPayment_Expire",
+                "choiceArgument": {
+                    "appTransferContext": context.build_app_transfer_context()
+                }
+            }
+        }],
+        "disclosedContracts": context.build_disclosed_contracts(),
+        "commandId": cmdid,
+        "actAs": [party_app_user],
+        "readAs": [],
+        "workflowId": "AdvancedPayment",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("Expire payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", user_api_url))
+        .bearer_auth(&user_jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to expire AdvancedPayment: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_resp: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json_resp
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    println!("AdvancedPayment expired successfully!");
+    println!("All funds returned to owner");
+    println!("Update ID: {}", update_id);
+    Ok(())
+}
+
+/// Owner tops up AdvancedPayment with additional funds and extends expiry
+pub async fn handle_topup(
+    payment_cid: String,
+    amount: String,
+    new_expires: String,
+    amulet_cids: Vec<String>,
+) -> Result<()> {
+    info!(payment_cid = %payment_cid, amount = %amount, "Topping up AdvancedPayment");
+
+    let party_app_user = std::env::var("PARTY_APP_USER")
+        .map_err(|_| anyhow::anyhow!("PARTY_APP_USER not set"))?;
+    let user_api_url = std::env::var("APP_USER_API_URL")
+        .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
+    let user_jwt =
+        std::env::var("APP_USER_JWT").map_err(|_| anyhow::anyhow!("APP_USER_JWT not set"))?;
+    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
+        .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
+    let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
+        .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
+
+    // Fetch contract blobs context for AppTransferContext
+    info!("Fetching contract context from Scan API...");
+    let context = ContractBlobsContext::fetch().await?;
+
+    let client = create_client_with_localhost_resolution()?;
+    let cmdid = format!("topup-advanced-payment-{}", chrono::Utc::now().timestamp());
+    let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
+
+    let payload = json!({
+        "commands": [{
+            "ExerciseCommand": {
+                "templateId": template_id,
+                "contractId": payment_cid,
+                "choice": "AdvancedPayment_TopUp",
+                "choiceArgument": {
+                    "topUpInputs": amulet_cids,
+                    "topUpAmount": amount,
+                    "newExpiresAt": new_expires,
+                    "appTransferContext": context.build_app_transfer_context()
+                }
+            }
+        }],
+        "disclosedContracts": context.build_disclosed_contracts(),
+        "commandId": cmdid,
+        "actAs": [party_app_user],
+        "readAs": [],
+        "workflowId": "AdvancedPayment",
+        "synchronizerId": synchronizer_id
+    });
+
+    debug!("TopUp payload: {}", serde_json::to_string_pretty(&payload)?);
+
+    let response = client
+        .post(&format!("{}v2/commands/submit-and-wait", user_api_url))
+        .bearer_auth(&user_jwt)
+        .json(&payload)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to top up AdvancedPayment: HTTP {} - {}",
+            status,
+            text
+        ));
+    }
+
+    let json_resp: serde_json::Value = serde_json::from_str(&text)?;
+    let update_id = json_resp
+        .get("updateId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    info!(update_id = %update_id, "TopUp successful");
+
+    // Fetch update to see new contract
+    let update_payload = json!({
+        "actAs": [party_app_user],
+        "updateId": update_id,
+        "updateFormat": {
+            "includeTransactions": {
+                "eventFormat": {
+                    "filtersByParty": {
+                        &party_app_user: {
+                            "cumulative": [{
+                                "identifierFilter": {
+                                    "WildcardFilter": {
+                                        "value": {
+                                            "includeCreatedEventBlob": true
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    },
+                    "verbose": true
+                },
+                "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+            }
+        }
+    });
+
+    let update_response = client
+        .post(&format!("{}v2/updates/update-by-id", user_api_url))
+        .bearer_auth(&user_jwt)
+        .json(&update_payload)
+        .send()
+        .await?;
+
+    let update_text = update_response.text().await?;
+    let update_json: serde_json::Value = serde_json::from_str(&update_text)?;
+
+    println!("TopUp successful!");
+    println!("Amount added: {} CC", amount);
+    println!("New expiry: {}", new_expires);
+
+    // Find new AdvancedPayment contract
+    if let Some(events) = update_json
+        .pointer("/update/Transaction/value/events")
+        .and_then(|v| v.as_array())
+    {
+        for event in events {
+            if let Some(created) = event.get("CreatedEvent") {
+                if let Some(template) = created.pointer("/templateId").and_then(|v| v.as_str()) {
+                    if template.contains(":AdvancedPayment:AdvancedPayment") {
+                        let new_cid = created
+                            .pointer("/contractId")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        let total_locked = created
+                            .pointer("/createArgument/lockedAmount")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        println!("New AdvancedPayment contract: {}", new_cid);
+                        println!("Total locked: {} CC", total_locked);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}

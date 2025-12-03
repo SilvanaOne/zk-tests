@@ -2,6 +2,7 @@ module AdvancedPayment where
 
 import Splice.Amulet (Amulet, LockedAmulet, LockedAmulet_Unlock(..))
 import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(..), TransferOutput(..), CreatedAmulet(..), exerciseAppTransfer)
+import Splice.Api.FeaturedAppRightV1 (AppRewardBeneficiary(..))
 import Splice.Expiry (TimeLock(..))
 
 -- Result types
@@ -47,9 +48,10 @@ template AdvancedPayment
       -- ^ Minimum to keep for unpaid services
     expiresAt : Time
       -- ^ Lock expiry time
+    beneficiaries : Optional [AppRewardBeneficiary]
+      -- ^ App reward beneficiaries for all transfers
   where
     signatory owner, provider
-    observer dso
 
     ensure lockedAmount > 0.0
         && minimumAmount >= 0.0
@@ -102,7 +104,7 @@ template AdvancedPayment
               provider = provider
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = providerOutput :: remainingOutput
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
 
@@ -168,7 +170,7 @@ template AdvancedPayment
               provider = provider
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = [ownerOutput, remainingOutput]
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
 
@@ -209,7 +211,7 @@ template AdvancedPayment
               provider = provider
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = [ownerOutput]
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         _ <- exerciseAppTransfer dso appTransferContext transfer
 
@@ -245,7 +247,7 @@ template AdvancedPayment
               provider = provider
               inputs = [InputAmulet unlockedResult.amuletSum.amulet]
               outputs = [ownerOutput]
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         _ <- exerciseAppTransfer dso appTransferContext transfer
 
@@ -296,7 +298,7 @@ template AdvancedPayment
               provider = provider
               inputs = InputAmulet unlockedResult.amuletSum.amulet :: map InputAmulet topUpInputs
               outputs = [combinedLockOutput]
-              beneficiaries = None
+              beneficiaries = beneficiaries
 
         transferResult <- exerciseAppTransfer dso appTransferContext transfer
 
