@@ -1,0 +1,30 @@
+:root {
+  /* Silvana Light Theme */
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #d8dbe0;
+  --text: #0c0e13;
+  --muted: #5e676f;
+  --buy: #34c98f;
+  --sell: #f6465d;
+  --accent: #7a8a32;
+
+  /* Brand Colors */
+  --brand-pink: #ef45cf;
+  --brand-purple: #8d75ff;
+  --brand-blue: #5fa8ff;
+  --brand-green: #34c98f;
+  --brand-yellow: #7a8a32;
+}
+
+.dark {
+  /* Silvana Dark Theme */
+  --bg: #0c0e13;
+  --panel: #15171d;
+  --border: #1e2128;
+  --text: #f7f8fa;
+  --muted: #5e676f;
+  --buy: #34c98f;
+  --sell: #f6465d;
+  --accent: #a0a06a;
+}

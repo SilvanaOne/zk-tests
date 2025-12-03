@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@import "../shared/styles/tokens.css";
+
+@source "../**/*.{ts,tsx}";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-buy: var(--buy);
+  --color-sell: var(--sell);
+  --color-accent: var(--accent);
+
+  /* Silvana Brand Colors */
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-blue: var(--brand-blue);
+
+  --radius-lg: 12px;
+  --radius-md: 10px;
+  --radius-sm: 8px;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+.container {
+  max-width: 100%;
+}
+
+/* Canton yellow brand text */
+.text-gradient-brand {
+  color: var(--accent);
+}

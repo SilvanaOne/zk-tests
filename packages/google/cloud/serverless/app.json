@@ -1,0 +1,12 @@
+{
+  "name": "signer-serverless",
+  "env": {
+    "GCP_PROJECT_ID": {
+      "description": "Your Google Cloud Project ID",
+      "required": true
+    }
+  },
+  "options": {
+    "allow-unauthenticated": true
+  }
+}
