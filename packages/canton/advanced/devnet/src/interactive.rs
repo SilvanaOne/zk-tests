@@ -10,6 +10,7 @@ use crate::signing::{extract_user_id_from_jwt, get_fingerprint, sign_transaction
 
 /// Traffic cost estimation from PrepareSubmissionResponse
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CostEstimation {
     pub estimation_timestamp: Option<String>,
     pub confirmation_request_traffic_cost: Option<u64>,
@@ -19,6 +20,7 @@ pub struct CostEstimation {
 
 /// Result of preparing a transaction for interactive submission.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct PreparedTransaction {
     pub prepared_transaction: String,
     pub prepared_transaction_hash: String,
@@ -70,7 +72,10 @@ pub async fn prepare_transaction(
         "disclosedContracts": disclosed_contracts
     });
 
-    debug!("Prepare payload: {}", serde_json::to_string_pretty(&payload)?);
+    debug!(
+        "Prepare payload: {}",
+        serde_json::to_string_pretty(&payload)?
+    );
 
     let url = format!("{}/interactive-submission/prepare", api_url);
     let response = client
@@ -209,7 +214,10 @@ pub async fn execute_transaction(
         }
     });
 
-    debug!("Execute payload: {}", serde_json::to_string_pretty(&payload)?);
+    debug!(
+        "Execute payload: {}",
+        serde_json::to_string_pretty(&payload)?
+    );
 
     let url = format!("{}/interactive-submission/execute", api_url);
     let response = client
@@ -242,15 +250,8 @@ pub async fn execute_transaction(
 
     // Execute response is empty per OpenAPI spec, so we need to poll completions
     // to get the real updateId
-    let update_id = get_completion_update_id(
-        client,
-        api_url,
-        jwt,
-        &user_id,
-        party,
-        &submission_id,
-    )
-    .await?;
+    let update_id =
+        get_completion_update_id(client, api_url, jwt, &user_id, party, &submission_id).await?;
 
     info!(
         submission_id = %submission_id,
@@ -304,7 +305,7 @@ async fn get_completion_update_id(
         }
 
         let text = response.text().await?;
-        info!(attempt = attempt, response = %text, "Completions response");
+        debug!(attempt = attempt, response = %text, "Completions response");
 
         let completions: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
 

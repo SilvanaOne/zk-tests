@@ -17,6 +17,8 @@ pub async fn handle_create_request(
     amount: String,
     minimum: String,
     expires: String,
+    description: Option<String>,
+    reference: Option<String>,
 ) -> Result<()> {
     info!("Creating AdvancedPaymentRequest via AppService (devnet)");
 
@@ -58,7 +60,9 @@ pub async fn handle_create_request(
                 "owner": party_user,
                 "lockedAmount": amount,
                 "minimumAmount": minimum,
-                "expiresAt": expires
+                "expiresAt": expires,
+                "description": description,
+                "reference": reference
             }
         }
     })];
@@ -298,7 +302,7 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
 }
 
 /// Reject an AdvancedPaymentRequest (owner action)
-pub async fn handle_reject_request(request_cid: String) -> Result<()> {
+pub async fn handle_reject_request(request_cid: String, reason: Option<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Rejecting AdvancedPaymentRequest (devnet)");
 
     let api_url = std::env::var("LEDGER_API_URL")
@@ -336,7 +340,9 @@ pub async fn handle_reject_request(request_cid: String) -> Result<()> {
             "templateId": template_id,
             "contractId": request_cid,
             "choice": "AdvancedPaymentRequest_Reject",
-            "choiceArgument": {}
+            "choiceArgument": {
+                "reason": reason
+            }
         }
     })];
 

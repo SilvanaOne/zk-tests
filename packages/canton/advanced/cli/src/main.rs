@@ -39,7 +39,11 @@ enum Commands {
 #[derive(Subcommand)]
 enum ServiceCommands {
     /// Create an AppServiceRequest (app action)
-    Create,
+    Create {
+        /// Description of service relationship
+        #[arg(short = 'd', long)]
+        service_description: Option<String>,
+    },
     /// List pending AppServiceRequest contracts
     ListRequests,
     /// Accept an AppServiceRequest (provider action)
@@ -53,6 +57,9 @@ enum ServiceCommands {
         /// Contract ID of the AppServiceRequest
         #[arg(short, long)]
         request_cid: String,
+        /// Reason for rejection
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// List active AppService contracts
     List,
@@ -80,6 +87,12 @@ enum RequestCommands {
         /// Expiry time (ISO 8601 format, e.g., "2024-12-31T23:59:59Z"). Default: 1 day from now
         #[arg(short, long)]
         expires: Option<String>,
+        /// Description of payment purpose
+        #[arg(short = 'd', long)]
+        description: Option<String>,
+        /// External reference (invoice, order ID)
+        #[arg(long)]
+        reference: Option<String>,
     },
     /// Accept an AdvancedPaymentRequest (owner action)
     Accept {
@@ -95,6 +108,9 @@ enum RequestCommands {
         /// Contract ID of the AdvancedPaymentRequest
         #[arg(short, long)]
         request_cid: String,
+        /// Reason for declining
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Cancel an AdvancedPaymentRequest (provider action)
     Cancel {
@@ -114,6 +130,9 @@ enum PaymentCommands {
         /// Amount to withdraw (in CC)
         #[arg(short, long)]
         amount: String,
+        /// Reason for withdrawal (service description)
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Unlock partial amount from AdvancedPayment (owner action)
     Unlock {
@@ -173,19 +192,21 @@ async fn main() -> Result<()> {
                 amount,
                 minimum,
                 expires,
+                description,
+                reference,
             } => {
                 let expires = expires.unwrap_or_else(|| {
                     let one_day_from_now = Utc::now() + Duration::days(1);
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
-                request::handle_create_request(service_cid, amount, minimum, expires).await?
+                request::handle_create_request(service_cid, amount, minimum, expires, description, reference).await?
             }
             RequestCommands::Accept {
                 request_cid,
                 amulet_cids,
             } => request::handle_accept_request(request_cid, amulet_cids).await?,
-            RequestCommands::Decline { request_cid } => {
-                request::handle_decline_request(request_cid).await?
+            RequestCommands::Decline { request_cid, reason } => {
+                request::handle_decline_request(request_cid, reason).await?
             }
             RequestCommands::Cancel { request_cid } => {
                 request::handle_cancel_request(request_cid).await?
@@ -195,7 +216,8 @@ async fn main() -> Result<()> {
             PaymentCommands::Withdraw {
                 payment_cid,
                 amount,
-            } => payment::handle_withdraw(payment_cid, amount).await?,
+                reason,
+            } => payment::handle_withdraw(payment_cid, amount, reason).await?,
             PaymentCommands::Unlock {
                 payment_cid,
                 amount,
@@ -210,13 +232,15 @@ async fn main() -> Result<()> {
             } => payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?,
         },
         Commands::Service(cmd) => match cmd {
-            ServiceCommands::Create => service::handle_create_service_request().await?,
+            ServiceCommands::Create { service_description } => {
+                service::handle_create_service_request(service_description).await?
+            }
             ServiceCommands::ListRequests => service::handle_list_service_requests().await?,
             ServiceCommands::Accept { request_cid } => {
                 service::handle_accept_service_request(request_cid).await?
             }
-            ServiceCommands::Reject { request_cid } => {
-                service::handle_reject_service_request(request_cid).await?
+            ServiceCommands::Reject { request_cid, reason } => {
+                service::handle_reject_service_request(request_cid, reason).await?
             }
             ServiceCommands::List => service::handle_list_services().await?,
             ServiceCommands::Terminate { service_cid } => {

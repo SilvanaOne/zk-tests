@@ -8,7 +8,7 @@ use crate::url::create_client_with_localhost_resolution;
 
 /// Create a new AppServiceRequest (app action)
 /// App creates a request to establish service relationship with provider
-pub async fn handle_create_service_request() -> Result<()> {
+pub async fn handle_create_service_request(service_description: Option<String>) -> Result<()> {
     info!("Creating AppServiceRequest");
 
     let party_app =
@@ -40,7 +40,8 @@ pub async fn handle_create_service_request() -> Result<()> {
                 "createArguments": {
                     "dso": party_dso,
                     "app": party_app,
-                    "provider": party_provider
+                    "provider": party_provider,
+                    "serviceDescription": service_description
                 }
             }
         }],
@@ -378,7 +379,7 @@ pub async fn handle_accept_service_request(request_cid: String) -> Result<()> {
 }
 
 /// Reject an AppServiceRequest (provider action)
-pub async fn handle_reject_service_request(request_cid: String) -> Result<()> {
+pub async fn handle_reject_service_request(request_cid: String, reason: Option<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Rejecting AppServiceRequest");
 
     let party_provider = std::env::var("PARTY_PROVIDER")
@@ -405,7 +406,9 @@ pub async fn handle_reject_service_request(request_cid: String) -> Result<()> {
                 "templateId": template_id,
                 "contractId": request_cid,
                 "choice": "AppServiceRequest_Reject",
-                "choiceArgument": {}
+                "choiceArgument": {
+                    "reason": reason
+                }
             }
         }],
         "commandId": cmdid,

@@ -11,7 +11,7 @@ use crate::interactive::submit_interactive;
 use crate::signing::parse_base58_private_key;
 
 /// App withdraws amount from AdvancedPayment
-pub async fn handle_withdraw(payment_cid: String, amount: String) -> Result<()> {
+pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option<String>) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Withdrawing from AdvancedPayment (devnet)");
 
     let api_url = std::env::var("LEDGER_API_URL")
@@ -52,7 +52,8 @@ pub async fn handle_withdraw(payment_cid: String, amount: String) -> Result<()> 
             "choice": "AdvancedPayment_Withdraw",
             "choiceArgument": {
                 "amount": amount,
-                "appTransferContext": context.build_app_transfer_context()
+                "appTransferContext": context.build_app_transfer_context(),
+                "withdrawReason": reason
             }
         }
     })];

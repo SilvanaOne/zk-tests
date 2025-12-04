@@ -13,6 +13,8 @@ pub async fn handle_create_request(
     amount: String,
     minimum: String,
     expires: String,
+    description: Option<String>,
+    reference: Option<String>,
 ) -> Result<()> {
     info!("Creating AdvancedPaymentRequest via AppService");
 
@@ -46,7 +48,9 @@ pub async fn handle_create_request(
                     "owner": party_owner,
                     "lockedAmount": amount,
                     "minimumAmount": minimum,
-                    "expiresAt": expires
+                    "expiresAt": expires,
+                    "description": description,
+                    "reference": reference
                 }
             }
         }],
@@ -301,7 +305,7 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
 }
 
 /// Decline an AdvancedPaymentRequest (owner action)
-pub async fn handle_decline_request(request_cid: String) -> Result<()> {
+pub async fn handle_decline_request(request_cid: String, reason: Option<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Declining AdvancedPaymentRequest");
 
     let party_owner = std::env::var("PARTY_OWNER")
@@ -330,8 +334,10 @@ pub async fn handle_decline_request(request_cid: String) -> Result<()> {
             "ExerciseCommand": {
                 "templateId": template_id,
                 "contractId": request_cid,
-                "choice": "AdvancedPaymentRequest_Decline",
-                "choiceArgument": {}
+                "choice": "AdvancedPaymentRequest_Reject",
+                "choiceArgument": {
+                    "reason": reason
+                }
             }
         }],
         "commandId": cmdid,

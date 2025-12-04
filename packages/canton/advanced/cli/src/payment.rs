@@ -8,7 +8,7 @@ use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 
 /// App withdraws amount from AdvancedPayment
-pub async fn handle_withdraw(payment_cid: String, amount: String) -> Result<()> {
+pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option<String>) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Withdrawing from AdvancedPayment");
 
     let party_app =
@@ -38,7 +38,8 @@ pub async fn handle_withdraw(payment_cid: String, amount: String) -> Result<()> 
                 "choice": "AdvancedPayment_Withdraw",
                 "choiceArgument": {
                     "amount": amount,
-                    "appTransferContext": context.build_app_transfer_context()
+                    "appTransferContext": context.build_app_transfer_context(),
+                    "withdrawReason": reason
                 }
             }
         }],

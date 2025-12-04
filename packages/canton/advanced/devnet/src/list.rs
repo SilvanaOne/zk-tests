@@ -6,6 +6,46 @@ use tracing::{debug, info};
 
 use crate::context::create_client;
 
+/// Build a template filter query for the active-contracts API
+fn build_template_filter_query(
+    party: &str,
+    template_ids: &[&str],
+    offset: u64,
+) -> serde_json::Value {
+    let cumulative: Vec<serde_json::Value> = template_ids
+        .iter()
+        .map(|tid| {
+            json!({
+                "identifierFilter": {
+                    "TemplateFilter": {
+                        "value": {
+                            "templateId": tid,
+                            "includeCreatedEventBlob": false
+                        }
+                    }
+                }
+            })
+        })
+        .collect();
+
+    // Build filters_by_party with the party as a dynamic key
+    let mut filters_by_party = serde_json::Map::new();
+    filters_by_party.insert(
+        party.to_string(),
+        json!({
+            "cumulative": cumulative
+        }),
+    );
+
+    json!({
+        "activeAtOffset": offset,
+        "filter": {
+            "filtersByParty": filters_by_party
+        },
+        "verbose": true
+    })
+}
+
 /// Amulet information for display
 #[derive(Debug)]
 pub struct AmuletInfo {
@@ -40,18 +80,17 @@ async fn find_amulets(
         .as_u64()
         .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
 
-    // Query active contracts
-    let query = json!({
-        "activeAtOffset": offset,
-        "filter": {
-            "filtersByParty": {
-                party: {}
-            }
-        },
-        "verbose": true
-    });
+    // Query active contracts with template filter for Amulet and LockedAmulet
+    let query = build_template_filter_query(
+        party,
+        &[
+            "#splice-amulet:Splice.Amulet:Amulet",
+            "#splice-amulet:Splice.Amulet:LockedAmulet",
+        ],
+        offset,
+    );
 
-    let contracts_url = format!("{}/state/active-contracts?limit=500", api_url);
+    let contracts_url = format!("{}/state/active-contracts", api_url);
     let contracts: Vec<serde_json::Value> = client
         .post(&contracts_url)
         .bearer_auth(jwt)
@@ -70,56 +109,51 @@ async fn find_amulets(
                 if let Some(created) = js_contract.get("createdEvent") {
                     if let Some(template_id) = created.get("templateId") {
                         if let Some(template_str) = template_id.as_str() {
-                            // Check for both Amulet and LockedAmulet
-                            let is_amulet = template_str.contains("Splice.Amulet:Amulet");
-                            let is_locked_amulet = template_str.contains("Splice.Amulet:LockedAmulet");
+                            // Determine if locked based on template
+                            let is_locked_amulet = template_str.contains("LockedAmulet");
 
-                            if is_amulet || is_locked_amulet {
-                                let cid = created
-                                    .get("contractId")
-                                    .and_then(|v| v.as_str())
-                                    .ok_or_else(|| anyhow::anyhow!("Missing contractId"))?
-                                    .to_string();
+                            let cid = created
+                                .get("contractId")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| anyhow::anyhow!("Missing contractId"))?
+                                .to_string();
 
-                                let amount = created
-                                    .pointer("/createArgument/amulet/amount/initialAmount")
-                                    .or_else(|| created.pointer("/createArgument/amount/initialAmount"))
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("0")
-                                    .to_string();
+                            let amount = created
+                                .pointer("/createArgument/amulet/amount/initialAmount")
+                                .or_else(|| created.pointer("/createArgument/amount/initialAmount"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("0")
+                                .to_string();
 
-                                let is_locked = is_locked_amulet;
+                            let mut lock_holders = Vec::new();
+                            let mut lock_expires_at = None;
 
-                                let mut lock_holders = Vec::new();
-                                let mut lock_expires_at = None;
-
-                                if is_locked_amulet {
-                                    // Extract lock details
-                                    if let Some(holders) = created
-                                        .pointer("/createArgument/lock/holders")
-                                        .and_then(|v| v.as_array())
-                                    {
-                                        for holder in holders {
-                                            if let Some(h) = holder.as_str() {
-                                                lock_holders.push(h.to_string());
-                                            }
+                            if is_locked_amulet {
+                                // Extract lock details
+                                if let Some(holders) = created
+                                    .pointer("/createArgument/lock/holders")
+                                    .and_then(|v| v.as_array())
+                                {
+                                    for holder in holders {
+                                        if let Some(h) = holder.as_str() {
+                                            lock_holders.push(h.to_string());
                                         }
                                     }
-
-                                    lock_expires_at = created
-                                        .pointer("/createArgument/lock/expiresAt")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s.to_string());
                                 }
 
-                                amulet_data.push(AmuletInfo {
-                                    contract_id: cid,
-                                    amount,
-                                    is_locked,
-                                    lock_holders,
-                                    lock_expires_at,
-                                });
+                                lock_expires_at = created
+                                    .pointer("/createArgument/lock/expiresAt")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
                             }
+
+                            amulet_data.push(AmuletInfo {
+                                contract_id: cid,
+                                amount,
+                                is_locked: is_locked_amulet,
+                                lock_holders,
+                                lock_expires_at,
+                            });
                         }
                     }
                 }
@@ -137,7 +171,7 @@ async fn find_advanced_payments(
     api_url: &str,
     jwt: &str,
     party: &str,
-    package_id: &str,
+    package_name: &str,
 ) -> Result<Vec<serde_json::Value>> {
     debug!(party = %party, "Finding AdvancedPayment contracts");
 
@@ -155,17 +189,11 @@ async fn find_advanced_payments(
         .as_u64()
         .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
 
-    let query = json!({
-        "activeAtOffset": offset,
-        "filter": {
-            "filtersByParty": {
-                party: {}
-            }
-        },
-        "verbose": true
-    });
+    // Use package name format for template filter
+    let template_id = format!("#{}:AdvancedPayment:AdvancedPayment", package_name);
+    let query = build_template_filter_query(party, &[&template_id], offset);
 
-    let contracts_url = format!("{}/state/active-contracts?limit=500", api_url);
+    let contracts_url = format!("{}/state/active-contracts", api_url);
     let contracts: Vec<serde_json::Value> = client
         .post(&contracts_url)
         .bearer_auth(jwt)
@@ -177,17 +205,12 @@ async fn find_advanced_payments(
         .await?;
 
     let mut payments = Vec::new();
-    let template_pattern = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
 
     for contract in contracts {
         if let Some(entry) = contract.get("contractEntry") {
             if let Some(js_contract) = entry.get("JsActiveContract") {
                 if let Some(created) = js_contract.get("createdEvent") {
-                    if let Some(template_id) = created.get("templateId").and_then(|v| v.as_str()) {
-                        if template_id.contains(&template_pattern) {
-                            payments.push(created.clone());
-                        }
-                    }
+                    payments.push(created.clone());
                 }
             }
         }
@@ -228,17 +251,14 @@ async fn find_app_reward_coupons(
         .as_u64()
         .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
 
-    let query = json!({
-        "activeAtOffset": offset,
-        "filter": {
-            "filtersByParty": {
-                party: {}
-            }
-        },
-        "verbose": true
-    });
+    // Use template filter for AppRewardCoupon
+    let query = build_template_filter_query(
+        party,
+        &["#splice-amulet:Splice.Amulet:AppRewardCoupon"],
+        offset,
+    );
 
-    let contracts_url = format!("{}/state/active-contracts?limit=500", api_url);
+    let contracts_url = format!("{}/state/active-contracts", api_url);
     let contracts: Vec<serde_json::Value> = client
         .post(&contracts_url)
         .bearer_auth(jwt)
@@ -255,34 +275,30 @@ async fn find_app_reward_coupons(
         if let Some(entry) = contract.get("contractEntry") {
             if let Some(js_contract) = entry.get("JsActiveContract") {
                 if let Some(created) = js_contract.get("createdEvent") {
-                    if let Some(template_id) = created.get("templateId").and_then(|v| v.as_str()) {
-                        if template_id.contains("Splice.Amulet:AppRewardCoupon") {
-                            let cid = created
-                                .get("contractId")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("?")
-                                .to_string();
+                    let cid = created
+                        .get("contractId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?")
+                        .to_string();
 
-                            // AppRewardCoupon has amount directly at createArgument.amount (Decimal)
-                            let amount = created
-                                .pointer("/createArgument/amount")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("0")
-                                .to_string();
+                    // AppRewardCoupon has amount directly at createArgument.amount (Decimal)
+                    let amount = created
+                        .pointer("/createArgument/amount")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0")
+                        .to_string();
 
-                            let round = created
-                                .pointer("/createArgument/round/number")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("?")
-                                .to_string();
+                    let round = created
+                        .pointer("/createArgument/round/number")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?")
+                        .to_string();
 
-                            coupons.push(AppRewardCouponInfo {
-                                contract_id: cid,
-                                amount,
-                                round,
-                            });
-                        }
-                    }
+                    coupons.push(AppRewardCouponInfo {
+                        contract_id: cid,
+                        amount,
+                        round,
+                    });
                 }
             }
         }
@@ -298,7 +314,7 @@ async fn find_advanced_payment_requests(
     api_url: &str,
     jwt: &str,
     party: &str,
-    package_id: &str,
+    package_name: &str,
 ) -> Result<Vec<serde_json::Value>> {
     debug!(party = %party, "Finding AdvancedPaymentRequest contracts");
 
@@ -316,17 +332,11 @@ async fn find_advanced_payment_requests(
         .as_u64()
         .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
 
-    let query = json!({
-        "activeAtOffset": offset,
-        "filter": {
-            "filtersByParty": {
-                party: {}
-            }
-        },
-        "verbose": true
-    });
+    // Use package name format for template filter
+    let template_id = format!("#{}:AdvancedPaymentRequest:AdvancedPaymentRequest", package_name);
+    let query = build_template_filter_query(party, &[&template_id], offset);
 
-    let contracts_url = format!("{}/state/active-contracts?limit=500", api_url);
+    let contracts_url = format!("{}/state/active-contracts", api_url);
     let contracts: Vec<serde_json::Value> = client
         .post(&contracts_url)
         .bearer_auth(jwt)
@@ -338,23 +348,128 @@ async fn find_advanced_payment_requests(
         .await?;
 
     let mut requests = Vec::new();
-    let template_pattern = format!("{}:AdvancedPaymentRequest:AdvancedPaymentRequest", package_id);
 
     for contract in contracts {
         if let Some(entry) = contract.get("contractEntry") {
             if let Some(js_contract) = entry.get("JsActiveContract") {
                 if let Some(created) = js_contract.get("createdEvent") {
-                    if let Some(template_id) = created.get("templateId").and_then(|v| v.as_str()) {
-                        if template_id.contains(&template_pattern) {
-                            requests.push(created.clone());
-                        }
-                    }
+                    requests.push(created.clone());
                 }
             }
         }
     }
 
     info!(count = requests.len(), party = %party, "Found AdvancedPaymentRequest contracts");
+    Ok(requests)
+}
+
+/// Find all AppService contracts for a specific party
+async fn find_app_services(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+    package_name: &str,
+) -> Result<Vec<serde_json::Value>> {
+    debug!(party = %party, "Finding AppService contracts");
+
+    let ledger_end_url = format!("{}/state/ledger-end", api_url);
+    let ledger_end: serde_json::Value = client
+        .get(&ledger_end_url)
+        .bearer_auth(jwt)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let offset = ledger_end["offset"]
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
+
+    // Use package name format for template filter
+    let template_id = format!("#{}:AppService:AppService", package_name);
+    let query = build_template_filter_query(party, &[&template_id], offset);
+
+    let contracts_url = format!("{}/state/active-contracts", api_url);
+    let contracts: Vec<serde_json::Value> = client
+        .post(&contracts_url)
+        .bearer_auth(jwt)
+        .json(&query)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let mut services = Vec::new();
+
+    for contract in contracts {
+        if let Some(entry) = contract.get("contractEntry") {
+            if let Some(js_contract) = entry.get("JsActiveContract") {
+                if let Some(created) = js_contract.get("createdEvent") {
+                    services.push(created.clone());
+                }
+            }
+        }
+    }
+
+    info!(count = services.len(), party = %party, "Found AppService contracts");
+    Ok(services)
+}
+
+/// Find all AppServiceRequest contracts for a specific party
+async fn find_app_service_requests(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+    package_name: &str,
+) -> Result<Vec<serde_json::Value>> {
+    debug!(party = %party, "Finding AppServiceRequest contracts");
+
+    let ledger_end_url = format!("{}/state/ledger-end", api_url);
+    let ledger_end: serde_json::Value = client
+        .get(&ledger_end_url)
+        .bearer_auth(jwt)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let offset = ledger_end["offset"]
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("Unable to get ledger end offset"))?;
+
+    // Use package name format for template filter
+    let template_id = format!("#{}:AppServiceRequest:AppServiceRequest", package_name);
+    let query = build_template_filter_query(party, &[&template_id], offset);
+
+    let contracts_url = format!("{}/state/active-contracts", api_url);
+    let contracts: Vec<serde_json::Value> = client
+        .post(&contracts_url)
+        .bearer_auth(jwt)
+        .json(&query)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let mut requests = Vec::new();
+
+    for contract in contracts {
+        if let Some(entry) = contract.get("contractEntry") {
+            if let Some(js_contract) = entry.get("JsActiveContract") {
+                if let Some(created) = js_contract.get("createdEvent") {
+                    requests.push(created.clone());
+                }
+            }
+        }
+    }
+
+    info!(count = requests.len(), party = %party, "Found AppServiceRequest contracts");
     Ok(requests)
 }
 
@@ -373,7 +488,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
 
-    let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID").unwrap_or_default();
+    let package_name = std::env::var("ADVANCED_PAYMENT_PACKAGE_NAME").unwrap_or_default();
 
     let client = create_client()?;
 
@@ -417,13 +532,13 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         }
 
         // List AdvancedPayment contracts
-        if !package_id.is_empty() {
+        if !package_name.is_empty() {
             let payments = find_advanced_payments(
                 &client,
                 &api_url,
                 &jwt,
                 &party_user,
-                &package_id,
+                &package_name,
             )
             .await?;
 
@@ -453,9 +568,22 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
 
+                    let description = payment
+                        .pointer("/createArgument/description")
+                        .and_then(|v| v.as_str());
+                    let reference = payment
+                        .pointer("/createArgument/reference")
+                        .and_then(|v| v.as_str());
+
                     println!("  {} - {} CC locked (min: {} CC)", cid, locked_amount, minimum);
                     println!("    Provider: {}", provider);
                     println!("    Expires: {}", expires);
+                    if let Some(desc) = description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(ref_num) = reference {
+                        println!("    Reference: {}", ref_num);
+                    }
                 }
             }
 
@@ -465,7 +593,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &api_url,
                 &jwt,
                 &party_user,
-                &package_id,
+                &package_name,
             )
             .await?;
 
@@ -483,9 +611,21 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/provider")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
+                    let description = req
+                        .pointer("/createArgument/description")
+                        .and_then(|v| v.as_str());
+                    let reference = req
+                        .pointer("/createArgument/reference")
+                        .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC requested", cid, amount);
                     println!("    From provider: {}", provider);
+                    if let Some(desc) = description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(ref_num) = reference {
+                        println!("    Reference: {}", ref_num);
+                    }
                 }
             }
         }
@@ -520,13 +660,13 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         }
 
         // List AdvancedPayment contracts where app is the controller
-        if !package_id.is_empty() {
+        if !package_name.is_empty() {
             let payments = find_advanced_payments(
                 &client,
                 &api_url,
                 &jwt,
                 &party_app,
-                &package_id,
+                &package_name,
             )
             .await?;
 
@@ -551,10 +691,86 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/expiresAt")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
+                    let description = payment
+                        .pointer("/createArgument/description")
+                        .and_then(|v| v.as_str());
+                    let reference = payment
+                        .pointer("/createArgument/reference")
+                        .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC locked", cid, locked_amount);
                     println!("    Owner: {}", owner);
                     println!("    Expires: {}", expires);
+                    if let Some(desc) = description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(ref_num) = reference {
+                        println!("    Reference: {}", ref_num);
+                    }
+                }
+            }
+
+            // List AppService contracts
+            let services = find_app_services(
+                &client,
+                &api_url,
+                &jwt,
+                &party_app,
+                &package_name,
+            )
+            .await?;
+
+            println!("\nApp Services:");
+            if services.is_empty() {
+                println!("  (none)");
+            } else {
+                for svc in &services {
+                    let cid = svc.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
+                    let provider = svc
+                        .pointer("/createArgument/provider")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let svc_desc = svc
+                        .pointer("/createArgument/serviceDescription")
+                        .and_then(|v| v.as_str());
+
+                    println!("  {}", cid);
+                    println!("    Provider: {}", provider);
+                    if let Some(desc) = svc_desc {
+                        println!("    Description: {}", desc);
+                    }
+                }
+            }
+
+            // List AppServiceRequest contracts
+            let svc_requests = find_app_service_requests(
+                &client,
+                &api_url,
+                &jwt,
+                &party_app,
+                &package_name,
+            )
+            .await?;
+
+            println!("\nPending App Service Requests:");
+            if svc_requests.is_empty() {
+                println!("  (none)");
+            } else {
+                for req in &svc_requests {
+                    let cid = req.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
+                    let provider = req
+                        .pointer("/createArgument/provider")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let svc_desc = req
+                        .pointer("/createArgument/serviceDescription")
+                        .and_then(|v| v.as_str());
+
+                    println!("  {}", cid);
+                    println!("    Provider: {}", provider);
+                    if let Some(desc) = svc_desc {
+                        println!("    Description: {}", desc);
+                    }
                 }
             }
         }
@@ -590,13 +806,13 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         }
 
         // List AdvancedPayment contracts
-        if !package_id.is_empty() {
+        if !package_name.is_empty() {
             let payments = find_advanced_payments(
                 &client,
                 &api_url,
                 &jwt,
                 &party_provider,
-                &package_id,
+                &package_name,
             )
             .await?;
 
@@ -621,10 +837,22 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/expiresAt")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
+                    let description = payment
+                        .pointer("/createArgument/description")
+                        .and_then(|v| v.as_str());
+                    let reference = payment
+                        .pointer("/createArgument/reference")
+                        .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC locked", cid, locked_amount);
                     println!("    Owner: {}", owner);
                     println!("    Expires: {}", expires);
+                    if let Some(desc) = description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(ref_num) = reference {
+                        println!("    Reference: {}", ref_num);
+                    }
                 }
             }
 
@@ -634,7 +862,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &api_url,
                 &jwt,
                 &party_provider,
-                &package_id,
+                &package_name,
             )
             .await?;
 
@@ -652,9 +880,85 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/owner")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
+                    let description = req
+                        .pointer("/createArgument/description")
+                        .and_then(|v| v.as_str());
+                    let reference = req
+                        .pointer("/createArgument/reference")
+                        .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC requested", cid, amount);
                     println!("    To owner: {}", owner);
+                    if let Some(desc) = description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(ref_num) = reference {
+                        println!("    Reference: {}", ref_num);
+                    }
+                }
+            }
+
+            // List AppService contracts for provider
+            let services = find_app_services(
+                &client,
+                &api_url,
+                &jwt,
+                &party_provider,
+                &package_name,
+            )
+            .await?;
+
+            println!("\nApp Services:");
+            if services.is_empty() {
+                println!("  (none)");
+            } else {
+                for svc in &services {
+                    let cid = svc.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
+                    let app = svc
+                        .pointer("/createArgument/app")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let svc_desc = svc
+                        .pointer("/createArgument/serviceDescription")
+                        .and_then(|v| v.as_str());
+
+                    println!("  {}", cid);
+                    println!("    App: {}", app);
+                    if let Some(desc) = svc_desc {
+                        println!("    Description: {}", desc);
+                    }
+                }
+            }
+
+            // List AppServiceRequest contracts for provider (to accept/reject)
+            let svc_requests = find_app_service_requests(
+                &client,
+                &api_url,
+                &jwt,
+                &party_provider,
+                &package_name,
+            )
+            .await?;
+
+            println!("\nPending App Service Requests (to accept/reject):");
+            if svc_requests.is_empty() {
+                println!("  (none)");
+            } else {
+                for req in &svc_requests {
+                    let cid = req.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
+                    let app = req
+                        .pointer("/createArgument/app")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let svc_desc = req
+                        .pointer("/createArgument/serviceDescription")
+                        .and_then(|v| v.as_str());
+
+                    println!("  {}", cid);
+                    println!("    App: {}", app);
+                    if let Some(desc) = svc_desc {
+                        println!("    Description: {}", desc);
+                    }
                 }
             }
         }

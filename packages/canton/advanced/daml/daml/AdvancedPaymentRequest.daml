@@ -5,7 +5,7 @@ import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(.
 import Splice.Api.FeaturedAppRightV1 (AppRewardBeneficiary(..))
 import Splice.Expiry (TimeLock(..))
 
-import AdvancedPayment (AdvancedPayment(..), verifyAmulets, extractLockedAmulet)
+import AdvancedPayment (AdvancedPayment(..), verifyAmulets, extractLockedAmulet, buildLockContext)
 
 -- Result types
 
@@ -38,6 +38,10 @@ template AdvancedPaymentRequest
       -- ^ Minimum to keep for unpaid services
     expiresAt : Time
       -- ^ Lock expiry time
+    description : Optional Text
+      -- ^ Description of payment purpose
+    reference : Optional Text
+      -- ^ External reference (invoice, PO, order ID)
   where
     signatory app, provider
     observer owner
@@ -74,7 +78,7 @@ template AdvancedPaymentRequest
               lock = Some $ TimeLock with
                 holders = [app]
                 expiresAt = expiresAt
-                optContext = Some "AdvancedPayment lock"
+                optContext = Some (buildLockContext reference)
 
         -- Build beneficiaries using provider (has FeaturedAppRight)
         let beneficiaries = Some [AppRewardBeneficiary with
@@ -105,11 +109,16 @@ template AdvancedPaymentRequest
           lockedAmount
           minimumAmount
           expiresAt
+          description
+          reference
 
         pure AdvancedPaymentRequest_Accept_Result with advancedPaymentCid
 
     choice AdvancedPaymentRequest_Reject : AdvancedPaymentRequest_Reject_Result
       -- ^ Owner rejects the request
+      with
+        reason : Optional Text
+          -- ^ Optional reason for rejection
       controller owner
       do
         pure AdvancedPaymentRequest_Reject_Result

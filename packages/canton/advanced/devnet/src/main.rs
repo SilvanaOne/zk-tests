@@ -40,7 +40,11 @@ enum Commands {
 #[derive(Subcommand)]
 enum ServiceCommands {
     /// Create a new AppServiceRequest (app requests service from provider)
-    Create,
+    Create {
+        /// Description of service relationship
+        #[arg(short = 'd', long)]
+        service_description: Option<String>,
+    },
     /// List pending AppServiceRequest contracts
     ListRequests,
     /// Accept an AppServiceRequest (provider action) - creates AppService
@@ -54,6 +58,9 @@ enum ServiceCommands {
         /// Contract ID of the AppServiceRequest
         #[arg(short, long)]
         request_cid: String,
+        /// Reason for rejection
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Cancel an AppServiceRequest (app action)
     Cancel {
@@ -87,6 +94,12 @@ enum RequestCommands {
         /// Expiry time (ISO 8601 format, e.g., "2024-12-31T23:59:59Z"). Default: 1 day from now
         #[arg(short, long)]
         expires: Option<String>,
+        /// Description of payment purpose
+        #[arg(short = 'd', long)]
+        description: Option<String>,
+        /// External reference (invoice, order ID)
+        #[arg(long)]
+        reference: Option<String>,
     },
     /// Accept an AdvancedPaymentRequest (owner action)
     Accept {
@@ -102,6 +115,9 @@ enum RequestCommands {
         /// Contract ID of the AdvancedPaymentRequest
         #[arg(short, long)]
         request_cid: String,
+        /// Reason for rejection
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Cancel an AdvancedPaymentRequest (app action)
     Cancel {
@@ -121,6 +137,9 @@ enum PaymentCommands {
         /// Amount to withdraw (in CC)
         #[arg(short, long)]
         amount: String,
+        /// Reason for withdrawal (service description)
+        #[arg(long)]
+        reason: Option<String>,
     },
     /// Unlock partial amount from AdvancedPayment (owner action)
     Unlock {
@@ -151,9 +170,9 @@ enum PaymentCommands {
         /// Amount to add (in CC)
         #[arg(short, long)]
         amount: String,
-        /// New expiry time (must be after existing expiry)
+        /// New expiry time (must be after existing expiry). Default: 1 day from now
         #[arg(short, long)]
-        new_expires: String,
+        new_expires: Option<String>,
         /// Comma-separated list of Amulet contract IDs to use as funds
         #[arg(short = 'c', long, value_delimiter = ',')]
         amulet_cids: Vec<String>,
@@ -175,13 +194,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::List { party } => list::handle_list(party).await?,
         Commands::Service(cmd) => match cmd {
-            ServiceCommands::Create => service::handle_create_service_request().await?,
+            ServiceCommands::Create { service_description } => {
+                service::handle_create_service_request(service_description).await?
+            }
             ServiceCommands::ListRequests => service::handle_list_service_requests().await?,
             ServiceCommands::Accept { request_cid } => {
                 service::handle_accept_service_request(request_cid).await?
             }
-            ServiceCommands::Reject { request_cid } => {
-                service::handle_reject_service_request(request_cid).await?
+            ServiceCommands::Reject { request_cid, reason } => {
+                service::handle_reject_service_request(request_cid, reason).await?
             }
             ServiceCommands::Cancel { request_cid } => {
                 service::handle_cancel_service_request(request_cid).await?
@@ -197,19 +218,21 @@ async fn main() -> Result<()> {
                 amount,
                 minimum,
                 expires,
+                description,
+                reference,
             } => {
                 let expires = expires.unwrap_or_else(|| {
                     let one_day_from_now = Utc::now() + Duration::days(1);
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
-                request::handle_create_request(service_cid, amount, minimum, expires).await?
+                request::handle_create_request(service_cid, amount, minimum, expires, description, reference).await?
             }
             RequestCommands::Accept {
                 request_cid,
                 amulet_cids,
             } => request::handle_accept_request(request_cid, amulet_cids).await?,
-            RequestCommands::Reject { request_cid } => {
-                request::handle_reject_request(request_cid).await?
+            RequestCommands::Reject { request_cid, reason } => {
+                request::handle_reject_request(request_cid, reason).await?
             }
             RequestCommands::Cancel { request_cid } => {
                 request::handle_cancel_request(request_cid).await?
@@ -219,7 +242,8 @@ async fn main() -> Result<()> {
             PaymentCommands::Withdraw {
                 payment_cid,
                 amount,
-            } => payment::handle_withdraw(payment_cid, amount).await?,
+                reason,
+            } => payment::handle_withdraw(payment_cid, amount, reason).await?,
             PaymentCommands::Unlock {
                 payment_cid,
                 amount,
@@ -231,7 +255,13 @@ async fn main() -> Result<()> {
                 amount,
                 new_expires,
                 amulet_cids,
-            } => payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?,
+            } => {
+                let new_expires = new_expires.unwrap_or_else(|| {
+                    let one_day_from_now = Utc::now() + Duration::days(1);
+                    one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                });
+                payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?
+            }
         },
     }
 

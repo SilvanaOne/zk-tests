@@ -26,6 +26,8 @@ template AppServiceRequest
       -- ^ Application operator (signatory)
     provider : Party
       -- ^ Service provider (must have FeaturedAppRight)
+    serviceDescription : Optional Text
+      -- ^ Proposed service description
   where
     signatory app
     observer provider
@@ -36,11 +38,14 @@ template AppServiceRequest
       -- ^ Provider accepts and creates AppService
       controller provider
       do
-        appServiceCid <- create AppService with dso, app, provider
+        appServiceCid <- create AppService with dso, app, provider, serviceDescription
         pure AppServiceRequest_Accept_Result with appServiceCid
 
     choice AppServiceRequest_Reject : AppServiceRequest_Reject_Result
       -- ^ Provider rejects the request
+      with
+        reason : Optional Text
+          -- ^ Reason for rejection
       controller provider
       do
         pure AppServiceRequest_Reject_Result

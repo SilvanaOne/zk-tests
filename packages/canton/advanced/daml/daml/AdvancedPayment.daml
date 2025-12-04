@@ -5,6 +5,12 @@ import Splice.AmuletRules (AppTransferContext(..), Transfer(..), TransferInput(.
 import Splice.Api.FeaturedAppRightV1 (AppRewardBeneficiary(..))
 import Splice.Expiry (TimeLock(..))
 
+-- | Build lock context string, including reference if available
+buildLockContext : Optional Text -> Text
+buildLockContext optRef = case optRef of
+  Some ref -> "AdvancedPayment [" <> ref <> "]"
+  None -> "AdvancedPayment lock"
+
 -- Result types
 
 data AdvancedPayment_Withdraw_Result = AdvancedPayment_Withdraw_Result
@@ -50,6 +56,10 @@ template AdvancedPayment
       -- ^ Minimum to keep for unpaid services
     expiresAt : Time
       -- ^ Lock expiry time
+    description : Optional Text
+      -- ^ Description of payment purpose
+    reference : Optional Text
+      -- ^ External reference number (invoice, PO, order ID)
   where
     signatory owner, app, provider
 
@@ -66,6 +76,8 @@ template AdvancedPayment
           -- ^ Amount to withdraw
         appTransferContext : AppTransferContext
           -- ^ Transfer context
+        withdrawReason : Optional Text
+          -- ^ Optional reason for withdrawal (service description)
       controller app
       do
         assertMsg "Withdraw amount must be positive" $ amount > 0.0
@@ -103,7 +115,7 @@ template AdvancedPayment
                       lock = Some $ TimeLock with
                         holders = [app]
                         expiresAt = expiresAt
-                        optContext = Some "AdvancedPayment lock"]
+                        optContext = Some (buildLockContext reference)]
               else []
 
         -- Execute transfer
@@ -175,7 +187,7 @@ template AdvancedPayment
               lock = Some $ TimeLock with
                 holders = [app]
                 expiresAt = expiresAt
-                optContext = Some "AdvancedPayment lock"
+                optContext = Some (buildLockContext reference)
 
         -- Execute transfer
         let transfer = Transfer with
@@ -318,7 +330,7 @@ template AdvancedPayment
               lock = Some $ TimeLock with
                 holders = [app]
                 expiresAt = newExpiresAt
-                optContext = Some "AdvancedPayment lock - topped up"
+                optContext = Some (buildLockContext reference)
 
         -- Execute transfer combining existing + new funds
         let transfer = Transfer with

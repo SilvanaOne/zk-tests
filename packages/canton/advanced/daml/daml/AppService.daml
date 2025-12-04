@@ -23,6 +23,8 @@ template AppService
       -- ^ Application operator (signatory)
     provider : Party
       -- ^ Service provider (signatory, has FeaturedAppRight)
+    serviceDescription : Optional Text
+      -- ^ Description of service relationship
   where
     signatory app, provider
 
@@ -39,12 +41,16 @@ template AppService
           -- ^ Minimum to keep for unpaid services
         expiresAt : Time
           -- ^ Lock expiry time
+        description : Optional Text
+          -- ^ Description of what payment is for
+        reference : Optional Text
+          -- ^ External reference (invoice, order ID)
       controller app
       do
         assertMsg "Owner must be different from app" $ owner /= app
         assertMsg "Owner must be different from provider" $ owner /= provider
         requestCid <- create AdvancedPaymentRequest with
-          dso, owner, provider, app, lockedAmount, minimumAmount, expiresAt
+          dso, owner, provider, app, lockedAmount, minimumAmount, expiresAt, description, reference
         pure AppService_CreatePaymentRequest_Result with requestCid
 
     choice AppService_Terminate : AppService_Terminate_Result
