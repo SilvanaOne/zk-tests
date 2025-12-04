@@ -16,29 +16,29 @@ data AppServiceRequest_Reject_Result = AppServiceRequest_Reject_Result {}
 data AppServiceRequest_Cancel_Result = AppServiceRequest_Cancel_Result {}
   deriving (Eq, Show)
 
--- | Request from app to provider to establish a service relationship
--- App creates this request, provider accepts to create an AppService
+-- | Request from seller to provider to establish a service relationship
+-- Seller creates this request, provider accepts to create an AppService
 template AppServiceRequest
   with
     dso : Party
       -- ^ DSO party reference
-    app : Party
-      -- ^ Application operator (signatory)
+    seller : Party
+      -- ^ Seller (signatory)
     provider : Party
       -- ^ Service provider (must have FeaturedAppRight)
     serviceDescription : Optional Text
       -- ^ Proposed service description
   where
-    signatory app
+    signatory seller
     observer provider
 
-    ensure app /= provider
+    ensure seller /= provider
 
     choice AppServiceRequest_Accept : AppServiceRequest_Accept_Result
       -- ^ Provider accepts and creates AppService
       controller provider
       do
-        appServiceCid <- create AppService with dso, app, provider, serviceDescription
+        appServiceCid <- create AppService with dso, seller, provider, serviceDescription
         pure AppServiceRequest_Accept_Result with appServiceCid
 
     choice AppServiceRequest_Reject : AppServiceRequest_Reject_Result
@@ -51,7 +51,7 @@ template AppServiceRequest
         pure AppServiceRequest_Reject_Result
 
     choice AppServiceRequest_Cancel : AppServiceRequest_Cancel_Result
-      -- ^ App cancels the request
-      controller app
+      -- ^ Seller cancels the request
+      controller seller
       do
         pure AppServiceRequest_Cancel_Result

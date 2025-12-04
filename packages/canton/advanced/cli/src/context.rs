@@ -45,8 +45,8 @@ impl ContractBlobsContext {
             .map_err(|_| anyhow::anyhow!("SCAN_API_URL not set in environment"))?;
         let dso_party = std::env::var("PARTY_DSO")
             .map_err(|_| anyhow::anyhow!("PARTY_DSO not set in environment"))?;
-        let party_app = std::env::var("PARTY_PROVIDER").ok();
-        let provider_hint = party_app
+        let party_seller = std::env::var("PARTY_PROVIDER").ok();
+        let provider_hint = party_seller
             .as_deref()
             .map(|s| s.split("::").next().unwrap_or(s).to_string());
 

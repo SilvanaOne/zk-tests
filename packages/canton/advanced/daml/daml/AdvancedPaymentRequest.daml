@@ -21,17 +21,17 @@ data AdvancedPaymentRequest_Reject_Result = AdvancedPaymentRequest_Reject_Result
 data AdvancedPaymentRequest_Cancel_Result = AdvancedPaymentRequest_Cancel_Result {}
   deriving (Eq, Show)
 
--- | Request from app to owner to set up an advanced payment
+-- | Request from seller to buyer to set up an advanced payment
 template AdvancedPaymentRequest
   with
     dso : Party
       -- ^ DSO party reference
-    owner : Party
-      -- ^ Amulet owner (will provide funds)
+    buyer : Party
+      -- ^ Amulet buyer (will provide funds)
     provider : Party
       -- ^ Service provider
-    app : Party
-      -- ^ Application operator (signatory, controls choices)
+    seller : Party
+      -- ^ Seller (signatory, controls choices)
     lockedAmount : Decimal
       -- ^ Amount to lock
     minimumAmount : Decimal
@@ -43,40 +43,40 @@ template AdvancedPaymentRequest
     reference : Optional Text
       -- ^ External reference (invoice, PO, order ID)
   where
-    signatory app, provider
-    observer owner
+    signatory seller, provider
+    observer buyer
 
     ensure lockedAmount > 0.0
         && minimumAmount >= 0.0
         && minimumAmount <= lockedAmount
-        && owner /= app
-        && owner /= provider
-        && app /= provider
+        && buyer /= seller
+        && buyer /= provider
+        && seller /= provider
 
     choice AdvancedPaymentRequest_Accept : AdvancedPaymentRequest_Accept_Result
-      -- ^ Owner accepts the request and provides funds
+      -- ^ Buyer accepts the request and provides funds
       with
-        ownerInputs : [ContractId Amulet]
+        buyerInputs : [ContractId Amulet]
           -- ^ Amulets to lock for the payment
         appTransferContext : AppTransferContext
           -- ^ Transfer context
-      controller owner
+      controller buyer
       do
         -- Validate expiry is in the future
         now <- getTime
         assertMsg "Expiry must be in the future" $ expiresAt > now
 
-        -- Verify owner has sufficient funds
-        inputAmount <- verifyAmulets dso ownerInputs
+        -- Verify buyer has sufficient funds
+        inputAmount <- verifyAmulets dso buyerInputs
         assertMsg "Insufficient funds" $ inputAmount >= lockedAmount
 
         -- Create locked output for the payment
         let lockedOutput = TransferOutput with
-              receiver = owner
+              receiver = buyer
               receiverFeeRatio = 0.0
               amount = lockedAmount
               lock = Some $ TimeLock with
-                holders = [app]
+                holders = [seller]
                 expiresAt = expiresAt
                 optContext = Some (buildLockContext reference)
 
@@ -87,9 +87,9 @@ template AdvancedPaymentRequest
 
         -- Create transfer to lock the funds
         let transfer = Transfer with
-              sender = owner
+              sender = buyer
               provider = provider  -- Provider has FeaturedAppRight
-              inputs = map InputAmulet ownerInputs
+              inputs = map InputAmulet buyerInputs
               outputs = [lockedOutput]
               beneficiaries = beneficiaries
 
@@ -102,9 +102,9 @@ template AdvancedPaymentRequest
         -- Create the AdvancedPayment contract
         advancedPaymentCid <- create AdvancedPayment with
           dso
-          owner
+          buyer
           provider
-          app
+          seller
           lockedAmulet = lockedAmuletCid
           lockedAmount
           minimumAmount
@@ -115,16 +115,16 @@ template AdvancedPaymentRequest
         pure AdvancedPaymentRequest_Accept_Result with advancedPaymentCid
 
     choice AdvancedPaymentRequest_Reject : AdvancedPaymentRequest_Reject_Result
-      -- ^ Owner rejects the request
+      -- ^ Buyer rejects the request
       with
         reason : Optional Text
           -- ^ Optional reason for rejection
-      controller owner
+      controller buyer
       do
         pure AdvancedPaymentRequest_Reject_Result
 
     choice AdvancedPaymentRequest_Cancel : AdvancedPaymentRequest_Cancel_Result
-      -- ^ App cancels the request
-      controller app
+      -- ^ Seller cancels the request
+      controller seller
       do
         pure AdvancedPaymentRequest_Cancel_Result

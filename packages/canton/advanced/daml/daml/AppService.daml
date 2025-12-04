@@ -13,28 +13,28 @@ data AppService_CreatePaymentRequest_Result = AppService_CreatePaymentRequest_Re
 data AppService_Terminate_Result = AppService_Terminate_Result {}
   deriving (Eq, Show)
 
--- | Active service relationship between app and provider
+-- | Active service relationship between seller and provider
 -- Both are signatories, providing authorization for exerciseAppTransfer
 template AppService
   with
     dso : Party
       -- ^ DSO party reference
-    app : Party
-      -- ^ Application operator (signatory)
+    seller : Party
+      -- ^ Seller (signatory)
     provider : Party
       -- ^ Service provider (signatory, has FeaturedAppRight)
     serviceDescription : Optional Text
       -- ^ Description of service relationship
   where
-    signatory app, provider
+    signatory seller, provider
 
-    ensure app /= provider
+    ensure seller /= provider
 
     nonconsuming choice AppService_CreatePaymentRequest : AppService_CreatePaymentRequest_Result
-      -- ^ App creates a payment request for an owner
+      -- ^ Seller creates a payment request for a buyer
       with
-        owner : Party
-          -- ^ Amulet owner who will provide funds
+        buyer : Party
+          -- ^ Amulet buyer who will provide funds
         lockedAmount : Decimal
           -- ^ Amount to lock
         minimumAmount : Decimal
@@ -45,12 +45,12 @@ template AppService
           -- ^ Description of what payment is for
         reference : Optional Text
           -- ^ External reference (invoice, order ID)
-      controller app
+      controller seller
       do
-        assertMsg "Owner must be different from app" $ owner /= app
-        assertMsg "Owner must be different from provider" $ owner /= provider
+        assertMsg "Buyer must be different from seller" $ buyer /= seller
+        assertMsg "Buyer must be different from provider" $ buyer /= provider
         requestCid <- create AdvancedPaymentRequest with
-          dso, owner, provider, app, lockedAmount, minimumAmount, expiresAt, description, reference
+          dso, buyer, provider, seller, lockedAmount, minimumAmount, expiresAt, description, reference
         pure AppService_CreatePaymentRequest_Result with requestCid
 
     choice AppService_Terminate : AppService_Terminate_Result

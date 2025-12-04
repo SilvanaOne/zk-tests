@@ -10,8 +10,8 @@ use crate::context::{create_client, ContractBlobsContext};
 use crate::interactive::submit_interactive;
 use crate::signing::parse_base58_private_key;
 
-/// Create a new AdvancedPaymentRequest via AppService choice (app action)
-/// This requires an existing AppService contract between app and provider
+/// Create a new AdvancedPaymentRequest via AppService choice (seller action)
+/// This requires an existing AppService contract between seller and provider
 pub async fn handle_create_request(
     service_cid: String,
     amount: String,
@@ -27,17 +27,17 @@ pub async fn handle_create_request(
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
-    let app_private_key = std::env::var("PARTY_APP_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PRIVATE_KEY not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
+    let seller_private_key = std::env::var("PARTY_SELLER_PRIVATE_KEY")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse app's private key (Base58 format)
-    let app_seed = parse_base58_private_key(&app_private_key)?;
+    let seller_seed = parse_base58_private_key(&seller_private_key)?;
 
     let client = create_client()?;
     let template_id = format!("{}:AppService:AppService", package_id);
@@ -56,7 +56,7 @@ pub async fn handle_create_request(
             "contractId": service_cid,
             "choice": "AppService_CreatePaymentRequest",
             "choiceArgument": {
-                "owner": user,
+                "buyer": user,
                 "lockedAmount": amount,
                 "minimumAmount": minimum,
                 "expiresAt": expires,
@@ -73,9 +73,9 @@ pub async fn handle_create_request(
         &client,
         &api_url,
         &jwt,
-        &party_app,
+        &party_seller,
         &synchronizer_id,
-        &app_seed,
+        &seller_seed,
         commands,
         vec![], // No disclosed contracts needed
     )
@@ -89,13 +89,13 @@ pub async fn handle_create_request(
 
     // Fetch update to get contract ID
     let update_payload = json!({
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "updateId": result.update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app: {
+                        &party_seller: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -157,7 +157,7 @@ pub async fn handle_create_request(
     Ok(())
 }
 
-/// Accept an AdvancedPaymentRequest (owner action)
+/// Accept an AdvancedPaymentRequest (buyer action)
 pub async fn handle_accept_request(
     request_cid: String,
     amulet_cids: Vec<String>,
@@ -202,7 +202,7 @@ pub async fn handle_accept_request(
             "contractId": request_cid,
             "choice": "AdvancedPaymentRequest_Accept",
             "choiceArgument": {
-                "ownerInputs": amulet_cids,
+                "buyerInputs": amulet_cids,
                 "appTransferContext": context.build_app_transfer_context()
             }
         }
@@ -301,7 +301,7 @@ pub async fn handle_accept_request(
     Ok(())
 }
 
-/// Reject an AdvancedPaymentRequest (owner action)
+/// Reject an AdvancedPaymentRequest (buyer action)
 pub async fn handle_reject_request(
     request_cid: String,
     reason: Option<String>,
@@ -371,7 +371,7 @@ pub async fn handle_reject_request(
     Ok(())
 }
 
-/// Cancel an AdvancedPaymentRequest (app action)
+/// Cancel an AdvancedPaymentRequest (seller action)
 pub async fn handle_cancel_request(request_cid: String) -> Result<()> {
     info!(request_cid = %request_cid, "Canceling AdvancedPaymentRequest (devnet)");
 
@@ -379,17 +379,17 @@ pub async fn handle_cancel_request(request_cid: String) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
-    let app_private_key = std::env::var("PARTY_APP_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PRIVATE_KEY not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
+    let seller_private_key = std::env::var("PARTY_SELLER_PRIVATE_KEY")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse app's private key (Base58 format)
-    let app_seed = parse_base58_private_key(&app_private_key)?;
+    let seller_seed = parse_base58_private_key(&seller_private_key)?;
 
     let client = create_client()?;
     let template_id = format!(
@@ -424,9 +424,9 @@ pub async fn handle_cancel_request(request_cid: String) -> Result<()> {
         &client,
         &api_url,
         &jwt,
-        &party_app,
+        &party_seller,
         &synchronizer_id,
-        &app_seed,
+        &seller_seed,
         commands,
         vec![],
     )

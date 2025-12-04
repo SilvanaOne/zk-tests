@@ -476,10 +476,10 @@ async fn find_app_service_requests(
 pub async fn handle_list(party: Option<String>) -> Result<()> {
     info!("Listing amulets and advanced payment contracts");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
 
@@ -497,15 +497,15 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
 
     let client = create_client_with_localhost_resolution()?;
 
-    let show_user = party.is_none() || party.as_deref() == Some("user") || party.as_deref() == Some("owner");
-    let show_app = party.is_none() || party.as_deref() == Some("app");
+    let show_user = party.is_none() || party.as_deref() == Some("user") || party.as_deref() == Some("buyer");
+    let show_app = party.is_none() || party.as_deref() == Some("app") || party.as_deref() == Some("seller");
     let show_provider = party.is_none() || party.as_deref() == Some("provider");
 
     if show_user {
-        println!("\n=== OWNER ({}) ===", party_owner);
+        println!("\n=== BUYER ({}) ===", party_buyer);
 
         // List amulets
-        let user_amulets = find_amulets(&client, &user_api_url, &user_jwt, &party_owner).await?;
+        let user_amulets = find_amulets(&client, &user_api_url, &user_jwt, &party_buyer).await?;
 
         println!("\nAmulets:");
         if user_amulets.is_empty() {
@@ -535,12 +535,12 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &client,
                 &user_api_url,
                 &user_jwt,
-                &party_owner,
+                &party_buyer,
                 &package_name,
             )
             .await?;
 
-            println!("\nAdvanced Payments (as owner):");
+            println!("\nAdvanced Payments (as buyer):");
             if payments.is_empty() {
                 println!("  (none)");
             } else {
@@ -590,7 +590,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &client,
                 &user_api_url,
                 &user_jwt,
-                &party_owner,
+                &party_buyer,
                 &package_name,
             )
             .await?;
@@ -630,11 +630,11 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
     }
 
     if show_app {
-        println!("\n=== APP ({}) ===", party_app);
+        println!("\n=== SELLER ({}) ===", party_seller);
 
         // List amulets for app (withdrawals go here)
         let app_amulets =
-            find_amulets(&client, &provider_api_url, &provider_jwt, &party_app).await?;
+            find_amulets(&client, &provider_api_url, &provider_jwt, &party_seller).await?;
 
         println!("\nAmulets:");
         if app_amulets.is_empty() {
@@ -664,12 +664,12 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &client,
                 &provider_api_url,
                 &provider_jwt,
-                &party_app,
+                &party_seller,
                 &package_name,
             )
             .await?;
 
-            println!("\nAdvanced Payments (as app controller):");
+            println!("\nAdvanced Payments (as seller):");
             if payments.is_empty() {
                 println!("  (none)");
             } else {
@@ -682,8 +682,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/lockedAmount")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
-                    let owner = payment
-                        .pointer("/createArgument/owner")
+                    let buyer = payment
+                        .pointer("/createArgument/buyer")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let expires = payment
@@ -698,7 +698,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC locked", cid, locked_amount);
-                    println!("    Owner: {}", owner);
+                    println!("    Buyer: {}", buyer);
                     println!("    Expires: {}", expires);
                     if let Some(desc) = description {
                         println!("    Description: {}", desc);
@@ -714,7 +714,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &client,
                 &provider_api_url,
                 &provider_jwt,
-                &party_app,
+                &party_seller,
                 &package_name,
             )
             .await?;
@@ -746,7 +746,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                 &client,
                 &provider_api_url,
                 &provider_jwt,
-                &party_app,
+                &party_seller,
                 &package_name,
             )
             .await?;
@@ -828,8 +828,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/lockedAmount")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
-                    let owner = payment
-                        .pointer("/createArgument/owner")
+                    let buyer = payment
+                        .pointer("/createArgument/buyer")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let expires = payment
@@ -844,7 +844,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC locked", cid, locked_amount);
-                    println!("    Owner: {}", owner);
+                    println!("    Buyer: {}", buyer);
                     println!("    Expires: {}", expires);
                     if let Some(desc) = description {
                         println!("    Description: {}", desc);
@@ -875,8 +875,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .pointer("/createArgument/lockedAmount")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
-                    let owner = req
-                        .pointer("/createArgument/owner")
+                    let buyer = req
+                        .pointer("/createArgument/buyer")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let description = req
@@ -887,7 +887,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str());
 
                     println!("  {} - {} CC requested", cid, amount);
-                    println!("    To owner: {}", owner);
+                    println!("    To buyer: {}", buyer);
                     if let Some(desc) = description {
                         println!("    Description: {}", desc);
                     }
@@ -913,8 +913,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
             } else {
                 for svc in &services {
                     let cid = svc.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
-                    let app = svc
-                        .pointer("/createArgument/app")
+                    let seller = svc
+                        .pointer("/createArgument/seller")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let svc_desc = svc
@@ -922,7 +922,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str());
 
                     println!("  {}", cid);
-                    println!("    App: {}", app);
+                    println!("    Seller: {}", seller);
                     if let Some(desc) = svc_desc {
                         println!("    Description: {}", desc);
                     }
@@ -945,8 +945,8 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
             } else {
                 for req in &svc_requests {
                     let cid = req.get("contractId").and_then(|v| v.as_str()).unwrap_or("?");
-                    let app = req
-                        .pointer("/createArgument/app")
+                    let seller = req
+                        .pointer("/createArgument/seller")
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let svc_desc = req
@@ -954,7 +954,7 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
                         .and_then(|v| v.as_str());
 
                     println!("  {}", cid);
-                    println!("    App: {}", app);
+                    println!("    Seller: {}", seller);
                     if let Some(desc) = svc_desc {
                         println!("    Description: {}", desc);
                     }

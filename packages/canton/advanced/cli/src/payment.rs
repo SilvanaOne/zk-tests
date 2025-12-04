@@ -7,12 +7,12 @@ use tracing::{debug, info};
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 
-/// App withdraws amount from AdvancedPayment
+/// Seller withdraws amount from AdvancedPayment
 pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option<String>) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Withdrawing from AdvancedPayment");
 
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -45,7 +45,7 @@ pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -81,13 +81,13 @@ pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option
 
     // Fetch update to see result
     let update_payload = json!({
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app: {
+                        &party_seller: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -149,12 +149,12 @@ pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option
     Ok(())
 }
 
-/// Owner unlocks partial amount from AdvancedPayment
+/// Buyer unlocks partial amount from AdvancedPayment
 pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Unlocking from AdvancedPayment");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -186,7 +186,7 @@ pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -222,13 +222,13 @@ pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
 
     // Fetch update to see new contract
     let update_payload = json!({
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_owner: {
+                        &party_buyer: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -289,12 +289,12 @@ pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
     Ok(())
 }
 
-/// App cancels AdvancedPayment and returns funds to owner
+/// Seller cancels AdvancedPayment and returns funds to buyer
 pub async fn handle_cancel(payment_cid: String) -> Result<()> {
     info!(payment_cid = %payment_cid, "Canceling AdvancedPayment");
 
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -325,7 +325,7 @@ pub async fn handle_cancel(payment_cid: String) -> Result<()> {
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -358,17 +358,17 @@ pub async fn handle_cancel(payment_cid: String) -> Result<()> {
         .unwrap_or("unknown");
 
     println!("AdvancedPayment canceled successfully!");
-    println!("Funds returned to owner");
+    println!("Funds returned to buyer");
     println!("Update ID: {}", update_id);
     Ok(())
 }
 
-/// Owner expires AdvancedPayment after lock expiry
+/// Buyer expires AdvancedPayment after lock expiry
 pub async fn handle_expire(payment_cid: String) -> Result<()> {
     info!(payment_cid = %payment_cid, "Expiring AdvancedPayment");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -399,7 +399,7 @@ pub async fn handle_expire(payment_cid: String) -> Result<()> {
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -432,12 +432,12 @@ pub async fn handle_expire(payment_cid: String) -> Result<()> {
         .unwrap_or("unknown");
 
     println!("AdvancedPayment expired successfully!");
-    println!("All funds returned to owner");
+    println!("All funds returned to buyer");
     println!("Update ID: {}", update_id);
     Ok(())
 }
 
-/// Owner tops up AdvancedPayment with additional funds and extends expiry
+/// Buyer tops up AdvancedPayment with additional funds and extends expiry
 pub async fn handle_topup(
     payment_cid: String,
     amount: String,
@@ -446,8 +446,8 @@ pub async fn handle_topup(
 ) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Topping up AdvancedPayment");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -481,7 +481,7 @@ pub async fn handle_topup(
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -517,13 +517,13 @@ pub async fn handle_topup(
 
     // Fetch update to see new contract
     let update_payload = json!({
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_owner: {
+                        &party_buyer: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {

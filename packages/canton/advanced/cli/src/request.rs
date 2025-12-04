@@ -7,7 +7,7 @@ use tracing::{debug, info};
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
 
-/// Create a new AdvancedPaymentRequest via AppService choice (app action)
+/// Create a new AdvancedPaymentRequest via AppService choice (seller action)
 pub async fn handle_create_request(
     service_cid: String,
     amount: String,
@@ -18,10 +18,10 @@ pub async fn handle_create_request(
 ) -> Result<()> {
     info!("Creating AdvancedPaymentRequest via AppService");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -45,7 +45,7 @@ pub async fn handle_create_request(
                 "contractId": service_cid,
                 "choice": "AppService_CreatePaymentRequest",
                 "choiceArgument": {
-                    "owner": party_owner,
+                    "buyer": party_buyer,
                     "lockedAmount": amount,
                     "minimumAmount": minimum,
                     "expiresAt": expires,
@@ -55,7 +55,7 @@ pub async fn handle_create_request(
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -91,13 +91,13 @@ pub async fn handle_create_request(
 
     // Fetch update to get contract ID
     let update_payload = json!({
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app: {
+                        &party_seller: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -155,12 +155,12 @@ pub async fn handle_create_request(
     Ok(())
 }
 
-/// Accept an AdvancedPaymentRequest (owner action)
+/// Accept an AdvancedPaymentRequest (buyer action)
 pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Accepting AdvancedPaymentRequest");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -192,14 +192,14 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
                 "contractId": request_cid,
                 "choice": "AdvancedPaymentRequest_Accept",
                 "choiceArgument": {
-                    "ownerInputs": amulet_cids,
+                    "buyerInputs": amulet_cids,
                     "appTransferContext": context.build_app_transfer_context()
                 }
             }
         }],
         "disclosedContracts": context.build_disclosed_contracts(),
         "commandId": cmdid,
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id
@@ -235,13 +235,13 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
 
     // Fetch update to get new AdvancedPayment contract ID
     let update_payload = json!({
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_owner: {
+                        &party_buyer: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -304,12 +304,12 @@ pub async fn handle_accept_request(request_cid: String, amulet_cids: Vec<String>
     Ok(())
 }
 
-/// Decline an AdvancedPaymentRequest (owner action)
+/// Decline an AdvancedPaymentRequest (buyer action)
 pub async fn handle_decline_request(request_cid: String, reason: Option<String>) -> Result<()> {
     info!(request_cid = %request_cid, "Declining AdvancedPaymentRequest");
 
-    let party_owner = std::env::var("PARTY_OWNER")
-        .map_err(|_| anyhow::anyhow!("PARTY_OWNER not set"))?;
+    let party_buyer = std::env::var("PARTY_BUYER")
+        .map_err(|_| anyhow::anyhow!("PARTY_BUYER not set"))?;
     let user_api_url = std::env::var("APP_USER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_USER_API_URL not set"))?;
     let user_jwt =
@@ -341,7 +341,7 @@ pub async fn handle_decline_request(request_cid: String, reason: Option<String>)
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_owner],
+        "actAs": [party_buyer],
         "readAs": [],
         "workflowId": "AdvancedPayment",
         "synchronizerId": synchronizer_id

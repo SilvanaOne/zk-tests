@@ -11,8 +11,8 @@ use crate::url::create_client_with_localhost_resolution;
 pub async fn handle_create_service_request(service_description: Option<String>) -> Result<()> {
     info!("Creating AppServiceRequest");
 
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
     let party_dso =
@@ -39,14 +39,14 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
                 "templateId": template_id,
                 "createArguments": {
                     "dso": party_dso,
-                    "app": party_app,
+                    "app": party_seller,
                     "provider": party_provider,
                     "serviceDescription": service_description
                 }
             }
         }],
         "commandId": cmdid,
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "readAs": [],
         "workflowId": "AppService",
         "synchronizerId": synchronizer_id
@@ -85,13 +85,13 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
 
     // Fetch update to get contract ID
     let update_payload = json!({
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "updateId": update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app: {
+                        &party_seller: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -135,7 +135,7 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
                             .unwrap_or("?");
                         println!("AppServiceRequest created successfully!");
                         println!("Contract ID: {}", cid);
-                        println!("App: {}", party_app);
+                        println!("App: {}", party_seller);
                         println!("Provider: {}", party_provider);
                         return Ok(());
                     }
@@ -152,8 +152,8 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
 pub async fn handle_list_service_requests() -> Result<()> {
     info!("Listing AppServiceRequest contracts");
 
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -182,7 +182,7 @@ pub async fn handle_list_service_requests() -> Result<()> {
         "activeAtOffset": offset,
         "filter": {
             "filtersByParty": {
-                &party_app: {}
+                &party_seller: {}
             }
         },
         "verbose": true
@@ -456,8 +456,8 @@ pub async fn handle_reject_service_request(request_cid: String, reason: Option<S
 pub async fn handle_list_services() -> Result<()> {
     info!("Listing AppService contracts");
 
-    let party_app =
-        std::env::var("PARTY_APP").map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller =
+        std::env::var("PARTY_SELLER").map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let provider_api_url = std::env::var("APP_PROVIDER_API_URL")
         .map_err(|_| anyhow::anyhow!("APP_PROVIDER_API_URL not set"))?;
     let provider_jwt = std::env::var("APP_PROVIDER_JWT")
@@ -486,7 +486,7 @@ pub async fn handle_list_services() -> Result<()> {
         "activeAtOffset": offset,
         "filter": {
             "filtersByParty": {
-                &party_app: {}
+                &party_seller: {}
             }
         },
         "verbose": true

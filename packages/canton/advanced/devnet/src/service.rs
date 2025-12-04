@@ -20,19 +20,19 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
-    let app_private_key = std::env::var("PARTY_APP_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PRIVATE_KEY not set"))?;
+    let seller_private_key = std::env::var("PARTY_SELLER_PRIVATE_KEY")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse app's private key (Base58 format)
-    let app_seed = parse_base58_private_key(&app_private_key)?;
+    let seller_seed = parse_base58_private_key(&seller_private_key)?;
 
     // Fetch DSO party from scan API
     let context = ContractBlobsContext::fetch().await?;
@@ -54,7 +54,7 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
             "templateId": template_id,
             "createArguments": {
                 "dso": party_dso,
-                "app": party_app,
+                "app": party_seller,
                 "provider": party_provider,
                 "serviceDescription": service_description
             }
@@ -71,9 +71,9 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
         &client,
         &api_url,
         &jwt,
-        &party_app,
+        &party_seller,
         &synchronizer_id,
-        &app_seed,
+        &seller_seed,
         commands,
         vec![], // No disclosed contracts needed for create
     )
@@ -87,13 +87,13 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
 
     // Fetch update to get contract ID
     let update_payload = json!({
-        "actAs": [party_app],
+        "actAs": [party_seller],
         "updateId": result.update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_app: {
+                        &party_seller: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -137,7 +137,7 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
                             .unwrap_or("?");
                         println!("AppServiceRequest created successfully!");
                         println!("Contract ID: {}", cid);
-                        println!("App: {}", party_app);
+                        println!("App: {}", party_seller);
                         println!("Provider: {}", party_provider);
                         println!("Submission ID: {}", result.submission_id);
                         println!("Update ID: {}", result.update_id);
@@ -388,17 +388,17 @@ pub async fn handle_cancel_service_request(request_cid: String) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
-    let app_private_key = std::env::var("PARTY_APP_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP_PRIVATE_KEY not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
+    let seller_private_key = std::env::var("PARTY_SELLER_PRIVATE_KEY")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse app's private key (Base58 format)
-    let app_seed = parse_base58_private_key(&app_private_key)?;
+    let seller_seed = parse_base58_private_key(&seller_private_key)?;
 
     let client = create_client()?;
     let template_id = format!("{}:AppServiceRequest:AppServiceRequest", package_id);
@@ -430,9 +430,9 @@ pub async fn handle_cancel_service_request(request_cid: String) -> Result<()> {
         &client,
         &api_url,
         &jwt,
-        &party_app,
+        &party_seller,
         &synchronizer_id,
-        &app_seed,
+        &seller_seed,
         commands,
         vec![],
     )
@@ -452,8 +452,8 @@ pub async fn handle_list_services() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
@@ -474,7 +474,7 @@ pub async fn handle_list_services() -> Result<()> {
     let payload = json!({
         "userId": user_id,
         "actAs": [party_provider],
-        "readAs": [party_provider, party_app],
+        "readAs": [party_provider, party_seller],
         "templateFilters": [{
             "templateFilter": {
                 "value": format!("{}:AppService:AppService", package_id)
@@ -542,8 +542,8 @@ pub async fn handle_list_service_requests() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_app = std::env::var("PARTY_APP")
-        .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
+    let party_seller = std::env::var("PARTY_SELLER")
+        .map_err(|_| anyhow::anyhow!("PARTY_SELLER not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
         .map_err(|_| anyhow::anyhow!("PARTY_PROVIDER not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
@@ -564,7 +564,7 @@ pub async fn handle_list_service_requests() -> Result<()> {
     let payload = json!({
         "userId": user_id,
         "actAs": [party_provider],
-        "readAs": [party_provider, party_app],
+        "readAs": [party_provider, party_seller],
         "templateFilters": [{
             "templateFilter": {
                 "value": format!("{}:AppServiceRequest:AppServiceRequest", package_id)
