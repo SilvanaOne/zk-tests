@@ -21,11 +21,12 @@ import {
   Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, type TransferResult, type PreapprovalResult } from "@/lib/loop";
+import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSignature, getLoopPublicKey, verifyPartyIdMatchesPublicKey, transferCC, createTransferPreapprovalProposal, signLoopTransactionHash, type TransferResult, type PreapprovalResult } from "@/lib/loop";
 import { createPhantomPreapprovalProposal } from "@/lib/phantom-preapproval";
 import { createSolflarePreapprovalProposal } from "@/lib/solflare-preapproval";
 import { createSolflareTransfer } from "@/lib/solflare-transfer";
-import { acceptAdvancedPaymentRequest, type AcceptResult } from "@/lib/solflare-accept-request";
+import { acceptAdvancedPaymentRequest } from "@/lib/solflare-accept-request";
+import { acceptAdvancedPaymentRequestLoop, type AcceptResult } from "@/lib/loop-accept-request";
 import { signSolflareTransactionHash } from "@/lib/solflare";
 import { fetchContractDetails, decodeCIP56HoldingBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
 import { getHoldingsFromLedger, getActiveContractsFromLedger, getPreapprovalsFromLedger } from "@/lib/ledger-api";
@@ -507,15 +508,21 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     }
   };
 
-  // Sign Multihash handler (Solflare only)
+  // Sign Multihash handler (Solflare and Loop)
   const handleSignMultihash = async () => {
-    if (!multihashToSign || walletType !== "solflare") return;
+    if (!multihashToSign || (walletType !== "solflare" && walletType !== "loop")) return;
 
     setSignMultihashStatus("loading");
     setSignedMultihash(null);
 
     try {
-      const signature = await signSolflareTransactionHash(multihashToSign);
+      let signature: string | undefined;
+
+      if (walletType === "solflare") {
+        signature = await signSolflareTransactionHash(multihashToSign);
+      } else if (walletType === "loop") {
+        signature = await signLoopTransactionHash(multihashToSign);
+      }
 
       if (signature) {
         setSignedMultihash({
@@ -629,9 +636,10 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     }
   };
 
-  // Handle Accept Advanced Payment Request (Solflare only)
+  // Handle Accept Advanced Payment Request (Solflare and Loop)
   const handleAcceptRequest = async () => {
-    if (!isConnected || !acceptRequestCid.trim() || !loopPartyId || walletType !== "solflare") return;
+    if (!isConnected || !acceptRequestCid.trim() || !loopPartyId) return;
+    if (walletType !== "solflare" && walletType !== "loop") return;
 
     setAcceptRequestStatus("awaiting");
     setAcceptRequestResult(null);
@@ -645,12 +653,25 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
       console.log("[LoopWallet] Request CID:", acceptRequestCid.trim());
       console.log("[LoopWallet] Party ID:", loopPartyId);
       console.log("[LoopWallet] Package ID:", packageId);
+      console.log("[LoopWallet] Wallet Type:", walletType);
 
-      const result = await acceptAdvancedPaymentRequest({
-        senderPartyId: loopPartyId,
-        requestContractId: acceptRequestCid.trim(),
-        packageId,
-      });
+      let result: AcceptResult;
+
+      if (walletType === "loop") {
+        // Use Loop wallet's hybrid flow (interactive submission + message signing)
+        result = await acceptAdvancedPaymentRequestLoop({
+          loopPartyId,
+          requestContractId: acceptRequestCid.trim(),
+          packageId,
+        });
+      } else {
+        // Use Solflare's flow
+        result = await acceptAdvancedPaymentRequest({
+          senderPartyId: loopPartyId,
+          requestContractId: acceptRequestCid.trim(),
+          packageId,
+        });
+      }
 
       setAcceptRequestResult(result);
       setAcceptRequestStatus(result.success ? "success" : "error");
@@ -1377,12 +1398,17 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
           )}
         </div>
 
-        {/* Accept Advanced Payment Request Section (Solflare only) */}
-        {walletType === "solflare" && (
+        {/* Accept Advanced Payment Request Section (Solflare and Loop) */}
+        {(walletType === "solflare" || walletType === "loop") && (
           <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
               <CheckCircle className="w-4 h-4 mr-2" />
               Accept Advanced Payment Request
+              {walletType && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  ({walletType === "loop" ? "Loop signing" : "Solflare signing"})
+                </span>
+              )}
             </h4>
             <p className="text-xs text-muted-foreground">
               Accept an AdvancedPaymentRequest by locking your CC. Your unlocked Amulet contracts will be automatically used.
@@ -1413,7 +1439,9 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                 <AlertTitle className="text-sm text-foreground">Awaiting Signature</AlertTitle>
                 <AlertDescription className="text-xs">
                   <p className="text-muted-foreground">
-                    Please sign the transaction in the Solflare popup.
+                    {walletType === "loop"
+                      ? "Please approve the signature in your Loop Wallet."
+                      : "Please sign the transaction in the Solflare popup."}
                   </p>
                 </AlertDescription>
               </Alert>
@@ -1560,12 +1588,17 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
           )}
         </div>
 
-        {/* Sign Multihash Section (Solflare only) */}
-        {walletType === "solflare" && (
+        {/* Sign Multihash Section (Solflare and Loop) */}
+        {(walletType === "solflare" || walletType === "loop") && (
           <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
               <Edit3 className="w-4 h-4 mr-2" />
               Sign Multihash
+              {walletType && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  ({walletType === "loop" ? "Loop signing" : "Solflare signing"})
+                </span>
+              )}
             </h4>
             <p className="text-xs text-muted-foreground">
               Sign a base64-encoded multihash for topology transactions

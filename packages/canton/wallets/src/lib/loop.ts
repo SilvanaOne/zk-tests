@@ -535,6 +535,85 @@ export async function transferCC(params: {
  * @param params.provider - The provider's partyId (e.g., orderbook-operator-1::...)
  *                          Defaults to ORDERBOOK_OPERATOR_PARTY if not specified
  */
+/**
+ * Get Amulet contracts with createdEventBlob for use as disclosed contracts.
+ *
+ * Used when building transactions that need to reference user's Amulet holdings.
+ */
+export async function getLoopAmuletContractsWithBlobs(): Promise<{
+  contractId: string;
+  templateId: string;
+  createdEventBlob: string;
+}[]> {
+  const contracts = await getLoopActiveContracts({
+    templateId: "#splice-amulet:Splice.Amulet:Amulet"
+  });
+
+  if (!contracts || contracts.length === 0) {
+    return [];
+  }
+
+  return contracts
+    .map(contract => {
+      const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+      return {
+        contractId: createdEvent?.contractId || createdEvent?.contract_id || "",
+        templateId: createdEvent?.templateId || createdEvent?.template_id || "",
+        createdEventBlob: createdEvent?.createdEventBlob || "",
+      };
+    })
+    .filter(c => c.contractId && c.createdEventBlob);
+}
+
+/**
+ * Sign a Canton transaction hash using Loop wallet's message signing.
+ *
+ * Loop's signMessage returns a hex signature. Canton requires Base64.
+ * This function handles the conversion.
+ *
+ * @param hashBase64 - Base64-encoded transaction hash from Canton's prepare endpoint
+ * @returns Base64-encoded signature (64 bytes Ed25519: r || s concatenated)
+ */
+export async function signLoopTransactionHash(hashBase64: string): Promise<string | undefined> {
+  console.log("[loop.ts] signLoopTransactionHash called, hashBase64:", hashBase64);
+
+  // Sign the hash string with Loop's message signing API
+  const result = await signLoopMessage(hashBase64);
+
+  if (!result) {
+    console.error("[loop.ts] Loop signMessage returned null");
+    return undefined;
+  }
+
+  console.log("[loop.ts] Loop signMessage result:", result);
+
+  // Extract hex signature from result
+  // Loop returns either a hex string or { signature: "hex..." }
+  let sigHex: string;
+  if (typeof result === "string") {
+    sigHex = result;
+  } else if (result.signature) {
+    sigHex = result.signature;
+  } else {
+    console.error("[loop.ts] Unexpected signMessage result format:", result);
+    return undefined;
+  }
+
+  // Convert hex to bytes
+  const sigBytes = hexToBytes(sigHex);
+
+  if (sigBytes.length !== 64) {
+    console.error("[loop.ts] Invalid signature length:", sigBytes.length, "expected 64");
+    return undefined;
+  }
+
+  // Convert bytes to Base64 for Canton
+  const sigBase64 = btoa(String.fromCharCode(...sigBytes));
+  console.log("[loop.ts] Signature converted to Base64, length:", sigBase64.length);
+
+  return sigBase64;
+}
+
 export async function createTransferPreapprovalProposal(params?: {
   provider?: string;
 }): Promise<PreapprovalResult> {
