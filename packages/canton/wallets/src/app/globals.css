@@ -1,0 +1,950 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@layer base {
+  :root {
+    /* Silvana Brand Palette */
+    --brand-pink: #ef45cf;
+    --brand-purple: #8d75ff;
+    --brand-blue: #5fa8ff;
+    --brand-green: #34c98f;
+    --brand-yellow: #ffd857;
+    --neutral-900: #0c0e13;
+    --neutral-800: #15171d;
+    --neutral-700: #1e2128;
+    --neutral-600: #5e676f;
+    --neutral-50: #f7f8fa;
+    --neutral-200: #d8dbe0;
+
+    /* Design tokens for the wallet background */
+    --base-0: #0e101a;
+    --base-1: #1c2133;
+    --accent-1: #2e3b80;
+    --accent-2: var(--brand-purple);
+    --noise-opacity: 0.035;
+    --vignette-opacity: 0.5;
+
+    /* Original shadcn variables updated with brand colors */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+    --radius: 0.75rem;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --base-0: #f4f6ff;
+      --base-1: #e6e9ff;
+      --accent-1: #cbd1ff;
+      --accent-2: var(--brand-blue);
+      --vignette-opacity: 0.3;
+      --foreground: 222.2 84% 4.9%;
+      --background: 0 0% 100%;
+      --card: 0 0% 100%;
+      --card-foreground: 222.2 84% 4.9%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 222.2 84% 4.9%;
+      --primary: 222.2 47.4% 11.2%;
+      --primary-foreground: 210 40% 98%;
+      --secondary: 210 40% 96%;
+      --secondary-foreground: 222.2 84% 4.9%;
+      --muted: 210 40% 96%;
+      --muted-foreground: 215.4 16.3% 46.9%;
+      --accent: 210 40% 96%;
+      --accent-foreground: 222.2 84% 4.9%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 210 40% 98%;
+      --border: 214.3 31.8% 91.4%;
+      --input: 214.3 31.8% 91.4%;
+      --ring: 222.2 84% 4.9%;
+    }
+  }
+
+  /* ----------  explicit class-based theme overrides ---------- */
+  html.dark {
+    --base-0: #0e101a;
+    --base-1: #1c2133;
+    --accent-1: #2e3b80;
+    --accent-2: var(--brand-purple);
+    --noise-opacity: 0.035;
+    --vignette-opacity: 0.5;
+
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+
+  html.light {
+    --base-0: #f4f6ff;
+    --base-1: #e6e9ff;
+    --accent-1: #cbd1ff;
+    --accent-2: var(--brand-blue);
+    --vignette-opacity: 0.3;
+
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-inter {
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-pink via-brand-purple to-brand-blue bg-clip-text text-transparent;
+  }
+
+  .bg-radial-wallet {
+    background: radial-gradient(
+      circle at 50% 50%,
+      var(--base-0) 0%,
+      var(--brand-purple) 100%
+    );
+  }
+
+  .bg-conic-wallet {
+    background: conic-gradient(
+      from 0deg at 50% 50%,
+      var(--base-1) 0%,
+      var(--accent-1) 25%,
+      var(--base-1) 50%,
+      var(--accent-1) 75%,
+      var(--base-1) 100%
+    );
+    opacity: 0.4;
+  }
+
+  .bg-vignette {
+    background: radial-gradient(
+      circle at 50% 40%,
+      transparent 0%,
+      rgba(0, 0, 0, var(--vignette-opacity)) 100%
+    );
+  }
+
+  .modal-border-gradient {
+    position: relative;
+  }
+
+  .modal-border-gradient::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    background: conic-gradient(
+      from 140deg at 50% 50%,
+      var(--brand-pink) 0deg,
+      var(--brand-purple) 120deg,
+      var(--brand-blue) 240deg,
+      var(--brand-pink) 360deg
+    );
+    border-radius: inherit;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: xor;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+
+  @media (prefers-color-scheme: light) {
+    .bg-vignette {
+      background: radial-gradient(
+        circle at 50% 40%,
+        transparent 0%,
+        rgba(255, 255, 255, var(--vignette-opacity)) 100%
+      );
+    }
+  }
+
+  @keyframes brandColorCycle {
+    0% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8d75ff 100%
+      );
+    } /* purple start */
+    1% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8976ff 100%
+      );
+    }
+    2% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8577ff 100%
+      );
+    }
+    3% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8178ff 100%
+      );
+    }
+    4% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #7d79ff 100%
+      );
+    }
+    5% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #797aff 100%
+      );
+    }
+    6% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #757bff 100%
+      );
+    }
+    7% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #717cff 100%
+      );
+    }
+    8% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6d7dff 100%
+      );
+    }
+    9% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #697eff 100%
+      );
+    }
+    10% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #657fff 100%
+      );
+    }
+    11% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6180ff 100%
+      );
+    }
+    12% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6381ff 100%
+      );
+    }
+    13% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6582ff 100%
+      );
+    }
+    14% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6783ff 100%
+      );
+    }
+    15% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6984ff 100%
+      );
+    }
+    16% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6b85ff 100%
+      );
+    }
+    17% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6d86ff 100%
+      );
+    }
+    18% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6f87ff 100%
+      );
+    }
+    19% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #7188ff 100%
+      );
+    }
+    20% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #5fa8ff 100%
+      );
+    } /* blue */
+    21% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #5ca7fd 100%
+      );
+    }
+    22% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #59a6fb 100%
+      );
+    }
+    23% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #56a5f9 100%
+      );
+    }
+    24% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #53a4f7 100%
+      );
+    }
+    25% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #50a3f5 100%
+      );
+    }
+    26% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #4da2f3 100%
+      );
+    }
+    27% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #4aa1f1 100%
+      );
+    }
+    28% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #47a0ef 100%
+      );
+    }
+    29% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #449fed 100%
+      );
+    }
+    30% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #419eeb 100%
+      );
+    }
+    31% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #3e9de9 100%
+      );
+    }
+    32% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #3b9ce7 100%
+      );
+    }
+    33% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #389be5 100%
+      );
+    }
+    34% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #359ae3 100%
+      );
+    }
+    35% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #3299e1 100%
+      );
+    }
+    36% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #2f98df 100%
+      );
+    }
+    37% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #2c97dd 100%
+      );
+    }
+    38% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #2996db 100%
+      );
+    }
+    39% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #2695d9 100%
+      );
+    }
+    40% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #34c98f 100%
+      );
+    } /* green */
+    41% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #3dca91 100%
+      );
+    }
+    42% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #46cb93 100%
+      );
+    }
+    43% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #4fcc95 100%
+      );
+    }
+    44% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #58cd97 100%
+      );
+    }
+    45% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #61ce99 100%
+      );
+    }
+    46% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #6acf9b 100%
+      );
+    }
+    47% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #73d09d 100%
+      );
+    }
+    48% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #7cd19f 100%
+      );
+    }
+    49% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #85d2a1 100%
+      );
+    }
+    50% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8ed3a3 100%
+      );
+    }
+    51% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #97d4a5 100%
+      );
+    }
+    52% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #a0d5a7 100%
+      );
+    }
+    53% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #a9d6a9 100%
+      );
+    }
+    54% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #b2d7ab 100%
+      );
+    }
+    55% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #bbd8ad 100%
+      );
+    }
+    56% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #c4d9af 100%
+      );
+    }
+    57% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #cddab1 100%
+      );
+    }
+    58% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #d6dbb3 100%
+      );
+    }
+    59% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #dfdcb5 100%
+      );
+    }
+    60% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffd857 100%
+      );
+    } /* yellow */
+    61% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffd355 100%
+      );
+    }
+    62% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffce53 100%
+      );
+    }
+    63% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffc951 100%
+      );
+    }
+    64% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffc44f 100%
+      );
+    }
+    65% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffbf4d 100%
+      );
+    }
+    66% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffba4b 100%
+      );
+    }
+    67% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffb549 100%
+      );
+    }
+    68% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffb047 100%
+      );
+    }
+    69% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffab45 100%
+      );
+    }
+    70% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffa643 100%
+      );
+    }
+    71% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ffa141 100%
+      );
+    }
+    72% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff9c3f 100%
+      );
+    }
+    73% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff973d 100%
+      );
+    }
+    74% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff923b 100%
+      );
+    }
+    75% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff8d39 100%
+      );
+    }
+    76% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff7d47 100%
+      );
+    }
+    77% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff6d5f 100%
+      );
+    }
+    78% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff5d77 100%
+      );
+    }
+    79% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff4d8f 100%
+      );
+    }
+    80% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ef45cf 100%
+      );
+    } /* pink */
+    81% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f047d1 100%
+      );
+    }
+    82% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f149d3 100%
+      );
+    }
+    83% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f24bd5 100%
+      );
+    }
+    84% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f34dd7 100%
+      );
+    }
+    85% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f44fd9 100%
+      );
+    }
+    86% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f551db 100%
+      );
+    }
+    87% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f653dd 100%
+      );
+    }
+    88% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f755df 100%
+      );
+    }
+    89% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f857e1 100%
+      );
+    }
+    90% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f959e3 100%
+      );
+    }
+    91% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fa5be5 100%
+      );
+    }
+    92% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fb5de7 100%
+      );
+    }
+    93% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fc5fe9 100%
+      );
+    }
+    94% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fd61eb 100%
+      );
+    }
+    95% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fe63ed 100%
+      );
+    }
+    96% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #ff65ef 100%
+      );
+    }
+    97% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #fc67f1 100%
+      );
+    }
+    98% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f969f3 100%
+      );
+    }
+    99% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #f66bf5 100%
+      );
+    }
+    100% {
+      background: radial-gradient(
+        circle at 50% 50%,
+        var(--base-0) 0%,
+        #8d75ff 100%
+      );
+    } /* back to purple */
+  }
+
+  @keyframes rotateBg {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  .animate-hue-cycle {
+    animation: brandColorCycle 80s linear infinite;
+  }
+
+  .animate-rotate-bg {
+    animation: rotateBg 240s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-hue-cycle,
+    .animate-rotate-bg {
+      animation: none;
+    }
+  }
+}
