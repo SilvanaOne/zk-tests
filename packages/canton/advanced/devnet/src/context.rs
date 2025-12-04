@@ -346,3 +346,258 @@ impl ContractBlobsContext {
         contracts
     }
 }
+
+/// Contract info structure for individual contracts
+#[derive(Debug, Clone)]
+pub struct ContractInfo {
+    pub contract_id: String,
+    pub template_id: String,
+    pub created_event_blob: String,
+}
+
+/// Fetch ExternalPartyAmuletRules (TransferFactory) from Scan API
+pub async fn get_external_party_amulet_rules(scan_api_url: &str) -> anyhow::Result<ContractInfo> {
+    let client = create_client()?;
+    let url = format!("{}v0/external-party-amulet-rules", scan_api_url);
+
+    let response: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let contract_id = response
+        .pointer("/external_party_amulet_rules/contract/contract_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing contract_id in ExternalPartyAmuletRules response"))?
+        .to_string();
+
+    let template_id = response
+        .pointer("/external_party_amulet_rules/contract/template_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing template_id in ExternalPartyAmuletRules response"))?
+        .to_string();
+
+    let created_event_blob = response
+        .pointer("/external_party_amulet_rules/contract/created_event_blob")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing created_event_blob in ExternalPartyAmuletRules response"))?
+        .to_string();
+
+    Ok(ContractInfo {
+        contract_id,
+        template_id,
+        created_event_blob,
+    })
+}
+
+/// Fetch FeaturedAppRight for a specific provider from Scan API
+pub async fn get_featured_app_right_for_provider(scan_api_url: &str, provider: &str) -> anyhow::Result<ContractInfo> {
+    let client = create_client()?;
+    let url = format!("{}v0/featured-apps", scan_api_url);
+
+    let response: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let featured_apps = response
+        .get("featured_apps")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow::anyhow!("No featured_apps in response"))?;
+
+    // Find the FeaturedAppRight for the given provider
+    let app = featured_apps
+        .iter()
+        .find(|app| {
+            app.pointer("/payload/provider")
+                .and_then(|v| v.as_str())
+                .map(|p| p == provider)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| anyhow::anyhow!("No FeaturedAppRight found for provider {}", provider))?;
+
+    let contract_id = app
+        .get("contract_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing contract_id in FeaturedAppRight"))?
+        .to_string();
+
+    let template_id = app
+        .get("template_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing template_id in FeaturedAppRight"))?
+        .to_string();
+
+    let created_event_blob = app
+        .get("created_event_blob")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing created_event_blob in FeaturedAppRight"))?
+        .to_string();
+
+    Ok(ContractInfo {
+        contract_id,
+        template_id,
+        created_event_blob,
+    })
+}
+
+/// Fetch AmuletRules from Scan API
+pub async fn get_amulet_rules(scan_api_url: &str) -> anyhow::Result<ContractInfo> {
+    let client = create_client()?;
+    let url = format!("{}v0/dso", scan_api_url);
+
+    let response: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let contract_id = response
+        .pointer("/amulet_rules/contract/contract_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing contract_id in AmuletRules response"))?
+        .to_string();
+
+    let template_id = response
+        .pointer("/amulet_rules/contract/template_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing template_id in AmuletRules response"))?
+        .to_string();
+
+    let created_event_blob = response
+        .pointer("/amulet_rules/contract/created_event_blob")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing created_event_blob in AmuletRules response"))?
+        .to_string();
+
+    Ok(ContractInfo {
+        contract_id,
+        template_id,
+        created_event_blob,
+    })
+}
+
+/// Fetch OpenMiningRound from Scan API
+pub async fn get_open_mining_round(scan_api_url: &str) -> anyhow::Result<ContractInfo> {
+    let client = create_client()?;
+
+    // First get latest mining round as fallback
+    let dso_url = format!("{}v0/dso", scan_api_url);
+    let dso: serde_json::Value = client
+        .get(&dso_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let latest_cid = dso
+        .pointer("/latest_mining_round/contract/contract_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let latest_template_id = dso
+        .pointer("/latest_mining_round/contract/template_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let latest_blob = dso
+        .pointer("/latest_mining_round/contract/created_event_blob")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    // Try to get open mining rounds
+    let rounds_url = format!("{}v0/open-and-issuing-mining-rounds", scan_api_url);
+    let rounds_body = serde_json::json!({
+        "cached_open_mining_round_contract_ids": [],
+        "cached_issuing_round_contract_ids": []
+    });
+    let rounds_resp: serde_json::Value = client
+        .post(&rounds_url)
+        .json(&rounds_body)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await
+        .unwrap_or_else(|_| serde_json::json!({}));
+
+    // Find the current open round by sorting by opensAt
+    if let Some(obj) = rounds_resp.get("open_mining_rounds").and_then(|v| v.as_object()) {
+        let mut entries: Vec<(&String, &serde_json::Value)> = obj.iter().collect();
+        entries.sort_by_key(|(_, v)| {
+            v.pointer("/contract/payload/opensAt")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_default()
+        });
+
+        if let Some((_, first)) = entries.first() {
+            let contract_id = first
+                .pointer("/contract/contract_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let template_id = first
+                .pointer("/contract/template_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let created_event_blob = first
+                .pointer("/contract/created_event_blob")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if !contract_id.is_empty() {
+                return Ok(ContractInfo {
+                    contract_id,
+                    template_id,
+                    created_event_blob,
+                });
+            }
+        }
+    }
+
+    // Fallback to latest mining round
+    if latest_cid.is_empty() {
+        return Err(anyhow::anyhow!("No OpenMiningRound found"));
+    }
+
+    Ok(ContractInfo {
+        contract_id: latest_cid,
+        template_id: latest_template_id,
+        created_event_blob: latest_blob,
+    })
+}
+
+/// Fetch DSO party from Scan API
+pub async fn get_dso_party(scan_api_url: &str) -> anyhow::Result<String> {
+    let client = create_client()?;
+    let url = format!("{}v0/dso", scan_api_url);
+
+    let response: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let dso_party = response
+        .pointer("/amulet_rules/contract/payload/dso")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing dso party in AmuletRules response"))?
+        .to_string();
+
+    Ok(dso_party)
+}

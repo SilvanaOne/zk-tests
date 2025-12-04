@@ -57,7 +57,7 @@ pub struct AmuletInfo {
 }
 
 /// Find all Amulet contracts (locked and unlocked) for a specific party
-async fn find_amulets(
+pub async fn find_amulets(
     client: &reqwest::Client,
     api_url: &str,
     jwt: &str,

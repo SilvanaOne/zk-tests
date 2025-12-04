@@ -2,7 +2,9 @@ mod context;
 mod interactive;
 mod list;
 mod payment;
+mod preapproval;
 mod request;
+mod server;
 mod service;
 mod signing;
 
@@ -38,6 +40,57 @@ enum Commands {
     /// AdvancedPayment commands
     #[command(subcommand)]
     Payment(PaymentCommands),
+    /// Start HTTP REST API server
+    Start {
+        /// Port to listen on (default: 3030)
+        #[arg(short, long, default_value = "3030")]
+        port: u16,
+    },
+    /// TransferPreapproval commands for external party transfers
+    #[command(subcommand)]
+    Preapproval(PreapprovalCommands),
+}
+
+#[derive(Subcommand)]
+enum PreapprovalCommands {
+    /// Request TransferPreapproval for an external party (interactive submission)
+    Request {
+        /// Party ID of the external party (receiver)
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded Ed25519 private key
+        #[arg(long)]
+        private_key: String,
+    },
+    /// Accept all pending TransferPreapprovalProposals (provider action)
+    Accept,
+    /// Cancel all TransferPreapproval contracts for a party
+    Cancel {
+        /// Party ID (defaults to PARTY_PROVIDER if not specified)
+        #[arg(long)]
+        party_id: Option<String>,
+        /// JWT token (optional, uses JWT_PROVIDER if not specified)
+        #[arg(long)]
+        jwt: Option<String>,
+    },
+    /// Transfer Canton Coin using TransferPreapproval (interactive submission)
+    Transfer {
+        /// Party ID of the sender (external party)
+        #[arg(long)]
+        sender_party_id: String,
+        /// Base58-encoded Ed25519 private key of the sender
+        #[arg(long)]
+        sender_private_key: String,
+        /// Party ID of the receiver
+        #[arg(long)]
+        receiver_party_id: String,
+        /// Amount to transfer (in CC)
+        #[arg(long)]
+        amount: String,
+        /// Description of the transfer (optional)
+        #[arg(long)]
+        description: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -306,6 +359,34 @@ async fn main() -> Result<()> {
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
                 payment::handle_topup(payment_cid, amount, new_expires, amulet_cids, party_id, private_key).await?
+            }
+        },
+        Commands::Start { port } => server::start_server(port).await?,
+        Commands::Preapproval(cmd) => match cmd {
+            PreapprovalCommands::Request { party_id, private_key } => {
+                preapproval::handle_request_preapproval(party_id, private_key).await?;
+            }
+            PreapprovalCommands::Accept => {
+                preapproval::handle_accept_preapprovals().await?;
+            }
+            PreapprovalCommands::Cancel { party_id, jwt } => {
+                preapproval::handle_cancel_preapprovals(party_id, jwt).await?;
+            }
+            PreapprovalCommands::Transfer {
+                sender_party_id,
+                sender_private_key,
+                receiver_party_id,
+                amount,
+                description,
+            } => {
+                preapproval::handle_transfer(
+                    sender_party_id,
+                    sender_private_key,
+                    receiver_party_id,
+                    amount,
+                    description,
+                )
+                .await?;
             }
         },
     }
