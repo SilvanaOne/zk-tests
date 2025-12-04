@@ -163,9 +163,9 @@ enum PaymentCommands {
         /// Amount to add (in CC)
         #[arg(short, long)]
         amount: String,
-        /// New expiry time (must be after existing expiry)
+        /// New expiry time (must be after existing expiry). Default: 1 day from now
         #[arg(short, long)]
-        new_expires: String,
+        new_expires: Option<String>,
         /// Comma-separated list of Amulet contract IDs to use as funds
         #[arg(short = 'c', long, value_delimiter = ',')]
         amulet_cids: Vec<String>,
@@ -229,7 +229,13 @@ async fn main() -> Result<()> {
                 amount,
                 new_expires,
                 amulet_cids,
-            } => payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?,
+            } => {
+                let new_expires = new_expires.unwrap_or_else(|| {
+                    let one_day_from_now = Utc::now() + Duration::days(1);
+                    one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                });
+                payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?
+            }
         },
         Commands::Service(cmd) => match cmd {
             ServiceCommands::Create { service_description } => {
