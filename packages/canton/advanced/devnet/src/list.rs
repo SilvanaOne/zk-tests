@@ -473,7 +473,7 @@ async fn find_app_service_requests(
     Ok(requests)
 }
 
-pub async fn handle_list(party: Option<String>) -> Result<()> {
+pub async fn handle_list(party: Option<String>, user_party: Option<String>) -> Result<()> {
     info!("Listing amulets and advanced payment contracts (devnet)");
 
     // Devnet uses single API endpoint and JWT for all parties
@@ -481,8 +481,6 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_user = std::env::var("PARTY_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER not set"))?;
     let party_app = std::env::var("PARTY_APP")
         .map_err(|_| anyhow::anyhow!("PARTY_APP not set"))?;
     let party_provider = std::env::var("PARTY_PROVIDER")
@@ -499,11 +497,22 @@ pub async fn handle_list(party: Option<String>) -> Result<()> {
         format!("{}/", api_url)
     };
 
-    let show_user = party.is_none() || party.as_deref() == Some("user");
+    // Show user section only if user_party is provided (or explicitly requested with --party user)
+    let show_user = user_party.is_some() || party.as_deref() == Some("user");
     let show_app = party.is_none() || party.as_deref() == Some("app");
     let show_provider = party.is_none() || party.as_deref() == Some("provider");
 
     if show_user {
+        // For user section, we need user_party to be set
+        let party_user = match &user_party {
+            Some(p) => p.clone(),
+            None => {
+                return Err(anyhow::anyhow!(
+                    "User party ID required. Use --user-party <PARTY_ID> to specify the user."
+                ));
+            }
+        };
+
         println!("\n=== USER ({}) ===", party_user);
 
         // List amulets

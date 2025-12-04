@@ -25,6 +25,7 @@ import { getLoopHoldings, getLoopActiveContracts, signLoopMessage, verifyLoopSig
 import { createPhantomPreapprovalProposal } from "@/lib/phantom-preapproval";
 import { createSolflarePreapprovalProposal } from "@/lib/solflare-preapproval";
 import { createSolflareTransfer } from "@/lib/solflare-transfer";
+import { acceptAdvancedPaymentRequest, type AcceptResult } from "@/lib/solflare-accept-request";
 import { signSolflareTransactionHash } from "@/lib/solflare";
 import { fetchContractDetails, decodeCIP56HoldingBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
 import { getHoldingsFromLedger, getActiveContractsFromLedger, getPreapprovalsFromLedger } from "@/lib/ledger-api";
@@ -129,6 +130,11 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
   // Preapproval contracts state (from Loop SDK)
   const [acceptedPreapprovals, setAcceptedPreapprovals] = useState<PreapprovalContract[]>([]);
   const [preapprovalContractsLoading, setPreapprovalContractsLoading] = useState(false);
+
+  // Accept Advanced Payment Request state (Solflare only)
+  const [acceptRequestCid, setAcceptRequestCid] = useState("");
+  const [acceptRequestStatus, setAcceptRequestStatus] = useState<"idle" | "awaiting" | "loading" | "success" | "error">("idle");
+  const [acceptRequestResult, setAcceptRequestResult] = useState<AcceptResult | null>(null);
 
   // CIP-56 Holdings state
   const [cip56Holdings, setCip56Holdings] = useState<CIP56Holding[]>([]);
@@ -620,6 +626,45 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
       console.error("[LoopWallet] Preapproval error:", error);
       setPreapprovalResult({ success: false, error: error?.message || "Failed to create preapproval" });
       setPreapprovalStatus("error");
+    }
+  };
+
+  // Handle Accept Advanced Payment Request (Solflare only)
+  const handleAcceptRequest = async () => {
+    if (!isConnected || !acceptRequestCid.trim() || !loopPartyId || walletType !== "solflare") return;
+
+    setAcceptRequestStatus("awaiting");
+    setAcceptRequestResult(null);
+
+    try {
+      // Get package ID from env (provider hint is handled server-side via PARTY_SETTLEMENT_OPERATOR)
+      const packageId = process.env.NEXT_PUBLIC_ADVANCED_PAYMENT_PACKAGE_ID ||
+        "b688939b6beb9b42866b0a0c34a5fb8e03c54a3e3e8c4ba3fe5a9ff9c31780f2";
+
+      console.log("[LoopWallet] Accepting advanced payment request...");
+      console.log("[LoopWallet] Request CID:", acceptRequestCid.trim());
+      console.log("[LoopWallet] Party ID:", loopPartyId);
+      console.log("[LoopWallet] Package ID:", packageId);
+
+      const result = await acceptAdvancedPaymentRequest({
+        senderPartyId: loopPartyId,
+        requestContractId: acceptRequestCid.trim(),
+        packageId,
+      });
+
+      setAcceptRequestResult(result);
+      setAcceptRequestStatus(result.success ? "success" : "error");
+
+      if (result.success) {
+        // Clear input and refresh holdings after successful accept
+        setAcceptRequestCid("");
+        fetchHoldings();
+        fetchActiveContracts();
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Accept request error:", error);
+      setAcceptRequestResult({ success: false, error: error?.message || "Failed to accept request" });
+      setAcceptRequestStatus("error");
     }
   };
 
@@ -1331,6 +1376,99 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
             </Alert>
           )}
         </div>
+
+        {/* Accept Advanced Payment Request Section (Solflare only) */}
+        {walletType === "solflare" && (
+          <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Accept Advanced Payment Request
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Accept an AdvancedPaymentRequest by locking your CC. Your unlocked Amulet contracts will be automatically used.
+            </p>
+            <div>
+              <label className="text-xs text-muted-foreground">Request Contract ID</label>
+              <Input
+                placeholder="Enter request contract ID..."
+                value={acceptRequestCid}
+                onChange={(e) => setAcceptRequestCid(e.target.value)}
+                className="bg-input border-border focus:border-primary text-foreground font-mono text-xs placeholder:text-muted-foreground h-8 mt-1"
+              />
+            </div>
+            <Button
+              onClick={handleAcceptRequest}
+              disabled={!acceptRequestCid.trim() || acceptRequestStatus === "loading" || acceptRequestStatus === "awaiting"}
+              className="w-full bg-gradient-to-r from-brand-green via-brand-blue to-brand-purple hover:brightness-105 text-white h-8 text-xs"
+            >
+              {acceptRequestStatus === "loading" && (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              )}
+              <CheckCircle className="mr-2 h-3 w-3" />
+              Accept Request
+            </Button>
+            {acceptRequestStatus === "awaiting" && (
+              <Alert className="mt-2 p-2 bg-brand-yellow/10 border-brand-yellow/30">
+                <Loader2 className="h-4 w-4 animate-spin text-brand-yellow" />
+                <AlertTitle className="text-sm text-foreground">Awaiting Signature</AlertTitle>
+                <AlertDescription className="text-xs">
+                  <p className="text-muted-foreground">
+                    Please sign the transaction in the Solflare popup.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+            {acceptRequestStatus === "error" && acceptRequestResult && (
+              <Alert variant="destructive" className="mt-2 p-2">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle className="text-sm">Accept Failed</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {acceptRequestResult.error || "Unknown error occurred"}
+                </AlertDescription>
+              </Alert>
+            )}
+            {acceptRequestStatus === "success" && acceptRequestResult && (
+              <Alert
+                variant="default"
+                className="mt-2 p-2 bg-muted/30 border-border"
+              >
+                <CheckCircle className="h-4 w-4 text-brand-green" />
+                <AlertTitle className="text-sm text-foreground">
+                  Request Accepted
+                </AlertTitle>
+                <AlertDescription className="space-y-1 text-xs">
+                  <p className="text-muted-foreground">
+                    AdvancedPayment contract created. Your CC has been locked.
+                  </p>
+                  {acceptRequestResult.submissionId && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-muted-foreground shrink-0">Submission:</span>
+                      <span
+                        className="font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                        title="Click to copy"
+                        onClick={() => navigator.clipboard.writeText(acceptRequestResult.submissionId!)}
+                      >
+                        {acceptRequestResult.submissionId}
+                      </span>
+                    </div>
+                  )}
+                  {acceptRequestResult.updateId && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-muted-foreground shrink-0">Update ID:</span>
+                      <span
+                        className="font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                        title="Click to copy"
+                        onClick={() => navigator.clipboard.writeText(acceptRequestResult.updateId!)}
+                      >
+                        {acceptRequestResult.updateId}
+                      </span>
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
 
         {/* Sign Message Section */}
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">

@@ -71,6 +71,77 @@ function getFingerprintFromParty(partyId: string): string | null {
   return parts[1];
 }
 
+/**
+ * Poll the completions endpoint to get the real updateId for a submission.
+ * The execute response is empty, so we need to poll completions.
+ */
+async function pollForUpdateId(
+  ledgerApiBaseUrl: string,
+  jwt: string,
+  userId: string,
+  partyId: string,
+  submissionId: string,
+  maxAttempts: number = 20,
+  delayMs: number = 1000
+): Promise<string | null> {
+  const url = `${ledgerApiBaseUrl}/api/json-api/v2/commands/completions?stream_idle_timeout_ms=2000`;
+
+  const payload = {
+    userId,
+    parties: [partyId],
+    beginExclusive: "0",
+  };
+
+  console.log("[pollForUpdateId] Polling completions for submission:", submissionId);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${jwt}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        console.log(`[pollForUpdateId] Attempt ${attempt + 1}: HTTP ${response.status}`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      const responseText = await response.text();
+      let completions: any[] = [];
+      try {
+        completions = JSON.parse(responseText);
+      } catch {
+        // Not valid JSON array
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      // Find completion matching our submission_id
+      for (const completion of completions) {
+        const comp = completion?.completionResponse?.Completion?.value;
+        if (comp?.submissionId === submissionId && comp?.updateId) {
+          console.log("[pollForUpdateId] Found updateId:", comp.updateId);
+          return comp.updateId;
+        }
+      }
+
+      // Not found yet, wait and retry
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    } catch (error) {
+      console.error(`[pollForUpdateId] Attempt ${attempt + 1} error:`, error);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  console.log("[pollForUpdateId] Could not find updateId after", maxAttempts, "attempts");
+  return null;
+}
+
 // ============================================================================
 // Server Actions
 // ============================================================================
@@ -317,14 +388,25 @@ export async function executeInteractiveSubmission(params: ExecuteParams): Promi
       return { success: false, error: errorMessage };
     }
 
-    console.log("[executeInteractiveSubmission] Canton execute succeeded:", {
-      updateId: responseData.updateId,
+    console.log("[executeInteractiveSubmission] Canton execute succeeded, polling for updateId...");
+
+    // Execute response is empty per Canton API spec, poll completions to get updateId
+    const updateId = await pollForUpdateId(
+      ledgerApiBaseUrl,
+      jwt,
+      userId,
+      externalPartyId,
+      submissionId
+    );
+
+    console.log("[executeInteractiveSubmission] Final result:", {
       submissionId,
+      updateId: updateId || "(not found, using submissionId)",
     });
 
     return {
       success: true,
-      updateId: responseData.updateId || submissionId,
+      updateId: updateId || submissionId,
       submissionId,
     };
   } catch (error: any) {

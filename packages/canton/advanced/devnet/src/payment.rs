@@ -154,24 +154,25 @@ pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option
 }
 
 /// Owner unlocks partial amount from AdvancedPayment
-pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
+pub async fn handle_unlock(
+    payment_cid: String,
+    amount: String,
+    party_id: String,
+    private_key: String,
+) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Unlocking from AdvancedPayment (devnet)");
 
     let api_url = std::env::var("LEDGER_API_URL")
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_user = std::env::var("PARTY_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER not set"))?;
-    let user_private_key = std::env::var("PARTY_USER_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse user's private key (Base58 format)
-    let user_seed = parse_base58_private_key(&user_private_key)?;
+    let user_seed = parse_base58_private_key(&private_key)?;
 
     // Fetch contract blobs context for AppTransferContext
     info!("Fetching contract context from Scan API...");
@@ -207,7 +208,7 @@ pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
         &client,
         &api_url,
         &jwt,
-        &party_user,
+        &party_id,
         &synchronizer_id,
         &user_seed,
         commands,
@@ -223,13 +224,13 @@ pub async fn handle_unlock(payment_cid: String, amount: String) -> Result<()> {
 
     // Fetch update to see new contract
     let update_payload = json!({
-        "actAs": [party_user],
+        "actAs": [&party_id],
         "updateId": result.update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_user: {
+                        &party_id: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {
@@ -363,24 +364,24 @@ pub async fn handle_cancel(payment_cid: String) -> Result<()> {
 }
 
 /// Owner expires AdvancedPayment after lock expiry
-pub async fn handle_expire(payment_cid: String) -> Result<()> {
+pub async fn handle_expire(
+    payment_cid: String,
+    party_id: String,
+    private_key: String,
+) -> Result<()> {
     info!(payment_cid = %payment_cid, "Expiring AdvancedPayment (devnet)");
 
     let api_url = std::env::var("LEDGER_API_URL")
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_user = std::env::var("PARTY_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER not set"))?;
-    let user_private_key = std::env::var("PARTY_USER_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse user's private key (Base58 format)
-    let user_seed = parse_base58_private_key(&user_private_key)?;
+    let user_seed = parse_base58_private_key(&private_key)?;
 
     // Fetch contract blobs context for AppTransferContext
     info!("Fetching contract context from Scan API...");
@@ -415,7 +416,7 @@ pub async fn handle_expire(payment_cid: String) -> Result<()> {
         &client,
         &api_url,
         &jwt,
-        &party_user,
+        &party_id,
         &synchronizer_id,
         &user_seed,
         commands,
@@ -436,6 +437,8 @@ pub async fn handle_topup(
     amount: String,
     new_expires: String,
     amulet_cids: Vec<String>,
+    party_id: String,
+    private_key: String,
 ) -> Result<()> {
     info!(payment_cid = %payment_cid, amount = %amount, "Topping up AdvancedPayment (devnet)");
 
@@ -443,17 +446,13 @@ pub async fn handle_topup(
         .map_err(|_| anyhow::anyhow!("LEDGER_API_URL not set"))?;
     let jwt = std::env::var("JWT").map_err(|_| anyhow::anyhow!("JWT not set"))?;
 
-    let party_user = std::env::var("PARTY_USER")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER not set"))?;
-    let user_private_key = std::env::var("PARTY_USER_PRIVATE_KEY")
-        .map_err(|_| anyhow::anyhow!("PARTY_USER_PRIVATE_KEY not set"))?;
     let package_id = std::env::var("ADVANCED_PAYMENT_PACKAGE_ID")
         .map_err(|_| anyhow::anyhow!("ADVANCED_PAYMENT_PACKAGE_ID not set"))?;
     let synchronizer_id = std::env::var("SYNCHRONIZER_ID")
         .map_err(|_| anyhow::anyhow!("SYNCHRONIZER_ID not set"))?;
 
     // Parse user's private key (Base58 format)
-    let user_seed = parse_base58_private_key(&user_private_key)?;
+    let user_seed = parse_base58_private_key(&private_key)?;
 
     // Fetch contract blobs context for AppTransferContext
     info!("Fetching contract context from Scan API...");
@@ -491,7 +490,7 @@ pub async fn handle_topup(
         &client,
         &api_url,
         &jwt,
-        &party_user,
+        &party_id,
         &synchronizer_id,
         &user_seed,
         commands,
@@ -507,13 +506,13 @@ pub async fn handle_topup(
 
     // Fetch update to see new contract
     let update_payload = json!({
-        "actAs": [party_user],
+        "actAs": [&party_id],
         "updateId": result.update_id,
         "updateFormat": {
             "includeTransactions": {
                 "eventFormat": {
                     "filtersByParty": {
-                        &party_user: {
+                        &party_id: {
                             "cumulative": [{
                                 "identifierFilter": {
                                     "WildcardFilter": {

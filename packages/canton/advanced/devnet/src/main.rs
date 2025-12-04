@@ -22,9 +22,12 @@ struct Cli {
 enum Commands {
     /// List amulets and advanced payment contracts
     List {
-        /// Filter by party: "user" or "provider" (default: both)
+        /// Filter by party: "user", "app", or "provider" (default: all except user)
         #[arg(short, long)]
         party: Option<String>,
+        /// User party ID to show user assets (optional)
+        #[arg(long)]
+        user_party: Option<String>,
     },
     /// AppService management commands
     #[command(subcommand)]
@@ -100,6 +103,9 @@ enum RequestCommands {
         /// External reference (invoice, order ID)
         #[arg(long)]
         reference: Option<String>,
+        /// Owner party ID (user who will fund the payment)
+        #[arg(short, long)]
+        user: String,
     },
     /// Accept an AdvancedPaymentRequest (owner action)
     Accept {
@@ -109,6 +115,12 @@ enum RequestCommands {
         /// Comma-separated list of Amulet contract IDs to use as funds (required)
         #[arg(short, long, value_delimiter = ',', required = true)]
         amulet_cids: Vec<String>,
+        /// Party ID of the user
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded private key
+        #[arg(long)]
+        private_key: String,
     },
     /// Reject an AdvancedPaymentRequest (owner action)
     Reject {
@@ -118,6 +130,12 @@ enum RequestCommands {
         /// Reason for rejection
         #[arg(long)]
         reason: Option<String>,
+        /// Party ID of the user
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded private key
+        #[arg(long)]
+        private_key: String,
     },
     /// Cancel an AdvancedPaymentRequest (app action)
     Cancel {
@@ -149,6 +167,12 @@ enum PaymentCommands {
         /// Amount to unlock (in CC)
         #[arg(short, long)]
         amount: String,
+        /// Party ID of the user
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded private key
+        #[arg(long)]
+        private_key: String,
     },
     /// Cancel AdvancedPayment and return funds to owner (app action)
     Cancel {
@@ -161,6 +185,12 @@ enum PaymentCommands {
         /// Contract ID of the AdvancedPayment
         #[arg(short, long)]
         payment_cid: String,
+        /// Party ID of the user
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded private key
+        #[arg(long)]
+        private_key: String,
     },
     /// Top up AdvancedPayment with additional funds (owner action)
     Topup {
@@ -176,6 +206,12 @@ enum PaymentCommands {
         /// Comma-separated list of Amulet contract IDs to use as funds
         #[arg(short = 'c', long, value_delimiter = ',')]
         amulet_cids: Vec<String>,
+        /// Party ID of the user
+        #[arg(long)]
+        party_id: String,
+        /// Base58-encoded private key
+        #[arg(long)]
+        private_key: String,
     },
 }
 
@@ -192,7 +228,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::List { party } => list::handle_list(party).await?,
+        Commands::List { party, user_party } => list::handle_list(party, user_party).await?,
         Commands::Service(cmd) => match cmd {
             ServiceCommands::Create { service_description } => {
                 service::handle_create_service_request(service_description).await?
@@ -220,19 +256,22 @@ async fn main() -> Result<()> {
                 expires,
                 description,
                 reference,
+                user,
             } => {
                 let expires = expires.unwrap_or_else(|| {
                     let one_day_from_now = Utc::now() + Duration::days(1);
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
-                request::handle_create_request(service_cid, amount, minimum, expires, description, reference).await?
+                request::handle_create_request(service_cid, amount, minimum, expires, description, reference, user).await?
             }
             RequestCommands::Accept {
                 request_cid,
                 amulet_cids,
-            } => request::handle_accept_request(request_cid, amulet_cids).await?,
-            RequestCommands::Reject { request_cid, reason } => {
-                request::handle_reject_request(request_cid, reason).await?
+                party_id,
+                private_key,
+            } => request::handle_accept_request(request_cid, amulet_cids, party_id, private_key).await?,
+            RequestCommands::Reject { request_cid, reason, party_id, private_key } => {
+                request::handle_reject_request(request_cid, reason, party_id, private_key).await?
             }
             RequestCommands::Cancel { request_cid } => {
                 request::handle_cancel_request(request_cid).await?
@@ -247,20 +286,26 @@ async fn main() -> Result<()> {
             PaymentCommands::Unlock {
                 payment_cid,
                 amount,
-            } => payment::handle_unlock(payment_cid, amount).await?,
+                party_id,
+                private_key,
+            } => payment::handle_unlock(payment_cid, amount, party_id, private_key).await?,
             PaymentCommands::Cancel { payment_cid } => payment::handle_cancel(payment_cid).await?,
-            PaymentCommands::Expire { payment_cid } => payment::handle_expire(payment_cid).await?,
+            PaymentCommands::Expire { payment_cid, party_id, private_key } => {
+                payment::handle_expire(payment_cid, party_id, private_key).await?
+            }
             PaymentCommands::Topup {
                 payment_cid,
                 amount,
                 new_expires,
                 amulet_cids,
+                party_id,
+                private_key,
             } => {
                 let new_expires = new_expires.unwrap_or_else(|| {
                     let one_day_from_now = Utc::now() + Duration::days(1);
                     one_day_from_now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                 });
-                payment::handle_topup(payment_cid, amount, new_expires, amulet_cids).await?
+                payment::handle_topup(payment_cid, amount, new_expires, amulet_cids, party_id, private_key).await?
             }
         },
     }
