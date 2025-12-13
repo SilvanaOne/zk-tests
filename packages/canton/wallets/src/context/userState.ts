@@ -7,6 +7,7 @@ import React, {
   ReactNode,
   useCallback,
   useState,
+  useEffect,
 } from "react";
 import { getWalletById } from "@/lib/wallet";
 import type {
@@ -17,7 +18,7 @@ import type {
   WalletConnectionResult,
   WalletType,
 } from "@/lib/types";
-import { initLoop, connectLoop as loopConnect, getLoopPartyId as getPartyId } from "@/lib/loop";
+import { initLoop, connectLoop as loopConnect, getLoopPartyId as getPartyId, disconnectLoop, hasStoredSession, isProviderAvailable, verifySession, restoreSession } from "@/lib/loop";
 import { connectPhantom as phantomConnect, disconnectPhantom } from "@/lib/phantom";
 import { connectSolflare as solflareConnect, disconnectSolflare } from "@/lib/solflare";
 import { getPartyIdFromSolanaKey } from "@/lib/phantom-mapping";
@@ -485,6 +486,7 @@ export const UserStateProvider: React.FC<{
 
   // Disconnect current wallet
   const disconnectWallet = useCallback(() => {
+    console.log("[userState] disconnectWallet called, type:", connectedWalletType);
     if (connectedWalletType === "phantom") {
       disconnectPhantom();
       setPhantomPartyId(null);
@@ -496,11 +498,13 @@ export const UserStateProvider: React.FC<{
       setSolflareSolanaKey(null);
     }
     if (connectedWalletType === "loop") {
+      disconnectLoop();  // Clear Loop SDK state and localStorage
       setLoopPartyId(null);
       setLoopPublicKey(null);
     }
     setConnectedWalletType(null);
     dispatch({ type: "RESET_ALL_CONNECTIONS" });
+    console.log("[userState] Wallet disconnected");
   }, [connectedWalletType, dispatch]);
 
   const getConnectionState = useCallback(
@@ -592,6 +596,68 @@ export const UserStateProvider: React.FC<{
   const getSelectedAuthMethod = useCallback(() => {
     return state.selectedAuthMethod;
   }, [state.selectedAuthMethod]);
+
+  // Session verification on mount - restore Loop session if valid
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window === "undefined") return;
+
+    // Check if we have a stored session but no provider
+    if (hasStoredSession() && !isProviderAvailable()) {
+      console.log("[userState] Found stored session but no provider, verifying...");
+
+      // First verify the session token is still valid with the server
+      verifySession()
+        .then((account) => {
+          if (account) {
+            // Session token is valid, now restore provider
+            console.log("[userState] Session token valid, restoring provider for:", account.partyId);
+            // Initialize Loop SDK with callbacks before restoring
+            initLoop(
+              {
+                onConnect: (provider) => {
+                  console.log("[userState] Loop session restored:", provider.party_id);
+                  setLoopPartyId(provider.party_id);
+                  setLoopPublicKey(provider.public_key);
+                  setConnectedWalletType("loop");
+
+                  const newConnection: UserWalletStatus = {
+                    loginType: "wallet",
+                    chain: "canton",
+                    wallet: "Loop",
+                    walletId: "loop-canton",
+                    isConnected: true,
+                    isConnectionFailed: false,
+                    isConnecting: false,
+                    address: provider.party_id,
+                    publicKey: provider.public_key,
+                  };
+
+                  dispatch({
+                    type: "SET_WALLET_CONNECTED",
+                    payload: { walletId: "loop-canton", connection: newConnection },
+                  });
+                },
+                onReject: () => {
+                  console.log("[userState] Loop session restore rejected");
+                  disconnectLoop();
+                },
+              },
+              "devnet"
+            );
+            restoreSession();
+          } else {
+            // Session expired or invalid, clear everything
+            console.log("[userState] Session invalid, clearing auth");
+            disconnectLoop();
+          }
+        })
+        .catch((err) => {
+          console.error("[userState] Session verification error:", err);
+          disconnectLoop();
+        });
+    }
+  }, []); // Run only once on mount
 
   const contextValue: UserStateContextType = {
     state,

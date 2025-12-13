@@ -77,7 +77,7 @@ export default function HomePage() {
                   {/* Connected Wallet Info */}
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/50 border border-border/50">
                     <Image
-                      src={walletInfo.walletType === "loop" ? "/loop.svg" : walletInfo.walletType === "phantom" ? "/phantom.svg" : "/solflare.svg"}
+                      src={walletInfo.walletType === "loop" ? "/loop.png" : walletInfo.walletType === "phantom" ? "/phantom.svg" : "/solflare.svg"}
                       alt={walletInfo.walletName || ""}
                       width={20}
                       height={20}
@@ -199,7 +199,7 @@ export default function HomePage() {
               >
                 <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
                   <Image
-                    src="/loop.svg"
+                    src="/loop.png"
                     alt="Loop"
                     width={32}
                     height={32}

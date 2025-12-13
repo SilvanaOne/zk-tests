@@ -5,6 +5,16 @@ export type { ActiveContract };
 
 export type LoopNetwork = "devnet" | "testnet" | "mainnet";
 
+// Interface for stored session data in localStorage
+interface LoopConnectSession {
+  sessionId?: string;
+  ticketId?: string;
+  authToken?: string;
+  partyId?: string;
+  publicKey?: string;
+  email?: string;
+}
+
 // Use window object to store provider to avoid module instance duplication issues in Next.js
 declare global {
   interface Window {
@@ -48,6 +58,106 @@ function setCallbacks(callbacks: { onConnect?: (provider: LoopProvider) => void;
   if (typeof window !== "undefined") {
     window.__loopCallbacks = callbacks;
   }
+}
+
+// Get stored session from localStorage
+function getStoredSession(): LoopConnectSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem("loop_connect");
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
+// Get API URL based on network
+function getApiUrl(): string {
+  const network = getNetwork();
+  switch (network) {
+    case "devnet":
+      return "https://devnet.cantonloop.com";
+    case "testnet":
+      return "https://testnet.cantonloop.com";
+    case "mainnet":
+      return "https://cantonloop.com";
+  }
+}
+
+/**
+ * Checks if there's a stored session (without verifying with server).
+ */
+export function hasStoredSession(): boolean {
+  const session = getStoredSession();
+  return !!(session?.authToken && session?.partyId);
+}
+
+/**
+ * Checks if the Loop provider is available in memory.
+ */
+export function isProviderAvailable(): boolean {
+  return getProvider() !== null;
+}
+
+/**
+ * Verifies if the current session is still valid by checking with the Loop server.
+ * Returns the account info if valid, null if expired/invalid.
+ */
+export async function verifySession(): Promise<{ partyId: string; publicKey: string } | null> {
+  const session = getStoredSession();
+  if (!session?.authToken) {
+    console.log("[loop.ts] No auth token found in session");
+    return null;
+  }
+
+  try {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/v1/.connect/pair/account`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.log("[loop.ts] Session verification failed:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data?.party_id || !data?.public_key) {
+      console.log("[loop.ts] Invalid session response - missing party_id or public_key");
+      return null;
+    }
+
+    console.log("[loop.ts] Session verified successfully:", data.party_id);
+    return {
+      partyId: data.party_id,
+      publicKey: data.public_key,
+    };
+  } catch (error) {
+    console.error("[loop.ts] Session verification error:", error);
+    return null;
+  }
+}
+
+/**
+ * Attempts to restore provider from stored session.
+ * This calls loop.connect() which will check localStorage,
+ * verify with server, and if valid, create provider and call onAccept.
+ * Returns true if restoration was attempted (has stored session), false otherwise.
+ */
+export function restoreSession(): boolean {
+  if (!hasStoredSession()) {
+    console.log("[loop.ts] No stored session to restore");
+    return false;
+  }
+
+  console.log("[loop.ts] Attempting to restore session from storage");
+  loop.connect();
+  return true;
 }
 
 export function initLoop(
@@ -104,11 +214,16 @@ export function getCurrentNetwork(): LoopNetwork {
 }
 
 export function disconnectLoop() {
-  // Clear local storage to logout (Loop SDK stores session in 'loop_connect')
+  console.log("[loop.ts] disconnectLoop called");
+  // Clear local storage (Loop SDK stores session in 'loop_connect')
   if (typeof window !== "undefined") {
     localStorage.removeItem("loop_connect");
   }
+  // Clear the provider reference
   setProvider(null);
+  // Clear callbacks to avoid stale closures on next connect
+  setCallbacks({});
+  console.log("[loop.ts] Loop session cleared");
 }
 
 export async function getLoopHoldings(): Promise<Holding[] | null> {

@@ -437,3 +437,414 @@ export function decodeCIP56HoldingBlob(base64Blob: string): CIP56HoldingCreateAr
     return null;
   }
 }
+
+/**
+ * CredentialOffer contract create_arguments structure
+ */
+export interface CredentialOfferCreateArguments {
+  operator: string;
+  issuer: string;
+  holder: string;
+  dso: string;
+  id: string;
+  description: string;
+  billingParams?: {
+    feePerDayUsd?: { rate: string };
+    billingPeriodMinutes?: string;
+    depositTargetAmountUsd?: string;
+  };
+  depositInitialAmountUsd?: string;
+  claims?: Array<{
+    property: string;
+    subject: string;
+    value: string;
+  }>;
+}
+
+/**
+ * Credential contract create_arguments structure
+ * Based on Daml template: Utility.Credential.V0.Credential:Credential
+ */
+export interface CredentialCreateArguments {
+  issuer: string;
+  holder: string;
+  id: string;
+  description: string;
+  validFrom?: string; // Optional Time as ISO string
+  validUntil?: string; // Optional Time as ISO string
+  claims: Array<{
+    subject: string;
+    property: string;
+    value: string;
+  }>;
+}
+
+/**
+ * BillingState structure for CredentialBilling
+ */
+export interface BillingState {
+  createdAt: string;
+  status: "New" | "Success" | "Failure";
+  lastBilledInRound: string;
+  lastBilledAt: string;
+  billedUntil: string;
+  totalCcFeesPaidIssuerCc: string;
+  totalCcFeesPaidHolderCc: string;
+}
+
+/**
+ * BalanceState structure for CredentialBilling
+ */
+export interface BalanceState {
+  totalUserDepositCc: string;
+  totalCredentialFeesPaidCc: string;
+  totalDistributedCc: string;
+  totalPaidOutCc: string;
+  currentDepositAmountCc: string;
+}
+
+/**
+ * CredentialBilling contract create_arguments structure
+ * Based on Daml template: Utility.Credential.App.V0.Model.Billing:CredentialBilling
+ */
+export interface CredentialBillingCreateArguments {
+  operator: string;
+  issuer: string;
+  holder: string;
+  dso: string;
+  credentialId: string;
+  params: {
+    feePerDayUsd: { rate: string };
+    billingPeriodMinutes: string;
+    depositTargetAmountUsd: string;
+    holderActivityWeight?: string;
+  };
+  balanceState: BalanceState;
+  billingState: BillingState;
+}
+
+/**
+ * Decodes a CredentialOffer contract from its createdEventBlob
+ *
+ * CredentialOffer fields (in order based on Daml template):
+ *   0: operator (Party)
+ *   1: issuer (Party)
+ *   2: holder (Party)
+ *   3: dso (Party)
+ *   4: id (Text)
+ *   5: description (Text)
+ *   6: claims (List of Claim records)
+ *   7: billingParams (Optional BillingParams record)
+ *   8: depositInitialAmountUsd (Optional Decimal)
+ *
+ * @param base64Blob - The base64-encoded createdEventBlob
+ * @returns Decoded CredentialOffer arguments or null if decoding fails
+ */
+export function decodeCredentialOfferBlob(base64Blob: string): CredentialOfferCreateArguments | null {
+  try {
+    const decoded = decodeContractBlob(base64Blob);
+    if (!decoded || !decoded.fields) {
+      console.error("[blob.ts] Failed to decode CredentialOffer: no fields");
+      return null;
+    }
+
+    const fields = decoded.fields.fields;
+    console.log("[blob.ts] Decoding CredentialOffer fields count:", fields.length);
+
+    if (fields.length < 6) {
+      console.error(`[blob.ts] CredentialOffer has insufficient fields: ${fields.length}`);
+      return null;
+    }
+
+    // Extract billingParams (field 7) - Optional record
+    let billingParams: CredentialOfferCreateArguments["billingParams"] = undefined;
+    if (fields.length > 7 && fields[7]?.value?.sum.case === "optional") {
+      const optionalValue = fields[7].value.sum.value;
+      if (optionalValue.value) {
+        const billingRecord = extractRecord(optionalValue.value);
+        if (billingRecord && billingRecord.fields.length >= 3) {
+          // BillingParams fields: feePerDayUsd, billingPeriodMinutes, depositTargetAmountUsd
+          const feeRecord = extractRecord(billingRecord.fields[0]?.value);
+          billingParams = {
+            feePerDayUsd: feeRecord ? { rate: extractStringValue(feeRecord.fields[0]?.value) } : undefined,
+            billingPeriodMinutes: extractStringValue(billingRecord.fields[1]?.value),
+            depositTargetAmountUsd: extractStringValue(billingRecord.fields[2]?.value),
+          };
+        }
+      }
+    }
+
+    // Extract depositInitialAmountUsd (field 8) - Optional Decimal
+    let depositInitialAmountUsd: string | undefined = undefined;
+    if (fields.length > 8 && fields[8]?.value?.sum.case === "optional") {
+      const optionalValue = fields[8].value.sum.value;
+      if (optionalValue.value) {
+        depositInitialAmountUsd = extractStringValue(optionalValue.value);
+      }
+    }
+
+    // Extract claims (field 6) - List of Claim records
+    const claims: CredentialOfferCreateArguments["claims"] = [];
+    if (fields.length > 6 && fields[6]?.value?.sum.case === "list") {
+      const listValue = fields[6].value.sum.value;
+      for (const item of listValue.elements) {
+        const claimRecord = extractRecord(item);
+        if (claimRecord && claimRecord.fields.length >= 3) {
+          claims.push({
+            property: extractStringValue(claimRecord.fields[0]?.value),
+            subject: extractStringValue(claimRecord.fields[1]?.value),
+            value: extractStringValue(claimRecord.fields[2]?.value),
+          });
+        }
+      }
+    }
+
+    return {
+      operator: extractStringValue(fields[0]?.value),
+      issuer: extractStringValue(fields[1]?.value),
+      holder: extractStringValue(fields[2]?.value),
+      dso: extractStringValue(fields[3]?.value),
+      id: extractStringValue(fields[4]?.value),
+      description: extractStringValue(fields[5]?.value),
+      claims: claims.length > 0 ? claims : undefined,
+      billingParams,
+      depositInitialAmountUsd,
+    };
+  } catch (error) {
+    console.error("[blob.ts] Failed to decode CredentialOffer blob:", error);
+    return null;
+  }
+}
+
+/**
+ * Decodes a Credential contract from its createdEventBlob
+ *
+ * Credential fields (in order based on Daml template):
+ *   0: issuer (Party)
+ *   1: holder (Party)
+ *   2: id (Text)
+ *   3: description (Text)
+ *   4: validFrom (Optional Time)
+ *   5: validUntil (Optional Time)
+ *   6: claims (List of Claim records)
+ *   7: observers (Set Party)
+ *
+ * @param base64Blob - The base64-encoded createdEventBlob
+ * @returns Decoded Credential arguments or null if decoding fails
+ */
+export function decodeCredentialBlob(base64Blob: string): CredentialCreateArguments | null {
+  try {
+    const decoded = decodeContractBlob(base64Blob);
+    if (!decoded || !decoded.fields) {
+      console.error("[blob.ts] Failed to decode Credential: no fields");
+      return null;
+    }
+
+    const fields = decoded.fields.fields;
+    console.log("[blob.ts] Decoding Credential fields count:", fields.length);
+
+    if (fields.length < 7) {
+      console.error(`[blob.ts] Credential has insufficient fields: ${fields.length}`);
+      return null;
+    }
+
+    // Extract validFrom (field 4) - Optional Time
+    let validFrom: string | undefined = undefined;
+    if (fields[4]?.value?.sum.case === "optional") {
+      const optionalValue = fields[4].value.sum.value;
+      if (optionalValue.value && optionalValue.value.sum.case === "timestamp") {
+        // Timestamp is in microseconds
+        const microseconds = Number(optionalValue.value.sum.value);
+        validFrom = new Date(microseconds / 1000).toISOString();
+      }
+    }
+
+    // Extract validUntil (field 5) - Optional Time
+    let validUntil: string | undefined = undefined;
+    if (fields[5]?.value?.sum.case === "optional") {
+      const optionalValue = fields[5].value.sum.value;
+      if (optionalValue.value && optionalValue.value.sum.case === "timestamp") {
+        const microseconds = Number(optionalValue.value.sum.value);
+        validUntil = new Date(microseconds / 1000).toISOString();
+      }
+    }
+
+    // Extract claims (field 6) - List of Claim records
+    const claims: CredentialCreateArguments["claims"] = [];
+    if (fields[6]?.value?.sum.case === "list") {
+      const listValue = fields[6].value.sum.value;
+      for (const item of listValue.elements) {
+        const claimRecord = extractRecord(item);
+        if (claimRecord && claimRecord.fields.length >= 3) {
+          claims.push({
+            subject: extractStringValue(claimRecord.fields[0]?.value),
+            property: extractStringValue(claimRecord.fields[1]?.value),
+            value: extractStringValue(claimRecord.fields[2]?.value),
+          });
+        }
+      }
+    }
+
+    return {
+      issuer: extractStringValue(fields[0]?.value),
+      holder: extractStringValue(fields[1]?.value),
+      id: extractStringValue(fields[2]?.value),
+      description: extractStringValue(fields[3]?.value),
+      validFrom,
+      validUntil,
+      claims,
+    };
+  } catch (error) {
+    console.error("[blob.ts] Failed to decode Credential blob:", error);
+    return null;
+  }
+}
+
+/**
+ * Helper to extract timestamp from a Value
+ */
+function extractTimestamp(value: Value | undefined): string {
+  if (!value) return "";
+  if (value.sum.case === "timestamp") {
+    const microseconds = Number(value.sum.value);
+    return new Date(microseconds / 1000).toISOString();
+  }
+  return "";
+}
+
+/**
+ * Helper to extract optional timestamp from a Value
+ */
+function extractOptionalTimestamp(value: Value | undefined): string | undefined {
+  if (!value || value.sum.case !== "optional") return undefined;
+  const optionalValue = value.sum.value;
+  if (optionalValue.value) {
+    return extractTimestamp(optionalValue.value);
+  }
+  return undefined;
+}
+
+/**
+ * Decodes a CredentialBilling contract from its createdEventBlob
+ *
+ * CredentialBilling fields (in order based on Daml template):
+ *   0: operator (Party)
+ *   1: issuer (Party)
+ *   2: holder (Party)
+ *   3: dso (Party)
+ *   4: credentialId (Text)
+ *   5: params (BillingParams record)
+ *   6: balanceState (BalanceState record)
+ *   7: billingState (BillingState record)
+ *   8: deposits (List of ContractId)
+ *
+ * @param base64Blob - The base64-encoded createdEventBlob
+ * @returns Decoded CredentialBilling arguments or null if decoding fails
+ */
+export function decodeCredentialBillingBlob(base64Blob: string): CredentialBillingCreateArguments | null {
+  try {
+    const decoded = decodeContractBlob(base64Blob);
+    if (!decoded || !decoded.fields) {
+      console.error("[blob.ts] Failed to decode CredentialBilling: no fields");
+      return null;
+    }
+
+    const fields = decoded.fields.fields;
+    console.log("[blob.ts] Decoding CredentialBilling fields count:", fields.length);
+
+    if (fields.length < 8) {
+      console.error(`[blob.ts] CredentialBilling has insufficient fields: ${fields.length}`);
+      return null;
+    }
+
+    // Extract params (field 5) - BillingParams record
+    const paramsRecord = extractRecord(fields[5]?.value);
+    const params = {
+      feePerDayUsd: { rate: "0" },
+      billingPeriodMinutes: "0",
+      depositTargetAmountUsd: "0",
+      holderActivityWeight: undefined as string | undefined,
+    };
+    if (paramsRecord && paramsRecord.fields.length >= 3) {
+      // BillingParams: feePerDayUsd (RatePerDay), billingPeriodMinutes (Int), depositTargetAmountUsd (Decimal)
+      const feeRecord = extractRecord(paramsRecord.fields[0]?.value);
+      if (feeRecord && feeRecord.fields.length >= 1) {
+        params.feePerDayUsd = { rate: extractStringValue(feeRecord.fields[0]?.value) };
+      }
+      params.billingPeriodMinutes = extractStringValue(paramsRecord.fields[1]?.value);
+      params.depositTargetAmountUsd = extractStringValue(paramsRecord.fields[2]?.value);
+      if (paramsRecord.fields.length > 3) {
+        // Optional holderActivityWeight
+        if (paramsRecord.fields[3]?.value?.sum.case === "optional") {
+          const optVal = paramsRecord.fields[3].value.sum.value;
+          if (optVal.value) {
+            params.holderActivityWeight = extractStringValue(optVal.value);
+          }
+        }
+      }
+    }
+
+    // Extract balanceState (field 6) - BalanceState record
+    const balanceRecord = extractRecord(fields[6]?.value);
+    const balanceState: BalanceState = {
+      totalUserDepositCc: "0",
+      totalCredentialFeesPaidCc: "0",
+      totalDistributedCc: "0",
+      totalPaidOutCc: "0",
+      currentDepositAmountCc: "0",
+    };
+    if (balanceRecord && balanceRecord.fields.length >= 5) {
+      balanceState.totalUserDepositCc = extractStringValue(balanceRecord.fields[0]?.value);
+      balanceState.totalCredentialFeesPaidCc = extractStringValue(balanceRecord.fields[1]?.value);
+      balanceState.totalDistributedCc = extractStringValue(balanceRecord.fields[2]?.value);
+      balanceState.totalPaidOutCc = extractStringValue(balanceRecord.fields[3]?.value);
+      balanceState.currentDepositAmountCc = extractStringValue(balanceRecord.fields[4]?.value);
+    }
+
+    // Extract billingState (field 7) - BillingState record
+    const billingRecord = extractRecord(fields[7]?.value);
+    const billingState: BillingState = {
+      createdAt: "",
+      status: "New",
+      lastBilledInRound: "0",
+      lastBilledAt: "",
+      billedUntil: "",
+      totalCcFeesPaidIssuerCc: "0",
+      totalCcFeesPaidHolderCc: "0",
+    };
+    if (billingRecord && billingRecord.fields.length >= 7) {
+      // BillingState: createdAt, status, lastBilledInRound, lastBilledAt, billedUntil, totalCcFeesPaidIssuerCc, totalCcFeesPaidHolderCc
+      billingState.createdAt = extractTimestamp(billingRecord.fields[0]?.value);
+
+      // Status is a variant/enum: New | Success | Failure
+      const statusField = billingRecord.fields[1]?.value;
+      if (statusField?.sum.case === "variant") {
+        // Variant uses constructor$ ($ suffix because constructor is reserved in JS)
+        billingState.status = statusField.sum.value.constructor$ as "New" | "Success" | "Failure";
+      } else if (statusField?.sum.case === "enum") {
+        // Enum uses value
+        billingState.status = statusField.sum.value.value as "New" | "Success" | "Failure";
+      }
+
+      billingState.lastBilledInRound = extractStringValue(billingRecord.fields[2]?.value);
+      billingState.lastBilledAt = extractTimestamp(billingRecord.fields[3]?.value);
+      billingState.billedUntil = extractTimestamp(billingRecord.fields[4]?.value);
+      billingState.totalCcFeesPaidIssuerCc = extractStringValue(billingRecord.fields[5]?.value);
+      billingState.totalCcFeesPaidHolderCc = extractStringValue(billingRecord.fields[6]?.value);
+    }
+
+    return {
+      operator: extractStringValue(fields[0]?.value),
+      issuer: extractStringValue(fields[1]?.value),
+      holder: extractStringValue(fields[2]?.value),
+      dso: extractStringValue(fields[3]?.value),
+      credentialId: extractStringValue(fields[4]?.value),
+      params,
+      balanceState,
+      billingState,
+    };
+  } catch (error) {
+    console.error("[blob.ts] Failed to decode CredentialBilling blob:", error);
+    return null;
+  }
+}

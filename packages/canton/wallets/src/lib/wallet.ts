@@ -27,7 +27,7 @@ export const walletOptions: WalletOption[] = [
     id: "loop-canton",
     name: "Loop",
     chain: "canton",
-    logo: "/loop.svg",
+    logo: "/loop.png",
     type: "wallet",
     description: "Canton Network",
   },

@@ -1,6 +1,9 @@
 //! Axum HTTP server for Advanced Payment API.
 //!
 //! Exposes CLI commands as REST endpoints.
+//!
+//! Types are auto-generated from openapi.yaml via OpenAPI Generator.
+//! Run `make openapi-generate` to regenerate types after modifying openapi.yaml.
 
 use std::sync::Arc;
 
@@ -10,13 +13,70 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 use crate::context::{create_client, ContractBlobsContext};
 use crate::interactive::submit_interactive;
 use crate::signing::{extract_user_id_from_jwt, parse_base58_private_key};
+
+// Re-export generated REQUEST types from openapi.yaml
+// These are the types that are deserialized from incoming JSON requests.
+// They are auto-generated to match the OpenAPI specification exactly.
+pub use api_generated::models::{
+    // Request types - Service
+    ServiceRequestCreateRequest,
+    ServiceRequestAcceptRequest,
+    ServiceRequestRejectRequest,
+    ServiceRequestCancelRequest,
+    ServiceTerminateRequest,
+    ServiceListRequest,
+    // Request types - Payment Request
+    PaymentRequestCreateRequest,
+    PaymentRequestAcceptRequest,
+    PaymentRequestRejectRequest,
+    PaymentRequestCancelRequest,
+    // Request types - Payment
+    PaymentWithdrawRequest,
+    PaymentUnlockRequest,
+    PaymentCancelRequest,
+    PaymentExpireRequest,
+    PaymentTopupRequest,
+    // Request types - List
+    ListAmuletsRequest,
+    ListPaymentsRequest,
+    ListRequestsRequest,
+    // Request types - Preapproval
+    PreapprovalRequestRequest,
+    PreapprovalAcceptRequest,
+    PreapprovalCancelRequest,
+    PreapprovalTransferRequest,
+};
+
+// Type aliases to preserve backward compatibility with handler signatures
+pub type ServiceRequestCreateReq = ServiceRequestCreateRequest;
+pub type ServiceRequestAcceptReq = ServiceRequestAcceptRequest;
+pub type ServiceRequestRejectReq = ServiceRequestRejectRequest;
+pub type ServiceRequestCancelReq = ServiceRequestCancelRequest;
+pub type ServiceTerminateReq = ServiceTerminateRequest;
+pub type ServiceListReq = ServiceListRequest;
+pub type PaymentRequestCreateReq = PaymentRequestCreateRequest;
+pub type PaymentRequestAcceptReq = PaymentRequestAcceptRequest;
+pub type PaymentRequestRejectReq = PaymentRequestRejectRequest;
+pub type PaymentRequestCancelReq = PaymentRequestCancelRequest;
+pub type PaymentWithdrawReq = PaymentWithdrawRequest;
+pub type PaymentUnlockReq = PaymentUnlockRequest;
+pub type PaymentCancelReq = PaymentCancelRequest;
+pub type PaymentExpireReq = PaymentExpireRequest;
+pub type PaymentTopupReq = PaymentTopupRequest;
+pub type ListAmuletsReq = ListAmuletsRequest;
+pub type ListPaymentsReq = ListPaymentsRequest;
+pub type ListRequestsReq = ListRequestsRequest;
+pub type PreapprovalRequestReq = PreapprovalRequestRequest;
+pub type PreapprovalAcceptReq = PreapprovalAcceptRequest;
+pub type PreapprovalCancelReq = PreapprovalCancelRequest;
+pub type PreapprovalTransferReq = PreapprovalTransferRequest;
 
 /// Shared application state
 #[derive(Clone)]
@@ -64,6 +124,11 @@ impl AppState {
 }
 
 // ============= Response Types =============
+// Note: We define response types locally to avoid the double_option pattern
+// from the generated code. These are serialized to JSON responses, not deserialized
+// from requests, so we can use simpler Option<String> for nullable fields.
+// The generated types use Option<Option<String>> to distinguish between
+// "field is missing" and "field is null", but for our responses we don't need this.
 
 #[derive(Serialize)]
 pub struct SubmissionResult {
@@ -147,183 +212,6 @@ pub struct AppServiceRequestInfo {
     pub provider: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub service_description: Option<String>,
-}
-
-// ============= Request Types =============
-
-#[derive(Deserialize)]
-pub struct ServiceRequestCreateReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub service_description: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceRequestAcceptReq {
-    pub jwt: Option<String>,
-    pub request_cid: String,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceRequestRejectReq {
-    pub jwt: Option<String>,
-    pub request_cid: String,
-    pub reason: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceRequestCancelReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub request_cid: String,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceTerminateReq {
-    pub jwt: Option<String>,
-    pub service_cid: String,
-}
-
-#[derive(Deserialize, Default)]
-pub struct ServiceListReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentRequestCreateReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub service_cid: String,
-    pub buyer_party_id: String,
-    pub amount: String,
-    pub minimum: String,
-    pub expires: Option<String>,
-    pub description: Option<String>,
-    pub reference: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentRequestAcceptReq {
-    pub jwt: Option<String>,
-    pub buyer_party_id: String,
-    pub buyer_private_key: String,
-    pub request_cid: String,
-    pub amulet_cids: Vec<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentRequestRejectReq {
-    pub jwt: Option<String>,
-    pub buyer_party_id: String,
-    pub buyer_private_key: String,
-    pub request_cid: String,
-    pub reason: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentRequestCancelReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub request_cid: String,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentWithdrawReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub payment_cid: String,
-    pub amount: String,
-    pub reason: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentUnlockReq {
-    pub jwt: Option<String>,
-    pub buyer_party_id: String,
-    pub buyer_private_key: String,
-    pub payment_cid: String,
-    pub amount: String,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentCancelReq {
-    pub jwt: Option<String>,
-    pub seller_party_id: Option<String>,
-    pub seller_private_key: Option<String>,
-    pub payment_cid: String,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentExpireReq {
-    pub jwt: Option<String>,
-    pub buyer_party_id: String,
-    pub buyer_private_key: String,
-    pub payment_cid: String,
-}
-
-#[derive(Deserialize)]
-pub struct PaymentTopupReq {
-    pub jwt: Option<String>,
-    pub buyer_party_id: String,
-    pub buyer_private_key: String,
-    pub payment_cid: String,
-    pub amount: String,
-    pub new_expires: Option<String>,
-    pub amulet_cids: Vec<String>,
-}
-
-#[derive(Deserialize)]
-pub struct ListAmuletsReq {
-    pub jwt: Option<String>,
-    pub party_id: String,
-}
-
-#[derive(Deserialize)]
-pub struct ListPaymentsReq {
-    pub jwt: Option<String>,
-    pub party_id: String,
-}
-
-#[derive(Deserialize)]
-pub struct ListRequestsReq {
-    pub jwt: Option<String>,
-    pub party_id: String,
-}
-
-// --- Preapproval Request Types ---
-
-#[derive(Deserialize)]
-pub struct PreapprovalRequestReq {
-    pub jwt: Option<String>,
-    pub party_id: String,
-    pub private_key: String,
-}
-
-#[derive(Deserialize)]
-pub struct PreapprovalAcceptReq {
-    pub jwt: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PreapprovalCancelReq {
-    pub jwt: Option<String>,
-    pub party_id: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct PreapprovalTransferReq {
-    pub jwt: Option<String>,
-    pub sender_party_id: String,
-    pub sender_private_key: String,
-    pub receiver_party_id: String,
-    pub amount: String,
-    pub description: Option<String>,
 }
 
 // ============= Handler Helpers =============
@@ -1614,7 +1502,7 @@ async fn preapproval_transfer_handler(
         req.sender_private_key,
         req.receiver_party_id,
         req.amount,
-        req.description,
+        req.description.flatten(), // Convert Option<Option<String>> to Option<String>
     )
     .await
     .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed: {}", e)))?;

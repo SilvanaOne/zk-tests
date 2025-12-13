@@ -27,11 +27,14 @@ import { createSolflarePreapprovalProposal } from "@/lib/solflare-preapproval";
 import { createSolflareTransfer } from "@/lib/solflare-transfer";
 import { acceptAdvancedPaymentRequest } from "@/lib/solflare-accept-request";
 import { acceptAdvancedPaymentRequestLoop, type AcceptResult } from "@/lib/loop-accept-request";
+import { createUserServiceRequest } from "@/lib/request-service";
+import { acceptCredentialOffer } from "@/lib/accept-credential-offer";
 import { signSolflareTransactionHash } from "@/lib/solflare";
-import { fetchContractDetails, decodeCIP56HoldingBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments } from "@/lib/blob";
+import { fetchContractDetails, decodeCIP56HoldingBlob, decodeCredentialOfferBlob, decodeCredentialBlob, decodeCredentialBillingBlob, decodeContractBlob, type TransferPreapprovalCreateArguments, type AmuletCreateArguments, type ContractDetails, type CIP56HoldingCreateArguments, type CredentialOfferCreateArguments, type CredentialCreateArguments, type CredentialBillingCreateArguments } from "@/lib/blob";
 import { getHoldingsFromLedger, getActiveContractsFromLedger, getPreapprovalsFromLedger } from "@/lib/ledger-api";
 import type { LedgerHolding, LedgerActiveContract } from "@/lib/ledger-api-types";
 import type { Holding } from "@fivenorth/loop-sdk";
+import { fetchAllTokenMetadata, getTokenMetadata, type TokenMetadata } from "@/lib/token-metadata";
 
 // Type for preapproval contract with decoded details
 interface PreapprovalContract {
@@ -41,6 +44,84 @@ interface PreapprovalContract {
   receiver: string;
   expiresAt?: string;
   createdAt?: string;
+}
+
+// Type for UserService contract
+interface UserServiceContract {
+  contractId: string;
+  templateId: string;
+  operator: string;
+  user: string;
+  dso: string;
+}
+
+// Type for UserServiceRequest contract
+interface UserServiceRequestContract {
+  contractId: string;
+  templateId: string;
+  operator: string;
+  user: string;
+}
+
+// Type for CredentialOffer contract
+interface CredentialOfferContract {
+  contractId: string;
+  templateId: string;
+  operator: string;
+  issuer: string;
+  holder: string;
+  dso: string;
+  id: string;
+  description: string;
+  billingParams?: {
+    feePerDayUsd?: { rate: string };
+    billingPeriodMinutes?: string;
+    depositTargetAmountUsd?: string;
+  };
+  depositInitialAmountUsd?: string;
+}
+
+// Type for Credential contract (active subscription)
+interface CredentialContract {
+  contractId: string;
+  templateId: string;
+  issuer: string;
+  holder: string;
+  id: string;
+  description: string;
+  validFrom?: string;
+  validUntil?: string;
+  claims: Array<{
+    subject: string;
+    property: string;
+    value: string;
+  }>;
+}
+
+// Type for CredentialBilling contract
+interface CredentialBillingContract {
+  contractId: string;
+  templateId: string;
+  operator: string;
+  issuer: string;
+  holder: string;
+  dso: string;
+  credentialId: string;
+  params: {
+    feePerDayUsd: { rate: string };
+    billingPeriodMinutes: string;
+    depositTargetAmountUsd: string;
+  };
+  balanceState: {
+    currentDepositAmountCc: string;
+    totalUserDepositCc: string;
+    totalCredentialFeesPaidCc: string;
+  };
+  billingState: {
+    status: "New" | "Success" | "Failure";
+    billedUntil: string;
+    createdAt: string;
+  };
 }
 
 // Type for Amulet contract with decoded details from Lighthouse API
@@ -137,10 +218,42 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
   const [acceptRequestStatus, setAcceptRequestStatus] = useState<"idle" | "awaiting" | "loading" | "success" | "error">("idle");
   const [acceptRequestResult, setAcceptRequestResult] = useState<AcceptResult | null>(null);
 
+  // Request Service state
+  const [requestServiceOperator, setRequestServiceOperator] = useState("");
+  const [requestServiceStatus, setRequestServiceStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [requestServiceResult, setRequestServiceResult] = useState<{
+    success: boolean;
+    contractId?: string;
+    updateId?: string;
+    error?: string;
+  } | null>(null);
+
+  // User Service Status state
+  const [userServices, setUserServices] = useState<UserServiceContract[]>([]);
+  const [userServiceRequests, setUserServiceRequests] = useState<UserServiceRequestContract[]>([]);
+  const [userServiceStatusLoading, setUserServiceStatusLoading] = useState(false);
+
+  // Credential Offers state
+  const [credentialOffers, setCredentialOffers] = useState<CredentialOfferContract[]>([]);
+  const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
+  const [acceptOfferResult, setAcceptOfferResult] = useState<{
+    success: boolean;
+    credentialCid?: string;
+    error?: string;
+  } | null>(null);
+
+  // Active Credentials state (accepted subscriptions)
+  const [credentials, setCredentials] = useState<CredentialContract[]>([]);
+  const [credentialBillings, setCredentialBillings] = useState<CredentialBillingContract[]>([]);
+
   // CIP-56 Holdings state
   const [cip56Holdings, setCip56Holdings] = useState<CIP56Holding[]>([]);
   const [cip56HoldingsLoading, setCip56HoldingsLoading] = useState(false);
   const [cip56HoldingsError, setCip56HoldingsError] = useState<string | null>(null);
+
+  // Token metadata state (for CIP-56 token images)
+  const [tokenMetadataMap, setTokenMetadataMap] = useState<Map<string, TokenMetadata>>(new Map());
+  const [tokenMetadataLoaded, setTokenMetadataLoaded] = useState(false);
 
   // Ledger API holdings state (for Solflare/Phantom)
   const [ledgerHoldings, setLedgerHoldings] = useState<LedgerHolding[]>([]);
@@ -407,14 +520,312 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     }
   }, [isConnected, loopPartyId, walletType]);
 
+  // Fetch token metadata for CIP-56 holdings (logo URLs, names, etc.)
+  const fetchTokenMetadata = useCallback(async () => {
+    if (tokenMetadataLoaded) return;
+
+    console.log("[LoopWallet] Fetching token metadata...");
+    try {
+      const metadata = await fetchAllTokenMetadata();
+      console.log("[LoopWallet] Token metadata result:", metadata);
+
+      // Build a map keyed by instrumentAdmin::instrumentId
+      const metadataMap = new Map<string, TokenMetadata>();
+      for (const token of metadata) {
+        const key = `${token.instrumentAdmin}::${token.instrumentId}`;
+        metadataMap.set(key, token);
+      }
+      setTokenMetadataMap(metadataMap);
+      setTokenMetadataLoaded(true);
+    } catch (error) {
+      console.error("[LoopWallet] Failed to fetch token metadata:", error);
+    }
+  }, [tokenMetadataLoaded]);
+
+  // Helper to get token metadata for a CIP-56 holding
+  const getHoldingMetadata = useCallback((holding: CIP56Holding): TokenMetadata | undefined => {
+    const key = `${holding.instrumentAdmin}::${holding.instrumentId}`;
+    return tokenMetadataMap.get(key);
+  }, [tokenMetadataMap]);
+
+  // Fetch UserService and UserServiceRequest contracts
+  const fetchUserServiceStatus = useCallback(async () => {
+    console.log("[LoopWallet] fetchUserServiceStatus called, isConnected:", isConnected, "walletType:", walletType);
+    if (!isConnected || !loopPartyId) return;
+
+    // Only for Loop wallet (uses Loop SDK to query contracts)
+    if (walletType !== "loop") {
+      console.log("[LoopWallet] Skipping user service status for non-Loop wallet");
+      return;
+    }
+
+    setUserServiceStatusLoading(true);
+    try {
+      const packageName = process.env.NEXT_PUBLIC_UTILITY_CREDENTIAL_PACKAGE_NAME || "utility-credential-app-v0";
+
+      // Fetch UserService contracts
+      const serviceContracts = await getLoopActiveContracts({
+        templateId: `#${packageName}:Utility.Credential.App.V0.Service.User:UserService`
+      });
+
+      console.log("[LoopWallet] UserService contracts:", serviceContracts);
+
+      if (serviceContracts && serviceContracts.length > 0) {
+        const services: UserServiceContract[] = serviceContracts.map(contract => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const blob = createdEvent?.createdEventBlob || contract.createdEventBlob || "";
+
+          // Try to decode the blob to get operator
+          let operator = "";
+          let user = "";
+          let dso = "";
+
+          if (blob) {
+            const decoded = decodeContractBlob(blob);
+            if (decoded && decoded.fields) {
+              const fields = decoded.fields.fields;
+              // UserService fields: operator (0), user (1), dso (2)
+              if (fields.length >= 3) {
+                operator = fields[0]?.value?.sum.case === "party" ? fields[0].value.sum.value : "";
+                user = fields[1]?.value?.sum.case === "party" ? fields[1].value.sum.value : "";
+                dso = fields[2]?.value?.sum.case === "party" ? fields[2].value.sum.value : "";
+              }
+            }
+          }
+
+          // Fallback to createArguments
+          const createArgs = createdEvent?.createArguments || {};
+          console.log("[LoopWallet] UserService decoded - operator:", operator, "user:", user);
+
+          return {
+            contractId: createdEvent?.contractId || createdEvent?.contract_id || "",
+            templateId: createdEvent?.templateId || "",
+            operator: operator || createArgs.operator || "",
+            user: user || createArgs.user || "",
+            dso: dso || createArgs.dso || "",
+          };
+        });
+        setUserServices(services);
+      } else {
+        setUserServices([]);
+      }
+
+      // Fetch UserServiceRequest contracts
+      const requestContracts = await getLoopActiveContracts({
+        templateId: `#${packageName}:Utility.Credential.App.V0.Service.User:UserServiceRequest`
+      });
+
+      console.log("[LoopWallet] UserServiceRequest contracts:", requestContracts);
+
+      if (requestContracts && requestContracts.length > 0) {
+        const requests: UserServiceRequestContract[] = requestContracts.map(contract => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const createArgs = createdEvent?.createArguments || {};
+          return {
+            contractId: createdEvent?.contractId || createdEvent?.contract_id || "",
+            templateId: createdEvent?.templateId || "",
+            operator: createArgs.operator || "",
+            user: createArgs.user || "",
+          };
+        });
+        setUserServiceRequests(requests);
+      } else {
+        setUserServiceRequests([]);
+      }
+
+      // Fetch CredentialOffer contracts (where user is the holder)
+      const offerContracts = await getLoopActiveContracts({
+        templateId: `#${packageName}:Utility.Credential.App.V0.Model.Offer:CredentialOffer`
+      });
+
+      console.log("[LoopWallet] CredentialOffer contracts:", offerContracts);
+
+      if (offerContracts && offerContracts.length > 0) {
+        const offers: CredentialOfferContract[] = offerContracts.map(contract => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const contractId = createdEvent?.contractId || createdEvent?.contract_id || contract.contract_id || "";
+          const templateId = createdEvent?.templateId || "";
+          const blob = createdEvent?.createdEventBlob || contract.createdEventBlob || "";
+
+          // Try to decode the blob first
+          if (blob) {
+            const decoded = decodeCredentialOfferBlob(blob);
+            if (decoded) {
+              console.log("[LoopWallet] Decoded CredentialOffer from blob:", decoded);
+              return {
+                contractId,
+                templateId,
+                operator: decoded.operator,
+                issuer: decoded.issuer,
+                holder: decoded.holder,
+                dso: decoded.dso,
+                id: decoded.id,
+                description: decoded.description,
+                billingParams: decoded.billingParams,
+                depositInitialAmountUsd: decoded.depositInitialAmountUsd,
+              };
+            }
+          }
+
+          // Fallback to createArguments if blob decoding fails
+          const args = createdEvent?.createArguments || contract.payload || {};
+          console.log("[LoopWallet] CredentialOffer fallback args:", JSON.stringify(args, null, 2));
+          return {
+            contractId,
+            templateId,
+            operator: args.operator || "",
+            issuer: args.issuer || "",
+            holder: args.holder || "",
+            dso: args.dso || "",
+            id: args.id || "",
+            description: args.description || "",
+            billingParams: args.billingParams,
+            depositInitialAmountUsd: args.depositInitialAmountUsd,
+          };
+        });
+        console.log("[LoopWallet] Mapped offers:", offers);
+        setCredentialOffers(offers);
+      } else {
+        setCredentialOffers([]);
+      }
+
+      // Fetch active Credential contracts (accepted credentials)
+      const credentialContracts = await getLoopActiveContracts({
+        templateId: `#utility-credential-v0:Utility.Credential.V0.Credential:Credential`
+      });
+
+      console.log("[LoopWallet] Credential contracts:", credentialContracts);
+
+      if (credentialContracts && credentialContracts.length > 0) {
+        const creds: CredentialContract[] = credentialContracts.map(contract => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const contractId = createdEvent?.contractId || createdEvent?.contract_id || contract.contract_id || "";
+          const templateId = createdEvent?.templateId || "";
+          const blob = createdEvent?.createdEventBlob || contract.createdEventBlob || "";
+
+          // Try to decode the blob first
+          if (blob) {
+            const decoded = decodeCredentialBlob(blob);
+            if (decoded) {
+              console.log("[LoopWallet] Decoded Credential from blob:", decoded);
+              return {
+                contractId,
+                templateId,
+                issuer: decoded.issuer,
+                holder: decoded.holder,
+                id: decoded.id,
+                description: decoded.description,
+                validFrom: decoded.validFrom,
+                validUntil: decoded.validUntil,
+                claims: decoded.claims,
+              };
+            }
+          }
+
+          // Fallback to createArguments if blob decoding fails
+          const args = createdEvent?.createArguments || contract.payload || {};
+          return {
+            contractId,
+            templateId,
+            issuer: args.issuer || "",
+            holder: args.holder || "",
+            id: args.id || "",
+            description: args.description || "",
+            validFrom: args.validFrom,
+            validUntil: args.validUntil,
+            claims: args.claims || [],
+          };
+        });
+        console.log("[LoopWallet] Mapped credentials:", creds);
+        setCredentials(creds);
+      } else {
+        setCredentials([]);
+      }
+
+      // Fetch CredentialBilling contracts
+      const billingContracts = await getLoopActiveContracts({
+        templateId: `#${packageName}:Utility.Credential.App.V0.Model.Billing:CredentialBilling`
+      });
+
+      console.log("[LoopWallet] CredentialBilling contracts:", billingContracts);
+
+      if (billingContracts && billingContracts.length > 0) {
+        const billings: CredentialBillingContract[] = billingContracts.map(contract => {
+          const createdEvent = contract.contractEntry?.JsActiveContract?.createdEvent;
+          const contractId = createdEvent?.contractId || createdEvent?.contract_id || contract.contract_id || "";
+          const templateId = createdEvent?.templateId || "";
+          const blob = createdEvent?.createdEventBlob || contract.createdEventBlob || "";
+
+          // Try to decode the blob first
+          if (blob) {
+            const decoded = decodeCredentialBillingBlob(blob);
+            if (decoded) {
+              console.log("[LoopWallet] Decoded CredentialBilling from blob:", decoded);
+              return {
+                contractId,
+                templateId,
+                operator: decoded.operator,
+                issuer: decoded.issuer,
+                holder: decoded.holder,
+                dso: decoded.dso,
+                credentialId: decoded.credentialId,
+                params: decoded.params,
+                balanceState: {
+                  currentDepositAmountCc: decoded.balanceState.currentDepositAmountCc,
+                  totalUserDepositCc: decoded.balanceState.totalUserDepositCc,
+                  totalCredentialFeesPaidCc: decoded.balanceState.totalCredentialFeesPaidCc,
+                },
+                billingState: {
+                  status: decoded.billingState.status,
+                  billedUntil: decoded.billingState.billedUntil,
+                  createdAt: decoded.billingState.createdAt,
+                },
+              };
+            }
+          }
+
+          // Fallback to createArguments if blob decoding fails
+          const args = createdEvent?.createArguments || contract.payload || {};
+          return {
+            contractId,
+            templateId,
+            operator: args.operator || "",
+            issuer: args.issuer || "",
+            holder: args.holder || "",
+            dso: args.dso || "",
+            credentialId: args.credentialId || "",
+            params: args.params || { feePerDayUsd: { rate: "0" }, billingPeriodMinutes: "0", depositTargetAmountUsd: "0" },
+            balanceState: args.balanceState || { currentDepositAmountCc: "0", totalUserDepositCc: "0", totalCredentialFeesPaidCc: "0" },
+            billingState: args.billingState || { status: "New", billedUntil: "", createdAt: "" },
+          };
+        });
+        console.log("[LoopWallet] Mapped credential billings:", billings);
+        setCredentialBillings(billings);
+      } else {
+        setCredentialBillings([]);
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Failed to fetch user service status:", error);
+      setUserServices([]);
+      setUserServiceRequests([]);
+      setCredentialOffers([]);
+      setCredentials([]);
+      setCredentialBillings([]);
+    } finally {
+      setUserServiceStatusLoading(false);
+    }
+  }, [isConnected, loopPartyId, walletType]);
+
   useEffect(() => {
     if (isConnected) {
       fetchHoldings();
       fetchActiveContracts();
       fetchPreapprovalContracts();
       fetchCIP56Holdings();
+      fetchUserServiceStatus();
+      fetchTokenMetadata();
     }
-  }, [isConnected, fetchHoldings, fetchActiveContracts, fetchPreapprovalContracts, fetchCIP56Holdings]);
+  }, [isConnected, fetchHoldings, fetchActiveContracts, fetchPreapprovalContracts, fetchCIP56Holdings, fetchUserServiceStatus, fetchTokenMetadata]);
 
   // Verify partyId matches public key when connected
   useEffect(() => {
@@ -689,6 +1100,74 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     }
   };
 
+  // Handle Request Service
+  const handleRequestService = async () => {
+    if (!isConnected || !requestServiceOperator.trim() || !loopPartyId) return;
+    if (walletType !== "solflare" && walletType !== "loop") return;
+
+    setRequestServiceStatus("loading");
+    setRequestServiceResult(null);
+
+    try {
+      const result = await createUserServiceRequest({
+        userPartyId: loopPartyId,
+        operatorPartyId: requestServiceOperator.trim(),
+        walletType,
+      });
+
+      setRequestServiceResult(result);
+      setRequestServiceStatus(result.success ? "success" : "error");
+
+      if (result.success) {
+        setRequestServiceOperator("");
+        fetchUserServiceStatus(); // Refresh the list
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Request service error:", error);
+      setRequestServiceResult({ success: false, error: error?.message || "Failed to create request" });
+      setRequestServiceStatus("error");
+    }
+  };
+
+  // Handle Accept Credential Offer
+  const handleAcceptCredentialOffer = async (offer: CredentialOfferContract) => {
+    if (!isConnected || !loopPartyId || walletType !== "loop") return;
+
+    // Find the UserService contract for this offer (matching operator)
+    const userService = userServices.find(s => s.operator === offer.operator);
+    if (!userService) {
+      setAcceptOfferResult({ success: false, error: "No matching UserService found for this operator" });
+      return;
+    }
+
+    setAcceptingOfferId(offer.contractId);
+    setAcceptOfferResult(null);
+
+    try {
+      const isPaid = !!offer.billingParams || !!offer.depositInitialAmountUsd;
+
+      // For paid credentials, the function fetches amulets and context automatically
+      const result = await acceptCredentialOffer({
+        userPartyId: loopPartyId,
+        userServiceCid: userService.contractId,
+        credentialOfferCid: offer.contractId,
+        isPaid,
+        depositAmountUsd: offer.depositInitialAmountUsd ? parseFloat(offer.depositInitialAmountUsd) : undefined,
+      });
+
+      setAcceptOfferResult(result);
+
+      if (result.success) {
+        fetchUserServiceStatus(); // Refresh the list
+      }
+    } catch (error: any) {
+      console.error("[LoopWallet] Accept credential offer error:", error);
+      setAcceptOfferResult({ success: false, error: error?.message || "Failed to accept offer" });
+    } finally {
+      setAcceptingOfferId(null);
+    }
+  };
+
   if (!isConnected) {
     return (
       <StatusCard
@@ -810,19 +1289,6 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                   key={`${holding.instrument_id.admin}-${holding.instrument_id.id}-${index}`}
                   className="flex items-center gap-3 p-2 rounded-md bg-background/50 border border-border/50"
                 >
-                  {holding.image && (
-                    <Image
-                      src={holding.image}
-                      alt={holding.symbol}
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                      unoptimized
-                    />
-                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{holding.symbol}</span>
@@ -1025,7 +1491,9 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
 
           {!cip56HoldingsLoading && !cip56HoldingsError && cip56Holdings.length > 0 && (
             <div className="space-y-2">
-              {cip56Holdings.map((holding, index) => (
+              {cip56Holdings.map((holding, index) => {
+                const tokenMeta = getHoldingMetadata(holding);
+                return (
                 <div
                   key={`${holding.contractId}-${index}`}
                   className="p-2 rounded-md bg-background/50 border border-border/50"
@@ -1034,9 +1502,23 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                     {/* Amount and instrument prominently displayed */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Coins className="w-4 h-4 text-brand-purple" />
+                        {tokenMeta?.logoUrl ? (
+                          <Image
+                            src={tokenMeta.logoUrl}
+                            alt={tokenMeta.symbol || holding.instrumentId || "Token"}
+                            width={16}
+                            height={16}
+                            className="w-4 h-4 rounded-full"
+                            onError={(e) => {
+                              // Fall back to Coins icon on image load error
+                              e.currentTarget.style.display = "none";
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                            }}
+                          />
+                        ) : null}
+                        <Coins className={`w-4 h-4 text-brand-purple ${tokenMeta?.logoUrl ? "hidden" : ""}`} />
                         <span className="text-sm font-semibold text-foreground">
-                          {formatBalance(holding.amount)} {holding.instrumentId || holding.label || "Token"}
+                          {formatBalance(holding.amount)} {tokenMeta?.symbol || holding.instrumentId || holding.label || "Token"}
                         </span>
                       </div>
                       <Button
@@ -1126,7 +1608,8 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                     )}
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>
@@ -1208,6 +1691,331 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* User Service Status Section */}
+        <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <UserCheck className="w-4 h-4 mr-2" />
+              User Service Status
+            </h4>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchUserServiceStatus()}
+              disabled={userServiceStatusLoading}
+              className="h-6 w-6 p-0"
+            >
+              <RefreshCw className={`h-3 w-3 ${userServiceStatusLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+
+          {userServiceStatusLoading && (
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Loading user service status...</p>
+            </div>
+          )}
+
+          {!userServiceStatusLoading && userServices.length === 0 && userServiceRequests.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-2">
+              No active user services or pending requests found.
+            </p>
+          )}
+
+          {/* Active UserService contracts */}
+          {!userServiceStatusLoading && userServices.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-brand-green">Active Services ({userServices.length})</p>
+              {userServices.map((service, index) => (
+                <div key={service.contractId || index} className="p-2 rounded-md bg-brand-green/10 border border-brand-green/30">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Status:</span>
+                      <span className="text-xs font-medium text-brand-green">Active</span>
+                    </div>
+                    {service.operator && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Operator:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(service.operator)}
+                        >
+                          {service.operator}
+                        </span>
+                      </div>
+                    )}
+                    {service.contractId && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(service.contractId)}
+                        >
+                          {service.contractId}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pending UserServiceRequest contracts */}
+          {!userServiceStatusLoading && userServiceRequests.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-brand-yellow">Pending Requests ({userServiceRequests.length})</p>
+              {userServiceRequests.map((request, index) => (
+                <div key={request.contractId || index} className="p-2 rounded-md bg-brand-yellow/10 border border-brand-yellow/30">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Status:</span>
+                      <span className="text-xs font-medium text-brand-yellow">Pending</span>
+                    </div>
+                    {request.operator && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Operator:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(request.operator)}
+                        >
+                          {request.operator}
+                        </span>
+                      </div>
+                    )}
+                    {request.contractId && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                        <span
+                          className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                          title="Click to copy"
+                          onClick={() => navigator.clipboard.writeText(request.contractId)}
+                        >
+                          {request.contractId}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Credential Offers */}
+          {!userServiceStatusLoading && credentialOffers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-brand-blue">Credential Offers ({credentialOffers.length})</p>
+              {credentialOffers.map((offer, index) => {
+                const isPaid = !!offer.billingParams || !!offer.depositInitialAmountUsd;
+                return (
+                  <div key={offer.contractId || index} className="p-2 rounded-md bg-brand-blue/10 border border-brand-blue/30">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Type:</span>
+                          <span className={`text-xs font-medium ${isPaid ? "text-brand-yellow" : "text-brand-green"}`}>
+                            {isPaid ? "Paid" : "Free"}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAcceptCredentialOffer(offer)}
+                          disabled={acceptingOfferId === offer.contractId || walletType !== "loop"}
+                          className="h-6 text-xs px-2"
+                        >
+                          {acceptingOfferId === offer.contractId ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <>
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Accept
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {offer.description && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Description:</span>
+                          <span className="text-xs flex-1">{offer.description}</span>
+                        </div>
+                      )}
+                      {offer.issuer && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Issuer:</span>
+                          <span
+                            className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                            title="Click to copy"
+                            onClick={() => navigator.clipboard.writeText(offer.issuer)}
+                          >
+                            {offer.issuer}
+                          </span>
+                        </div>
+                      )}
+                      {isPaid && offer.billingParams?.feePerDayUsd?.rate && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Monthly Fee:</span>
+                          <span className="text-xs font-medium">
+                            ${(parseFloat(offer.billingParams.feePerDayUsd.rate) * 365 / 12).toFixed(2)} USD
+                          </span>
+                        </div>
+                      )}
+                      {isPaid && offer.depositInitialAmountUsd && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Deposit:</span>
+                          <span className="text-xs font-medium">${parseFloat(offer.depositInitialAmountUsd).toFixed(2)} USD</span>
+                        </div>
+                      )}
+                      {offer.contractId && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                          <span
+                            className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                            title="Click to copy"
+                            onClick={() => navigator.clipboard.writeText(offer.contractId)}
+                          >
+                            {offer.contractId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {acceptOfferResult && !acceptOfferResult.success && (
+                <Alert variant="destructive" className="mt-2 p-2">
+                  <XCircle className="h-4 w-4" />
+                  <AlertTitle className="text-sm">Accept Failed</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    {acceptOfferResult.error || "Unknown error occurred"}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {acceptOfferResult?.success && (
+                <Alert variant="default" className="mt-2 p-2 bg-muted/30 border-border">
+                  <CheckCircle className="h-4 w-4 text-brand-green" />
+                  <AlertTitle className="text-sm text-foreground">Offer Accepted</AlertTitle>
+                  <AlertDescription className="text-xs text-muted-foreground">
+                    Credential offer accepted successfully.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* Active Credentials (Subscriptions) */}
+          {!userServiceStatusLoading && credentials.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-brand-green">Active Credentials ({credentials.length})</p>
+              {credentials.map((cred, index) => {
+                // Find matching billing contract for this credential
+                const billing = credentialBillings.find(b => b.credentialId === cred.id);
+                const isPaid = !!billing;
+
+                return (
+                  <div key={cred.contractId || index} className="p-2 rounded-md bg-brand-green/10 border border-brand-green/30">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-brand-green" />
+                          <span className="text-xs font-medium text-foreground">{cred.id}</span>
+                        </div>
+                        <span className={`text-xs font-medium ${isPaid ? "text-brand-yellow" : "text-brand-green"}`}>
+                          {isPaid ? "Paid" : "Free"}
+                        </span>
+                      </div>
+                      {cred.description && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Description:</span>
+                          <span className="text-xs flex-1">{cred.description}</span>
+                        </div>
+                      )}
+                      {cred.issuer && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Issuer:</span>
+                          <span
+                            className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                            title="Click to copy"
+                            onClick={() => navigator.clipboard.writeText(cred.issuer)}
+                          >
+                            {cred.issuer}
+                          </span>
+                        </div>
+                      )}
+                      {/* Billing info for paid credentials */}
+                      {billing && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Status:</span>
+                            <span className={`text-xs font-medium ${
+                              billing.billingState.status === "Success" ? "text-brand-green" :
+                              billing.billingState.status === "Failure" ? "text-destructive" :
+                              "text-brand-yellow"
+                            }`}>
+                              {billing.billingState.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Current Deposit:</span>
+                            <span className="text-xs font-medium">
+                              {parseFloat(billing.balanceState.currentDepositAmountCc).toFixed(4)} CC
+                            </span>
+                          </div>
+                          {billing.billingState.billedUntil && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Billed Until:</span>
+                              <span className="text-xs">
+                                {new Date(billing.billingState.billedUntil).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Monthly Fee:</span>
+                            <span className="text-xs font-medium">
+                              ${(parseFloat(billing.params.feePerDayUsd.rate) * 365 / 12).toFixed(2)} USD
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      {/* Claims */}
+                      {cred.claims && cred.claims.length > 0 && (
+                        <div className="mt-1 p-1.5 rounded bg-background/50">
+                          <span className="text-xs text-muted-foreground">Claims:</span>
+                          <div className="mt-1 space-y-0.5">
+                            {cred.claims.map((claim, i) => (
+                              <div key={i} className="text-xs">
+                                <span className="text-muted-foreground">{claim.property}:</span>{" "}
+                                <span className="font-medium">{claim.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {cred.contractId && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Contract:</span>
+                          <span
+                            className="text-xs font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                            title="Click to copy"
+                            onClick={() => navigator.clipboard.writeText(cred.contractId)}
+                          >
+                            {cred.contractId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1652,6 +2460,76 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
                     className="border-none py-0.5"
                     valueClassName="text-xs"
                   />
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
+        {/* Request Service Section (Solflare and Loop) */}
+        {(walletType === "solflare" || walletType === "loop") && (
+          <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+            <h4 className="text-sm font-semibold text-foreground flex items-center">
+              <UserCheck className="w-4 h-4 mr-2" />
+              Request Service
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                ({walletType === "loop" ? "Loop signing" : "Solflare signing"})
+              </span>
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Request a Utility Credential service from an operator
+            </p>
+            <div>
+              <label className="text-xs text-muted-foreground">Operator Party ID</label>
+              <Input
+                placeholder="Enter operator's party ID..."
+                value={requestServiceOperator}
+                onChange={(e) => setRequestServiceOperator(e.target.value)}
+                className="bg-input border-border focus:border-primary text-foreground font-mono text-xs placeholder:text-muted-foreground h-8 mt-1"
+              />
+            </div>
+            <Button
+              onClick={handleRequestService}
+              disabled={!requestServiceOperator.trim() || requestServiceStatus === "loading"}
+              className="w-full bg-gradient-to-r from-brand-green via-brand-blue to-brand-purple hover:brightness-105 text-white h-8 text-xs"
+            >
+              {requestServiceStatus === "loading" && (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              )}
+              <UserCheck className="mr-2 h-3 w-3" />
+              Request Service
+            </Button>
+            {requestServiceStatus === "error" && requestServiceResult && (
+              <Alert variant="destructive" className="mt-2 p-2">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle className="text-sm">Request Failed</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {requestServiceResult.error || "Unknown error occurred"}
+                </AlertDescription>
+              </Alert>
+            )}
+            {requestServiceStatus === "success" && requestServiceResult && (
+              <Alert variant="default" className="mt-2 p-2 bg-muted/30 border-border">
+                <CheckCircle className="h-4 w-4 text-brand-green" />
+                <AlertTitle className="text-sm text-foreground">
+                  Request Created
+                </AlertTitle>
+                <AlertDescription className="space-y-1 text-xs">
+                  <p className="text-muted-foreground">
+                    UserServiceRequest created successfully. The operator needs to accept it.
+                  </p>
+                  {requestServiceResult.updateId && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-muted-foreground shrink-0">Update ID:</span>
+                      <span
+                        className="font-mono break-all flex-1 cursor-pointer hover:text-primary"
+                        title="Click to copy"
+                        onClick={() => navigator.clipboard.writeText(requestServiceResult.updateId!)}
+                      >
+                        {requestServiceResult.updateId}
+                      </span>
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
             )}

@@ -10,6 +10,7 @@ servers:
 
 components:
   schemas:
+    # ============= Response Types =============
     SubmissionResult:
       type: object
       properties:
@@ -22,6 +23,14 @@ components:
         contract_id:
           type: string
           description: Created/updated contract ID (when applicable)
+        new_contract_id:
+          type: string
+          description: New contract ID if funds remain (for withdraw operations)
+          nullable: true
+        remaining_amount:
+          type: string
+          description: Remaining locked amount (for withdraw operations)
+          nullable: true
       required:
         - submission_id
         - update_id
@@ -38,6 +47,22 @@ components:
       required:
         - error
 
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        ledger_api_url:
+          type: string
+        scan_api_url:
+          type: string
+      required:
+        - status
+        - ledger_api_url
+        - scan_api_url
+
+    # ============= Info Types =============
     AmuletInfo:
       type: object
       properties:
@@ -54,6 +79,11 @@ components:
         lock_expires_at:
           type: string
           nullable: true
+      required:
+        - contract_id
+        - amount
+        - is_locked
+        - lock_holders
 
     AdvancedPaymentInfo:
       type: object
@@ -78,6 +108,14 @@ components:
         reference:
           type: string
           nullable: true
+      required:
+        - contract_id
+        - locked_amount
+        - minimum_amount
+        - buyer
+        - seller
+        - provider
+        - expires_at
 
     AdvancedPaymentRequestInfo:
       type: object
@@ -102,6 +140,14 @@ components:
         reference:
           type: string
           nullable: true
+      required:
+        - contract_id
+        - locked_amount
+        - minimum_amount
+        - buyer
+        - seller
+        - provider
+        - expires_at
 
     AppServiceInfo:
       type: object
@@ -115,6 +161,10 @@ components:
         service_description:
           type: string
           nullable: true
+      required:
+        - contract_id
+        - seller
+        - provider
 
     AppServiceRequestInfo:
       type: object
@@ -128,7 +178,12 @@ components:
         service_description:
           type: string
           nullable: true
+      required:
+        - contract_id
+        - seller
+        - provider
 
+    # ============= Base Credential Types =============
     SellerCredentials:
       type: object
       properties:
@@ -160,6 +215,322 @@ components:
         - buyer_private_key
       description: buyer_party_id and buyer_private_key required; jwt falls back to .env
 
+    # ============= Service Request Types =============
+    ServiceRequestCreateRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            service_description:
+              type: string
+              description: Description of service relationship
+
+    ServiceRequestAcceptRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+          description: JWT (optional, falls back to .env)
+        request_cid:
+          type: string
+          description: Contract ID of AppServiceRequest
+      required:
+        - request_cid
+
+    ServiceRequestRejectRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        request_cid:
+          type: string
+        reason:
+          type: string
+          nullable: true
+      required:
+        - request_cid
+
+    ServiceRequestCancelRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            request_cid:
+              type: string
+          required:
+            - request_cid
+
+    ServiceTerminateRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        service_cid:
+          type: string
+      required:
+        - service_cid
+
+    ServiceListRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        seller_party_id:
+          type: string
+
+    # ============= Payment Request Types =============
+    PaymentRequestCreateRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            service_cid:
+              type: string
+              description: Contract ID of AppService
+            buyer_party_id:
+              type: string
+              description: Party ID of buyer who will fund payment
+            amount:
+              type: string
+              description: Amount to lock (in CC)
+            minimum:
+              type: string
+              description: Minimum amount to keep locked
+            expires:
+              type: string
+              description: ISO 8601 expiry time (default 1 day from now)
+            description:
+              type: string
+              nullable: true
+            reference:
+              type: string
+              nullable: true
+          required:
+            - service_cid
+            - buyer_party_id
+            - amount
+            - minimum
+
+    PaymentRequestAcceptRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BuyerCredentials'
+        - type: object
+          properties:
+            request_cid:
+              type: string
+              description: Contract ID of AdvancedPaymentRequest
+            amulet_cids:
+              type: array
+              items:
+                type: string
+              description: Amulet contract IDs to use as funds
+          required:
+            - request_cid
+            - amulet_cids
+
+    PaymentRequestRejectRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BuyerCredentials'
+        - type: object
+          properties:
+            request_cid:
+              type: string
+            reason:
+              type: string
+              nullable: true
+          required:
+            - request_cid
+
+    PaymentRequestCancelRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            request_cid:
+              type: string
+          required:
+            - request_cid
+
+    # ============= Payment Operation Types =============
+    PaymentWithdrawRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            payment_cid:
+              type: string
+              description: Contract ID of AdvancedPayment
+            amount:
+              type: string
+              description: Amount to withdraw (in CC)
+            reason:
+              type: string
+              description: Withdrawal reason
+              nullable: true
+          required:
+            - payment_cid
+            - amount
+
+    PaymentUnlockRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BuyerCredentials'
+        - type: object
+          properties:
+            payment_cid:
+              type: string
+            amount:
+              type: string
+          required:
+            - payment_cid
+            - amount
+
+    PaymentCancelRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/SellerCredentials'
+        - type: object
+          properties:
+            payment_cid:
+              type: string
+          required:
+            - payment_cid
+
+    PaymentExpireRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BuyerCredentials'
+        - type: object
+          properties:
+            payment_cid:
+              type: string
+          required:
+            - payment_cid
+
+    PaymentTopupRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BuyerCredentials'
+        - type: object
+          properties:
+            payment_cid:
+              type: string
+            amount:
+              type: string
+              description: Amount to add
+            new_expires:
+              type: string
+              description: New expiry time (ISO 8601)
+            amulet_cids:
+              type: array
+              items:
+                type: string
+          required:
+            - payment_cid
+            - amount
+            - amulet_cids
+
+    # ============= List Request Types =============
+    ListAmuletsRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        party_id:
+          type: string
+          description: Party to list amulets for
+      required:
+        - party_id
+
+    ListPaymentsRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        party_id:
+          type: string
+      required:
+        - party_id
+
+    ListRequestsRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+        party_id:
+          type: string
+      required:
+        - party_id
+
+    # ============= Preapproval Request Types =============
+    PreapprovalRequestRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+          description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
+        party_id:
+          type: string
+          description: External party ID (receiver of the preapproval)
+        private_key:
+          type: string
+          description: Base58-encoded Ed25519 private key for the external party
+      required:
+        - party_id
+        - private_key
+
+    PreapprovalAcceptRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+          description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
+
+    PreapprovalCancelRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+          description: JWT for Ledger API authentication
+        party_id:
+          type: string
+          description: Party ID (defaults to PARTY_PROVIDER if not specified)
+
+    PreapprovalTransferRequest:
+      type: object
+      properties:
+        jwt:
+          type: string
+          description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
+        sender_party_id:
+          type: string
+          description: Party ID of the sender (external party)
+        sender_private_key:
+          type: string
+          description: Base58-encoded Ed25519 private key of the sender
+        receiver_party_id:
+          type: string
+          description: Party ID of the receiver
+        amount:
+          type: string
+          description: Amount to transfer (in CC)
+        description:
+          type: string
+          description: Transfer description/reason
+          nullable: true
+      required:
+        - sender_party_id
+        - sender_private_key
+        - receiver_party_id
+        - amount
+
 paths:
   /api/service/request/create:
     post:
@@ -171,13 +542,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    service_description:
-                      type: string
-                      description: Description of service relationship
+              $ref: '#/components/schemas/ServiceRequestCreateRequest'
       responses:
         '200':
           description: AppServiceRequest created
@@ -202,16 +567,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                  description: JWT (optional, falls back to .env)
-                request_cid:
-                  type: string
-                  description: Contract ID of AppServiceRequest
-              required:
-                - request_cid
+              $ref: '#/components/schemas/ServiceRequestAcceptRequest'
       responses:
         '200':
           description: AppService created
@@ -230,17 +586,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                request_cid:
-                  type: string
-                reason:
-                  type: string
-                  nullable: true
-              required:
-                - request_cid
+              $ref: '#/components/schemas/ServiceRequestRejectRequest'
       responses:
         '200':
           description: AppServiceRequest rejected
@@ -259,14 +605,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    request_cid:
-                      type: string
-                  required:
-                    - request_cid
+              $ref: '#/components/schemas/ServiceRequestCancelRequest'
       responses:
         '200':
           description: AppServiceRequest canceled
@@ -285,14 +624,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                service_cid:
-                  type: string
-              required:
-                - service_cid
+              $ref: '#/components/schemas/ServiceTerminateRequest'
       responses:
         '200':
           description: AppService terminated
@@ -310,12 +642,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                seller_party_id:
-                  type: string
+              $ref: '#/components/schemas/ServiceListRequest'
       responses:
         '200':
           description: List of AppService contracts
@@ -335,12 +662,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                seller_party_id:
-                  type: string
+              $ref: '#/components/schemas/ServiceListRequest'
       responses:
         '200':
           description: List of pending AppServiceRequest contracts
@@ -361,36 +683,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    service_cid:
-                      type: string
-                      description: Contract ID of AppService
-                    buyer_party_id:
-                      type: string
-                      description: Party ID of buyer who will fund payment
-                    amount:
-                      type: string
-                      description: Amount to lock (in CC)
-                    minimum:
-                      type: string
-                      description: Minimum amount to keep locked
-                    expires:
-                      type: string
-                      description: ISO 8601 expiry time (default 1 day from now)
-                    description:
-                      type: string
-                      nullable: true
-                    reference:
-                      type: string
-                      nullable: true
-                  required:
-                    - service_cid
-                    - buyer_party_id
-                    - amount
-                    - minimum
+              $ref: '#/components/schemas/PaymentRequestCreateRequest'
       responses:
         '200':
           description: AdvancedPaymentRequest created
@@ -409,21 +702,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/BuyerCredentials'
-                - type: object
-                  properties:
-                    request_cid:
-                      type: string
-                      description: Contract ID of AdvancedPaymentRequest
-                    amulet_cids:
-                      type: array
-                      items:
-                        type: string
-                      description: Amulet contract IDs to use as funds
-                  required:
-                    - request_cid
-                    - amulet_cids
+              $ref: '#/components/schemas/PaymentRequestAcceptRequest'
       responses:
         '200':
           description: AdvancedPayment created
@@ -442,17 +721,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/BuyerCredentials'
-                - type: object
-                  properties:
-                    request_cid:
-                      type: string
-                    reason:
-                      type: string
-                      nullable: true
-                  required:
-                    - request_cid
+              $ref: '#/components/schemas/PaymentRequestRejectRequest'
       responses:
         '200':
           description: AdvancedPaymentRequest rejected
@@ -471,14 +740,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    request_cid:
-                      type: string
-                  required:
-                    - request_cid
+              $ref: '#/components/schemas/PaymentRequestCancelRequest'
       responses:
         '200':
           description: AdvancedPaymentRequest canceled
@@ -497,41 +759,14 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    payment_cid:
-                      type: string
-                      description: Contract ID of AdvancedPayment
-                    amount:
-                      type: string
-                      description: Amount to withdraw (in CC)
-                    reason:
-                      type: string
-                      description: Withdrawal reason
-                      nullable: true
-                  required:
-                    - payment_cid
-                    - amount
+              $ref: '#/components/schemas/PaymentWithdrawRequest'
       responses:
         '200':
           description: Withdrawal successful
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/SubmissionResult'
-                  - type: object
-                    properties:
-                      new_contract_id:
-                        type: string
-                        description: New contract ID if funds remain
-                        nullable: true
-                      remaining_amount:
-                        type: string
-                        description: Remaining locked amount
-                        nullable: true
+                $ref: '#/components/schemas/SubmissionResult'
 
   /api/payment/unlock:
     post:
@@ -543,17 +778,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/BuyerCredentials'
-                - type: object
-                  properties:
-                    payment_cid:
-                      type: string
-                    amount:
-                      type: string
-                  required:
-                    - payment_cid
-                    - amount
+              $ref: '#/components/schemas/PaymentUnlockRequest'
       responses:
         '200':
           description: Unlock successful
@@ -572,14 +797,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SellerCredentials'
-                - type: object
-                  properties:
-                    payment_cid:
-                      type: string
-                  required:
-                    - payment_cid
+              $ref: '#/components/schemas/PaymentCancelRequest'
       responses:
         '200':
           description: Payment canceled, funds returned
@@ -598,14 +816,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/BuyerCredentials'
-                - type: object
-                  properties:
-                    payment_cid:
-                      type: string
-                  required:
-                    - payment_cid
+              $ref: '#/components/schemas/PaymentExpireRequest'
       responses:
         '200':
           description: Payment expired, funds returned
@@ -624,26 +835,7 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/BuyerCredentials'
-                - type: object
-                  properties:
-                    payment_cid:
-                      type: string
-                    amount:
-                      type: string
-                      description: Amount to add
-                    new_expires:
-                      type: string
-                      description: New expiry time (ISO 8601)
-                    amulet_cids:
-                      type: array
-                      items:
-                        type: string
-                  required:
-                    - payment_cid
-                    - amount
-                    - amulet_cids
+              $ref: '#/components/schemas/PaymentTopupRequest'
       responses:
         '200':
           description: TopUp successful
@@ -661,15 +853,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                party_id:
-                  type: string
-                  description: Party to list amulets for
-              required:
-                - party_id
+              $ref: '#/components/schemas/ListAmuletsRequest'
       responses:
         '200':
           description: List of amulets
@@ -689,14 +873,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                party_id:
-                  type: string
-              required:
-                - party_id
+              $ref: '#/components/schemas/ListPaymentsRequest'
       responses:
         '200':
           description: List of AdvancedPayment contracts
@@ -716,14 +893,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                party_id:
-                  type: string
-              required:
-                - party_id
+              $ref: '#/components/schemas/ListRequestsRequest'
       responses:
         '200':
           description: List of AdvancedPaymentRequest contracts
@@ -744,20 +914,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                  description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
-                party_id:
-                  type: string
-                  description: External party ID (receiver of the preapproval)
-                private_key:
-                  type: string
-                  description: Base58-encoded Ed25519 private key for the external party
-              required:
-                - party_id
-                - private_key
+              $ref: '#/components/schemas/PreapprovalRequestRequest'
       responses:
         '200':
           description: TransferPreapprovalProposal created
@@ -782,11 +939,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                  description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
+              $ref: '#/components/schemas/PreapprovalAcceptRequest'
       responses:
         '200':
           description: List of update IDs for accepted proposals
@@ -813,14 +966,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                  description: JWT for Ledger API authentication
-                party_id:
-                  type: string
-                  description: Party ID (defaults to PARTY_PROVIDER if not specified)
+              $ref: '#/components/schemas/PreapprovalCancelRequest'
       responses:
         '200':
           description: List of update IDs for cancelled preapprovals
@@ -847,32 +993,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jwt:
-                  type: string
-                  description: JWT for Ledger API authentication (optional, falls back to JWT_PROVIDER)
-                sender_party_id:
-                  type: string
-                  description: Party ID of the sender (external party)
-                sender_private_key:
-                  type: string
-                  description: Base58-encoded Ed25519 private key of the sender
-                receiver_party_id:
-                  type: string
-                  description: Party ID of the receiver
-                amount:
-                  type: string
-                  description: Amount to transfer (in CC)
-                description:
-                  type: string
-                  description: Transfer description/reason
-                  nullable: true
-              required:
-                - sender_party_id
-                - sender_private_key
-                - receiver_party_id
-                - amount
+              $ref: '#/components/schemas/PreapprovalTransferRequest'
       responses:
         '200':
           description: Transfer successful
@@ -897,12 +1018,4 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  ledger_api_url:
-                    type: string
-                  scan_api_url:
-                    type: string
+                $ref: '#/components/schemas/HealthResponse'
