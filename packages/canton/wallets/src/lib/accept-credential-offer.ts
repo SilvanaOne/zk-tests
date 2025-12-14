@@ -26,13 +26,21 @@ interface AppTransferContext {
  * Fetch app transfer context from our server-side API route.
  * This provides amuletRules, openMiningRound, and featuredAppRight contracts.
  * Uses /api/scan/accept-context which fetches from Scan API server-side (no CORS issues).
+ * @param providerHint - Optional party ID to match FeaturedAppRight provider (typically the issuer)
  */
-async function fetchAppTransferContext(): Promise<AppTransferContext> {
+async function fetchAppTransferContext(providerHint?: string): Promise<AppTransferContext> {
   const network = getCurrentNetwork();
 
   console.log("[accept-credential-offer] Fetching app transfer context via /api/scan/accept-context");
+  if (providerHint) {
+    console.log("[accept-credential-offer] Using providerHint:", providerHint);
+  }
 
-  const response = await fetch(`/api/scan/accept-context?network=${network}`);
+  const params = new URLSearchParams({ network });
+  if (providerHint) {
+    params.set("providerHint", providerHint);
+  }
+  const response = await fetch(`/api/scan/accept-context?${params.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Unknown error" }));
@@ -63,8 +71,9 @@ export async function acceptCredentialOffer(params: {
   credentialOfferCid: string;
   isPaid: boolean;
   depositAmountUsd?: number;  // Required deposit amount in USD for paid credentials
+  issuerParty?: string;  // Issuer party for FeaturedAppRight matching (required for mainnet)
 }): Promise<AcceptCredentialOfferResult> {
-  const { userPartyId, userServiceCid, credentialOfferCid, isPaid, depositAmountUsd } = params;
+  const { userPartyId, userServiceCid, credentialOfferCid, isPaid, depositAmountUsd, issuerParty } = params;
 
   console.log("[accept-credential-offer] Accepting CredentialOffer");
   console.log("  - userPartyId:", userPartyId);
@@ -139,8 +148,9 @@ export async function acceptCredentialOffer(params: {
       console.log("[accept-credential-offer] Prepared", amuletCids.length, "Amulet contracts for deposit");
 
       // Fetch app transfer context from Scan API
+      // Pass issuerParty as providerHint to match the correct FeaturedAppRight
       console.log("[accept-credential-offer] Fetching app transfer context...");
-      const context = await fetchAppTransferContext();
+      const context = await fetchAppTransferContext(issuerParty);
       console.log("[accept-credential-offer] Got app transfer context:", {
         amuletRulesContractId: context.amuletRulesContractId.substring(0, 20) + "...",
         openRoundContractId: context.openRoundContractId.substring(0, 20) + "...",

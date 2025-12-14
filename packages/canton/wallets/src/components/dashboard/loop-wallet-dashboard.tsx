@@ -1147,12 +1147,14 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
       const isPaid = !!offer.billingParams || !!offer.depositInitialAmountUsd;
 
       // For paid credentials, the function fetches amulets and context automatically
+      // Pass issuer to match correct FeaturedAppRight on mainnet (issuer is the FeaturedAppRight provider)
       const result = await acceptCredentialOffer({
         userPartyId: loopPartyId,
         userServiceCid: userService.contractId,
         credentialOfferCid: offer.contractId,
         isPaid,
         depositAmountUsd: offer.depositInitialAmountUsd ? parseFloat(offer.depositInitialAmountUsd) : undefined,
+        issuerParty: offer.issuer,
       });
 
       setAcceptOfferResult(result);
