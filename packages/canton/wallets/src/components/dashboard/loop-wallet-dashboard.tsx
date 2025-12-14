@@ -35,6 +35,7 @@ import { getHoldingsFromLedger, getActiveContractsFromLedger, getPreapprovalsFro
 import type { LedgerHolding, LedgerActiveContract } from "@/lib/ledger-api-types";
 import type { Holding } from "@fivenorth/loop-sdk";
 import { fetchAllTokenMetadata, getTokenMetadata, type TokenMetadata } from "@/lib/token-metadata";
+import { getConsoleHoldings, type ConsoleHolding } from "@/lib/console";
 
 // Type for preapproval contract with decoded details
 interface PreapprovalContract {
@@ -157,10 +158,19 @@ interface LoopWalletDashboardProps {
   loopPartyId?: string | null;
   network?: "devnet" | "testnet" | "mainnet";
   walletName?: string;
-  walletType?: "loop" | "phantom" | "solflare" | null;
+  walletType?: "loop" | "phantom" | "solflare" | "console" | null;
+  consoleInfo?: {
+    hint: string;
+    namespace: string;
+    networkId: string;
+    status: string;
+    signingProviderId: string;
+    primary: boolean;
+  } | null;
+  consolePublicKey?: string | null;
 }
 
-export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletName = "Loop", walletType = "loop" }: LoopWalletDashboardProps) {
+export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletName = "Loop", walletType = "loop", consoleInfo, consolePublicKey }: LoopWalletDashboardProps) {
   const isConnected = !!loopPartyId;
   const [messageToSign, setMessageToSign] = useState("Hello Loop world!");
   const [signedMessage, setSignedMessage] = useState<{
@@ -188,6 +198,9 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
+
+  // Console Wallet holdings state
+  const [consoleHoldings, setConsoleHoldings] = useState<ConsoleHolding[]>([]);
 
   // Active Contracts state (enriched with Lighthouse API data)
   const [amuletContracts, setAmuletContracts] = useState<AmuletContract[]>([]);
@@ -270,13 +283,24 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     setHoldingsLoading(true);
     setHoldingsError(null);
     try {
-      // Use Ledger API for Solflare/Phantom, Loop SDK for Loop wallet
-      if (walletType === "solflare" || walletType === "phantom") {
+      // Use Console Wallet SDK for Console wallet
+      if (walletType === "console") {
+        console.log("[LoopWallet] Using Console Wallet SDK for holdings...");
+        const consoleResult = await getConsoleHoldings(loopPartyId, network);
+        console.log("[LoopWallet] Console holdings result:", consoleResult);
+        setConsoleHoldings(consoleResult);
+        // Clear other holding states
+        setHoldings([]);
+        setLedgerHoldings([]);
+        setCip56Holdings([]);
+      // Use Ledger API for Solflare/Phantom
+      } else if (walletType === "solflare" || walletType === "phantom") {
         console.log("[LoopWallet] Using Ledger API for holdings...");
         const ledgerResult = await getHoldingsFromLedger(loopPartyId);
         console.log("[LoopWallet] Ledger holdings result:", ledgerResult);
         setLedgerHoldings(ledgerResult);
         setHoldings([]); // Clear Loop holdings
+        setConsoleHoldings([]); // Clear Console holdings
 
         // Also derive CIP-56 holdings from ledger result (non-CC tokens)
         const cip56FromLedger = ledgerResult.filter(h => h.tokenId !== "CC");
@@ -295,6 +319,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
         }));
         setCip56Holdings(cip56Holdings);
       } else {
+        // Use Loop SDK for Loop wallet
         const result = await getLoopHoldings();
         console.log("[LoopWallet] Holdings result:", result);
         if (result) {
@@ -303,6 +328,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
           setHoldings([]);
         }
         setLedgerHoldings([]); // Clear Ledger holdings
+        setConsoleHoldings([]); // Clear Console holdings
       }
     } catch (error: any) {
       console.error("[LoopWallet] Failed to fetch holdings:", error);
@@ -310,7 +336,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
     } finally {
       setHoldingsLoading(false);
     }
-  }, [isConnected, loopPartyId, walletType]);
+  }, [isConnected, loopPartyId, walletType, network]);
 
   // Fetch active contracts when connected (Amulet contracts enriched with Lighthouse API)
   const fetchActiveContracts = useCallback(async () => {
@@ -1224,6 +1250,46 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
             )}
           </div>
         )}
+        {/* Console Wallet additional info */}
+        {walletType === "console" && consoleInfo && (
+          <>
+            <DataRow
+              label="Public Key"
+              value={consolePublicKey || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Wallet Name"
+              value={consoleInfo.hint || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Namespace"
+              value={consoleInfo.namespace || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Console Network"
+              value={consoleInfo.networkId || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Status"
+              value={consoleInfo.status || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Signing Provider"
+              value={consoleInfo.signingProviderId || "N/A"}
+              truncate={false}
+            />
+            <DataRow
+              label="Primary Wallet"
+              value={consoleInfo.primary ? "Yes" : "No"}
+              truncate={false}
+            />
+          </>
+        )}
         {getLoopPublicKey() && (
           <div className="flex items-center gap-2">
             <DataRow
@@ -1245,7 +1311,8 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
           </div>
         )}
 
-        {/* Holdings Section */}
+        {/* Holdings Section - hide for Console wallet (uses dedicated Console Holdings section) */}
+        {walletType !== "console" && (
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
@@ -1344,8 +1411,10 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
             </div>
           )}
         </div>
+        )}
 
-        {/* Canton Coin Holdings Section */}
+        {/* Canton Coin Holdings Section - hide for Console wallet */}
+        {walletType !== "console" && (
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
@@ -1451,8 +1520,111 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
             </div>
           )}
         </div>
+        )}
 
-        {/* CIP-56 Holdings Section */}
+        {/* Console Wallet Holdings Section - only show for Console wallet */}
+        {walletType === "console" && (
+          <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-foreground flex items-center">
+                <Coins className="w-4 h-4 mr-2" />
+                Console Wallet Holdings
+              </h4>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchHoldings()}
+                disabled={holdingsLoading}
+                className="h-6 w-6 p-0"
+              >
+                <RefreshCw className={`h-3 w-3 ${holdingsLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+
+            {holdingsLoading && (
+              <div className="flex flex-col items-center justify-center py-4 gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Loading holdings...</p>
+              </div>
+            )}
+
+            {holdingsError && (
+              <Alert variant="destructive" className="p-2">
+                <XCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">{holdingsError}</AlertDescription>
+              </Alert>
+            )}
+
+            {!holdingsLoading && !holdingsError && consoleHoldings.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                No holdings found
+              </p>
+            )}
+
+            {!holdingsLoading && !holdingsError && consoleHoldings.length > 0 && (
+              <div className="space-y-2">
+                {consoleHoldings.map((holding, index) => (
+                  <div
+                    key={`console-holding-${index}`}
+                    className="p-2 rounded-md bg-background/50 border border-border/50"
+                  >
+                    <div className="space-y-1">
+                      {/* Token with amount prominently displayed */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {holding.imageSrc ? (
+                            <img
+                              src={holding.imageSrc}
+                              alt={holding.tokenId}
+                              className="w-5 h-5 rounded-full"
+                            />
+                          ) : (
+                            <Coins className="w-5 h-5 text-brand-yellow" />
+                          )}
+                          <div>
+                            <span className="text-sm font-semibold text-foreground">
+                              {formatBalance(holding.amount)} {holding.tokenId}
+                            </span>
+                            {holding.tokenName && holding.tokenName !== holding.tokenId && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({holding.tokenName})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {/* USD Value */}
+                      {holding.balanceUsd && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">USD Value:</span>
+                          <span className="text-xs font-medium text-brand-green">${holding.balanceUsd}</span>
+                        </div>
+                      )}
+                      {/* Price */}
+                      {holding.price && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Price:</span>
+                          <span className="text-xs font-medium">${holding.price}</span>
+                        </div>
+                      )}
+                      {/* Network */}
+                      {holding.network && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Network:</span>
+                          <span className="text-xs font-mono">{holding.network}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CIP-56 Holdings Section - hide for Console wallet */}
+        {walletType !== "console" && (
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground flex items-center">
@@ -1615,6 +1787,7 @@ export function LoopWalletDashboard({ loopPartyId, network = "devnet", walletNam
             </div>
           )}
         </div>
+        )}
 
         {/* Preapproval Contracts Section */}
         <div className="space-y-2 p-3 rounded-md bg-muted/30 border border-border backdrop-blur-sm">

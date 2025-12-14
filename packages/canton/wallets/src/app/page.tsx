@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LoopWalletDashboard } from "@/components/dashboard/loop-wallet-dashboard";
 import { NetworkSelectModal, type NetworkType } from "@/components/dashboard/network-select-modal";
 import { Button } from "@/components/ui/button";
@@ -9,18 +9,34 @@ import { useUserState } from "@/context/userState";
 import { Globe, Wallet, LogOut, X } from "lucide-react";
 import Image from "next/image";
 
+// Get initial network from localStorage or default to devnet
+function getStoredNetwork(): NetworkType {
+  if (typeof window === "undefined") return "devnet";
+  const stored = localStorage.getItem("silvana-network");
+  if (stored === "devnet" || stored === "testnet" || stored === "mainnet") {
+    return stored;
+  }
+  return "devnet";
+}
+
 export default function HomePage() {
   const [network, setNetwork] = useState<NetworkType>("devnet");
+
+  // Load network from localStorage on mount
+  useEffect(() => {
+    setNetwork(getStoredNetwork());
+  }, []);
   const [showNetworkModal, setShowNetworkModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
 
-  const { connectLoop, connectPhantom, connectSolflare, getConnectedWalletInfo, disconnectWallet } = useUserState();
+  const { connectLoop, connectPhantom, connectSolflare, connectConsole, getConnectedWalletInfo, disconnectWallet } = useUserState();
 
   const walletInfo = getConnectedWalletInfo();
   const isConnected = walletInfo.walletType !== null;
 
   const handleNetworkSelect = (selectedNetwork: NetworkType) => {
     setNetwork(selectedNetwork);
+    localStorage.setItem("silvana-network", selectedNetwork);
     setShowNetworkModal(false);
   };
 
@@ -39,9 +55,14 @@ export default function HomePage() {
     await connectSolflare();
   };
 
+  const handleConnectConsole = async () => {
+    setShowWalletModal(false);
+    await connectConsole();
+  };
+
   const handleLogout = () => {
     disconnectWallet();
-    window.location.reload();
+    // Don't reload - just let React state update
   };
 
   // Truncate address for display
@@ -77,7 +98,7 @@ export default function HomePage() {
                   {/* Connected Wallet Info */}
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/50 border border-border/50">
                     <Image
-                      src={walletInfo.walletType === "loop" ? "/loop.png" : walletInfo.walletType === "phantom" ? "/phantom.svg" : "/solflare.svg"}
+                      src={walletInfo.walletType === "loop" ? "/loop.png" : walletInfo.walletType === "phantom" ? "/phantom.svg" : walletInfo.walletType === "console" ? "/console.svg" : "/solflare.svg"}
                       alt={walletInfo.walletName || ""}
                       width={20}
                       height={20}
@@ -150,6 +171,8 @@ export default function HomePage() {
           network={network}
           walletName={walletInfo.walletName || "Loop"}
           walletType={walletInfo.walletType}
+          consoleInfo={walletInfo.consoleInfo}
+          consolePublicKey={walletInfo.publicKey}
         />
       </main>
 
@@ -249,6 +272,26 @@ export default function HomePage() {
                 <div className="text-left">
                   <div className="font-semibold">Solflare</div>
                   <div className="text-sm text-muted-foreground">Solana</div>
+                </div>
+              </button>
+
+              {/* Console Wallet */}
+              <button
+                onClick={handleConnectConsole}
+                className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:border-brand-purple hover:bg-muted/50 transition-all"
+              >
+                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                  <Image
+                    src="/console.svg"
+                    alt="Console"
+                    width={32}
+                    height={32}
+                    className="rounded-sm"
+                  />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold">Console</div>
+                  <div className="text-sm text-muted-foreground">Canton Network</div>
                 </div>
               </button>
             </div>
