@@ -39,7 +39,7 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
                 "templateId": template_id,
                 "createArguments": {
                     "dso": party_dso,
-                    "app": party_seller,
+                    "seller": party_seller,
                     "provider": party_provider,
                     "serviceDescription": service_description
                 }
@@ -135,7 +135,7 @@ pub async fn handle_create_service_request(service_description: Option<String>) 
                             .unwrap_or("?");
                         println!("AppServiceRequest created successfully!");
                         println!("Contract ID: {}", cid);
-                        println!("App: {}", party_seller);
+                        println!("Seller: {}", party_seller);
                         println!("Provider: {}", party_provider);
                         return Ok(());
                     }
@@ -215,8 +215,8 @@ pub async fn handle_list_service_requests() -> Result<()> {
                                 .get("contractId")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("?");
-                            let app = created
-                                .pointer("/createArgument/app")
+                            let seller = created
+                                .pointer("/createArgument/seller")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("?");
                             let provider = created
@@ -225,7 +225,7 @@ pub async fn handle_list_service_requests() -> Result<()> {
                                 .unwrap_or("?");
 
                             println!("Contract ID: {}", cid);
-                            println!("  App: {}", app);
+                            println!("  Seller: {}", seller);
                             println!("  Provider: {}", provider);
                             println!();
                         }
@@ -519,8 +519,8 @@ pub async fn handle_list_services() -> Result<()> {
                                 .get("contractId")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("?");
-                            let app = created
-                                .pointer("/createArgument/app")
+                            let seller = created
+                                .pointer("/createArgument/seller")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("?");
                             let provider = created
@@ -529,7 +529,7 @@ pub async fn handle_list_services() -> Result<()> {
                                 .unwrap_or("?");
 
                             println!("Contract ID: {}", cid);
-                            println!("  App: {}", app);
+                            println!("  Seller: {}", seller);
                             println!("  Provider: {}", provider);
                             println!();
                         }

@@ -3,7 +3,7 @@
 include cli/.env
 export
 
-DAR := daml/.daml/dist/advanced-payment-v6-0.0.1.dar
+DAR := daml/.daml/dist/advanced-payment-v1-0.0.1.dar
 # Extract package name from DAR filename
 PACKAGE_NAME := $(basename $(notdir $(DAR)))
 # Extract package name without version

@@ -1,11 +1,131 @@
 //! AdvancedPayment command implementations.
 
 use anyhow::Result;
-use serde_json::json;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use serde_json::{json, Value};
 use tracing::{debug, info};
 
 use crate::context::ContractBlobsContext;
 use crate::url::create_client_with_localhost_resolution;
+
+/// Traffic cost estimation from /v2/interactive-submission/prepare
+#[derive(Debug, Clone, Default)]
+pub struct TrafficInfo {
+    /// Request traffic cost in bytes
+    pub request: Option<u64>,
+    /// Response traffic cost in bytes
+    pub response: Option<u64>,
+    /// Total traffic cost in bytes
+    pub total: Option<u64>,
+}
+
+/// Extract userId (sub claim) from JWT token.
+fn extract_user_id_from_jwt(jwt: &str) -> Result<String> {
+    let parts: Vec<&str> = jwt.split('.').collect();
+    if parts.len() != 3 {
+        return Err(anyhow::anyhow!("Invalid JWT format: expected 3 parts"));
+    }
+
+    let payload_bytes = URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|e| anyhow::anyhow!("Failed to decode JWT payload: {}", e))?;
+
+    let claims: Value = serde_json::from_slice(&payload_bytes)
+        .map_err(|e| anyhow::anyhow!("Failed to parse JWT claims: {}", e))?;
+
+    claims
+        .get("sub")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'sub' claim in JWT"))
+}
+
+/// Get traffic cost estimation for a command without executing it.
+/// Uses /v2/interactive-submission/prepare endpoint.
+/// Returns error if traffic estimation is not available - transaction will not proceed.
+async fn get_traffic_estimation(
+    client: &reqwest::Client,
+    api_url: &str,
+    jwt: &str,
+    party: &str,
+    synchronizer_id: &str,
+    commands: Vec<Value>,
+    disclosed_contracts: Vec<Value>,
+) -> Result<TrafficInfo> {
+    let user_id = extract_user_id_from_jwt(jwt)?;
+
+    let command_id = format!("traffic-estimate-{}", chrono::Utc::now().timestamp_millis());
+
+    let payload = json!({
+        "userId": user_id,
+        "commandId": command_id,
+        "actAs": [party],
+        "readAs": [party],
+        "synchronizerId": synchronizer_id,
+        "packageIdSelectionPreference": [],
+        "verboseHashing": false,
+        "commands": commands,
+        "disclosedContracts": disclosed_contracts
+    });
+
+    let url = format!("{}v2/interactive-submission/prepare", api_url);
+    debug!("Calling prepare endpoint for traffic estimation: {}", url);
+
+    let response = client
+        .post(&url)
+        .bearer_auth(jwt)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to call prepare endpoint: {}", e))?;
+
+    let status = response.status();
+    let text = response.text().await
+        .map_err(|e| anyhow::anyhow!("Failed to read prepare response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(anyhow::anyhow!(
+            "Prepare endpoint returned error ({}): {}",
+            status,
+            text
+        ));
+    }
+
+    let body: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse prepare response: {}", e))?;
+
+    let cost = body
+        .get("costEstimation")
+        .ok_or_else(|| anyhow::anyhow!("Missing costEstimation in prepare response"))?;
+
+    Ok(TrafficInfo {
+        request: cost
+            .get("confirmationRequestTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+        response: cost
+            .get("confirmationResponseTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+        total: cost
+            .get("totalTrafficCostEstimation")
+            .and_then(|v| v.as_u64()),
+    })
+}
+
+/// Print traffic info if available
+fn print_traffic_info(traffic: &TrafficInfo) {
+    println!();
+    println!("Traffic Cost Estimation:");
+    if let Some(req) = traffic.request {
+        println!("  Request:  {} bytes", req);
+    }
+    if let Some(resp) = traffic.response {
+        println!("  Response: {} bytes", resp);
+    }
+    if let Some(total) = traffic.total {
+        println!("  Total:    {} bytes", total);
+    }
+}
 
 /// Seller withdraws amount from AdvancedPayment
 pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option<String>) -> Result<()> {
@@ -30,20 +150,40 @@ pub async fn handle_withdraw(payment_cid: String, amount: String, reason: Option
     let cmdid = format!("withdraw-advanced-payment-{}", chrono::Utc::now().timestamp());
     let template_id = format!("{}:AdvancedPayment:AdvancedPayment", package_id);
 
-    let payload = json!({
-        "commands": [{
-            "ExerciseCommand": {
-                "templateId": template_id,
-                "contractId": payment_cid,
-                "choice": "AdvancedPayment_Withdraw",
-                "choiceArgument": {
-                    "amount": amount,
-                    "appTransferContext": context.build_app_transfer_context(),
-                    "withdrawReason": reason
-                }
+    // Build command for both traffic estimation and actual execution
+    let commands = vec![json!({
+        "ExerciseCommand": {
+            "templateId": template_id,
+            "contractId": payment_cid,
+            "choice": "AdvancedPayment_Withdraw",
+            "choiceArgument": {
+                "amount": amount,
+                "appTransferContext": context.build_app_transfer_context(),
+                "withdrawReason": reason
             }
-        }],
-        "disclosedContracts": context.build_disclosed_contracts(),
+        }
+    })];
+    let disclosed_contracts = context.build_disclosed_contracts();
+
+    // Get traffic estimation first (required - will fail if not available)
+    info!("Getting traffic cost estimation...");
+    let traffic = get_traffic_estimation(
+        &client,
+        &provider_api_url,
+        &provider_jwt,
+        &party_seller,
+        &synchronizer_id,
+        commands.clone(),
+        disclosed_contracts.clone(),
+    )
+    .await?;
+
+    // Print traffic info immediately
+    print_traffic_info(&traffic);
+
+    let payload = json!({
+        "commands": commands,
+        "disclosedContracts": disclosed_contracts,
         "commandId": cmdid,
         "actAs": [party_seller],
         "readAs": [],
