@@ -615,12 +615,16 @@ export async function transferCC(params: {
         }
       }],
       disclosedContracts,
+      workflowId: "transfer workflow"
     };
 
     console.log("[loop.ts] Submitting TransferFactory_Transfer command:", JSON.stringify(command, null, 2));
 
     // 7. Submit the transaction
-    const result = await provider.submitTransaction(command);
+    const result = await provider.submitTransaction(command, {
+      message: `Transfer ${params.amount} CC to ${params.receiver}`,
+      requestLabel: 'Transfer CC'
+    });
     console.log("[loop.ts] Transfer result:", result);
 
     return {
