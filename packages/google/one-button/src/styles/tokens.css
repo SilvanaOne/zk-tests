@@ -1,0 +1,30 @@
+:root {
+  /* Light Theme */
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #d8dbe0;
+  --text: #0c0e13;
+  --muted: #5e676f;
+  --accent: #7a8a32;
+  --success: #34c98f;
+  --error: #f6465d;
+  --warning: #f0b429;
+
+  /* Radius */
+  --radius-lg: 12px;
+  --radius-md: 10px;
+  --radius-sm: 8px;
+}
+
+.dark {
+  /* Dark Theme */
+  --bg: #0c0e13;
+  --panel: #15171d;
+  --border: #1e2128;
+  --text: #f7f8fa;
+  --muted: #5e676f;
+  --accent: #a0a06a;
+  --success: #34c98f;
+  --error: #f6465d;
+  --warning: #f0b429;
+}
