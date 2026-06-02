@@ -21,6 +21,8 @@
     "based:zeko": "CHAIN=zeko:testnet npm run test test/based.zeko.test.ts",
     "based:devnet": "CHAIN=mina:devnet npm run test test/based.devnet.test.ts",
     "zkapp:zeko": "CHAIN=zeko:testnet npm run test test/zkapp.zeko.test.ts",
+    "zkapp:devnet": "CHAIN=mina:devnet npm run test test/zkapp.devnet.test.ts",
+    "mesa": "CHAIN=mina:devnet npm run test test/mesa.test.ts",
     "json:zeko": "CHAIN=zeko:testnet npm run test test/json.test.ts",
     "fee:zeko": "CHAIN=zeko:testnet npm run test test/fee.zeko.test.ts",
     "status": "CHAIN=zeko:testnet npm run test test/status.test.ts",
@@ -43,24 +45,24 @@
     "version": ">=22.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.9.1",
     "@types/secp256k1": "^4.0.7",
-    "c8": "^10.1.3",
-    "dotenv": "^17.2.3",
+    "c8": "^11.0.0",
+    "dotenv": "^17.4.2",
     "log-timestamp": "^0.3.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@silvana-one/api": "^1.1.7",
-    "@silvana-one/mina-utils": "^1.1.7",
-    "@silvana-one/storage": "^1.1.7",
+    "@silvana-one/api": "^1.2.1",
+    "@silvana-one/mina-utils": "^1.2.1",
+    "@silvana-one/storage": "^1.2.1",
     "blakejs": "^1.2.1",
     "bs58": "^6.0.0",
-    "jose": "^6.1.1",
+    "jose": "^6.2.3",
     "js-sha256": "^0.11.1",
     "mina-signer": "^3.1.0",
-    "o1js": "2.10.0",
+    "o1js": "2.15.0",
     "secp256k1": "^5.0.1"
   },
   "c8": {
