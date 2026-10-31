@@ -1,0 +1,3 @@
+# Applies to the host only: sp1-build sets CARGO_ENCODED_RUSTFLAGS for guests, which takes precedence.
+[build]
+rustflags = ["-C", "target-cpu=native"]

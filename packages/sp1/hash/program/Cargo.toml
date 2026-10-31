@@ -1,0 +1,27 @@
+[package]
+name = "hash-guest"
+version = "0.1.0"
+edition = "2024"
+# The compiler SP1 6.10.0 ships for guests is succinct-1.96.0-64bit-v3, the newest available.
+rust-version = "1.96"
+publish = false
+
+# Its own workspace, so the [patch] table below applies to the zkVM build only.
+[workspace]
+
+[dependencies]
+sp1-zkvm = "=6.10.0"
+# Newest sha2 with an sp1-6.10.0 patch tag; crates.io already has 0.11.1.
+sha2 = "=0.11.0"
+tiny-keccak = { version = "=2.0.2", features = ["keccak"] }
+
+[patch.crates-io]
+# sp1-zkvm hashes public values with sha2 ^0.10.8, so both sha2 lines need the precompile patch.
+sha2-v0-10-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.10.0" }
+sha2-v0-11-0 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.11.0-sp1-6.10.0" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.10.0" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

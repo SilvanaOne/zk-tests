@@ -1,17 +1,18 @@
 # mclean: previews, confirms and removes node_modules, .next and target build output and month-old network
-# logs below the current directory, prunes Docker and, on macOS, thins local Time Machine snapshots.
+# logs below the current directory, on macOS thins local Time Machine snapshots, and prunes Docker.
 # Style: ai-env/Makefile (`make help` lists targets from `## comments`); GNU make 3.81 (macOS /usr/bin/make) and 4.x.
 .PHONY: help build test fmt clippy check install
 
 SHELL        := /bin/bash
-# The channel of rust-toolchain.toml; keep the two in sync.
-TOOLCHAIN    ?= 1.99.1
+# The channel of rust-toolchain.toml; `make TOOLCHAIN=x` overrides it.
+TOOLCHAIN    := $(shell sed -n 's/^channel = "\([^"]*\)".*/\1/p' rust-toolchain.toml)
 CARGO        := cargo +$(TOOLCHAIN)
 # A make started under `cargo run` inherits CARGO (the path cargo gives its children), and make would export this
 # file's value to every recipe; recipes use $(CARGO), their children find cargo on PATH.
 unexport CARGO
-# Where `make install` puts mclean (cargo install --root); same default as cargo's own.
-INSTALL_ROOT ?= $(or $(CARGO_INSTALL_ROOT),$(CARGO_HOME),$(HOME)/.cargo)
+# Where `make install` puts mclean (cargo install --root): CARGO_INSTALL_ROOT, CARGO_HOME or ~/.cargo, as cargo
+# does, except that cargo's install.root config is not read. Empty means the default; a trailing slash is dropped.
+override INSTALL_ROOT := $(patsubst %/,%,$(or $(INSTALL_ROOT),$(CARGO_INSTALL_ROOT),$(CARGO_HOME),$(HOME)/.cargo))
 INSTALLED    := $(INSTALL_ROOT)/bin/mclean
 # The [package] version, which the installed binary must report.
 PKG_VERSION  := $(shell sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
@@ -22,7 +23,7 @@ help: ## Show this help
 build: ## Debug build (target/debug/mclean)
 	$(CARGO) build
 
-test: ## Unit tests (scratch trees under the system temp dir; never runs docker, tmutil or df)
+test: ## Unit and CLI tests (scratch trees under the system temp dir; fake docker, tmutil and df only)
 	$(CARGO) test
 
 fmt: ## rustfmt check (`cargo fmt` applies it)

@@ -1,0 +1,40 @@
+[package]
+name = "sp1-hash-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+default-run = "hash-bench"
+
+[lib]
+name = "hash_bench"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hash-bench"
+path = "src/main.rs"
+
+# The guests are a separate workspace so their [patch] table never reaches this crate:
+# the host must keep the unpatched hash crates and their fastest native paths.
+[workspace]
+exclude = ["program"]
+
+[dependencies]
+anyhow = "1.0.104"
+bincode = "1.3.3"
+clap = { version = "4.6.7", features = ["derive"] }
+comfy-table = "8.0.1"
+rand = { version = "0.10.3", features = ["chacha"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+sha3 = "0.12.0"
+slop-algebra = "=6.10.0"
+slop-symmetric = "=6.10.0"
+sp1-core-executor = "=6.10.0"
+sp1-primitives = "=6.10.0"
+sp1-sdk = "=6.10.0"
+sysinfo = "0.40.1"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
+
+[build-dependencies]
+sp1-build = "=6.10.0"
