@@ -1,5 +1,6 @@
-# mclean: previews, confirms and removes node_modules, .next and target build output and month-old network
-# logs below the current directory, on macOS thins local Time Machine snapshots, and prunes Docker.
+# mclean: previews, confirms and removes node_modules, .next and target build output and every file older than 30
+# days in logs/devnet, logs/testnet and logs/mainnet below the current directory, on macOS thins local Time Machine
+# snapshots, and prunes Docker.
 # Style: ai-env/Makefile (`make help` lists targets from `## comments`); GNU make 3.81 (macOS /usr/bin/make) and 4.x.
 .PHONY: help build test fmt clippy check install
 

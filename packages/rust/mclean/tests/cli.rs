@@ -183,6 +183,9 @@ impl Scratch {
         for path in OLD_KEPT {
             assert!(self.tree(path).exists(), "{path} was removed");
         }
+        // A run empties these: the folders stay
+        assert!(self.tree("svc/logs/testnet").is_dir());
+        assert!(self.tree("svc/logs/mainnet/sub/deep").is_dir());
         for path in [
             "js/package.json",
             "rs/Cargo.toml",
@@ -376,6 +379,7 @@ fn a_dry_run_wins_over_yes_and_only_reads() {
         "Run: docker --context desktop-linux builder prune -a -f --builder desktop-linux"
             .to_string(),
         "context desktop-linux at unix:///var/run/docker.sock".to_string(),
+        "and 5 files in log folders (20.00 KiB), ".to_string(),
         "Time Machine: 1 local snapshot(s) of /".to_string(),
         "No thinning: this plan removes less than 1.00 GiB".to_string(),
         "Dry run: nothing was removed.".to_string(),

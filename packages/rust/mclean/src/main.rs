@@ -25,7 +25,7 @@ macro_rules! err {
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-// Dated files in logs/devnet, logs/testnet and logs/mainnet not modified for this long are removed
+// Files in logs/devnet, logs/testnet and logs/mainnet not modified for this long are removed
 const LOG_MAX_AGE_DAYS: u64 = 30;
 const LOG_MAX_AGE: Duration = Duration::from_hours(LOG_MAX_AGE_DAYS * 24);
 // macOS: a local Time Machine snapshot keeps deleted files allocated until it is thinned, which
@@ -53,8 +53,8 @@ Scans the current directory and everything below it, prints what it would do, an
 In this order, it:
   removes build directories: node_modules and .next next to a package.json, target next to a
   Cargo.toml
-  removes every file older than 30 days, whatever its name, at any depth, in logs/devnet,
-  logs/testnet and logs/mainnet; the folders stay
+  removes every regular file older than 30 days (last modified), whatever its name, at any depth,
+  in logs/devnet, logs/testnet and logs/mainnet; the folders, symlinks, sockets and FIFOs stay
   on macOS, once 1 GiB or more was removed from the startup volume, thins local Time Machine
   snapshots (they keep deleted files allocated), which can delete all of them
   runs docker system prune -a -f, then docker builder prune -a -f on the builder of the current
@@ -66,7 +66,7 @@ removed. An APFS clone counts in full, as in du, though it shares its blocks, so
 can be a few percent less; the free space line shows the real gain.
 Symbolic links are never followed. The scan skips .git directories and other volumes mounted
 below it; a build directory is removed whole, with any .git inside it.
-Run it at or above a logs directory: from inside logs/devnet it finds no logs.
+Run it at or above a logs directory: from inside logs/devnet it finds none of those files.
 
 Options:
   -n, --dry-run  Print the plan and exit; remove nothing (wins over --yes)
@@ -144,7 +144,7 @@ struct Shared {
     owner: Owner,
 }
 
-// The plan item a shared file's bytes count for: a build dir, or a log file of a log folder
+// The plan item a shared file's bytes count for: a build dir, or a file of a log folder
 #[derive(Clone, Copy)]
 enum Owner {
     Dir(usize),
@@ -1574,6 +1574,13 @@ mod tests {
             ("a/logs/devnet/agent/.gitkeep", old, true),
             ("a/logs/devnet/.archive/old.2023-01-01", old, true),
             ("a/logs/devnet/.git/old.2023-01-01", old, false),
+            ("a/logs/devnet/wt/.git", old, true),
+            ("a/logs/devnet/agent/.github/old.2023-01-01", old, true),
+            ("a/logs/devnet/agent/repo/.git/old.2023-01-01", old, false),
+            ("a/logs/devnet/.fresh", now, false),
+            ("a/logs/devnet/.archive/fresh", now, false),
+            ("f/.hidden/logs/mainnet/old.2023-01-01", old, true),
+            ("g/logs/testnet/today", now, false),
             ("a/logs/staging/old.2023-01-01", old, false),
             ("a/logs/loose.2023-01-01", old, false),
             ("a/logs/rpc/testnet/old.2023-01-01", old, false),
@@ -1585,8 +1592,13 @@ mod tests {
             ("e/logs/xdevnet/old.2023-01-01", old, false),
         ];
         for (path, mtime, _) in files {
-            put(&root.join(path), 10, mtime);
+            let len = if path.ends_with(".gitkeep") { 0 } else { 10 };
+            put(&root.join(path), len, mtime);
         }
+        // Written today, though setting the old time moved its birth time back as well
+        let active = root.join("a/logs/mainnet/active");
+        put(&active, 10, old);
+        touch(&active, now);
         put(&outside.join("old.2023-01-01"), 10, old);
         put(&outside.join("devnet/old.2023-01-01"), 10, old);
         fs::create_dir_all(root.join("d/logs")).unwrap();
@@ -1597,13 +1609,23 @@ mod tests {
         link(&outside.join("old.2023-01-01"), &linked_log);
         let aged = fs::FileTimes::new().set_modified(old);
         fs::set_times_nofollow(&linked_log, aged).unwrap();
+        // An old FIFO is not a regular file
+        let fifo = devnet.join("old.fifo");
+        let made = Command::new("mkfifo").arg(&fifo).status().unwrap();
+        assert!(made.success());
+        fs::set_times_nofollow(&fifo, aged).unwrap();
         link(&outside.join("devnet"), &devnet.join("agent/linked"));
         link(&outside.join("devnet"), &root.join("d/logs/devnet"));
 
         let plan = scan(&root);
 
         let folders: Vec<_> = plan.logs.iter().map(|l| l.path.clone()).collect();
-        let networks = ["a/logs/devnet", "a/logs/mainnet", "a/logs/testnet"];
+        let networks = [
+            "a/logs/devnet",
+            "a/logs/mainnet",
+            "a/logs/testnet",
+            "f/.hidden/logs/mainnet",
+        ];
         assert_eq!(folders, networks.map(|p| root.join(p)));
         let mut planned = Vec::new();
         for folder in &plan.logs {
@@ -1620,6 +1642,20 @@ mod tests {
         assert!(plan.dirs.is_empty());
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[test]
+    fn a_scan_finds_a_log_folder_from_at_or_above_its_logs_directory() {
+        let root = scratch("start");
+        put(
+            &root.join("svc/logs/devnet/old.2023-01-01"),
+            1,
+            cutoff() - DAY,
+        );
+        for (start, folders) in [("svc", 1), ("svc/logs", 1), ("svc/logs/devnet", 0)] {
+            assert_eq!(scan(&root.join(start)).logs.len(), folders, "{start}");
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -2121,7 +2157,7 @@ com.apple.TimeMachine.2026-10-31-150200.local
         let module = root.join("web/node_modules/pkg.js");
         fs::create_dir_all(module.parent().unwrap()).unwrap();
         fs::hard_link(&store, &module).unwrap();
-        let log = root.join("svc/logs/devnet/kept.2023-01-01");
+        let log = root.join("svc/logs/devnet/linked.2023-01-01");
         put(&log, 50_000, old);
         fs::hard_link(&log, root.join("svc/kept-copy")).unwrap();
         // Three links, two in one target and one outside it, free nothing
