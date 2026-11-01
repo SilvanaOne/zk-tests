@@ -16,7 +16,7 @@ This compares performance only. It says nothing about the security of each hash 
 - Rust stable (selected by `rust-toolchain.toml`)
 - Docker, running: guests build inside `ghcr.io/succinctlabs/sp1:v6.10.0`, so no local SP1 toolchain is needed and ELFs and verifying keys are reproducible
 - `protoc`
-- At least 16 GiB of RAM for proving
+- RAM: proving used about 11 GiB of resident memory at 1,000 hashes and 17 to 18 GiB from 20,000 hashes up. On a 32 GiB machine shared with other work, swap use grew from about 130 to 500 million trace cells upward, and by 7 to 21 GiB for the largest proofs
 
 The first build compiles about 500 crates and pulls the image (about 1.5 GB), so it takes a while with no output from the guest step. The image is public and is pulled without credentials, so you need no login, and a stored `ghcr.io` login cannot block it. If the image is removed later, for example by `docker system prune -a`, the next guest build pulls it again.
 
@@ -44,7 +44,7 @@ The last command makes 10 real proofs, 5 in each mode, because baseline runs twi
 | `-v, --variants` | Variants to run, comma separated | all that apply |
 | `-m, --modes` | `core`, `compressed` | both |
 | `-r, --runs` | Proofs per variant and mode | `1` |
-| `--execute-only` | Stop before proving. Rankings then use gas, which can misorder SHA-256 and Keccak | off |
+| `--execute-only` | Stop before proving. Rankings then use gas | off |
 | `--seed` | Seed for the data and run order | random, printed |
 | `--json` | Write a full report, updated after every measurement | off |
 
@@ -74,11 +74,11 @@ The host never uses the precompile patches, so native timings use each crate's d
 | Metric | What it is |
 |---|---|
 | Net | Per hash, minus `baseline`: roughly the cost of the hash path itself. Baseline's XOR and loop differ a little from each guest's, so net area is only good to a few hundred units. That matters only for Poseidon2, whose call is that small |
-| Estimated real tree node | Each guest's own fitted area per hash, minus loading the child a real path already has in memory. It needs at least 2 values of `-n`. It does not use the baseline, so this is the line to compare hashes on |
-| Main trace area | Rows times main columns, summed over all chips and shards of a core proof, leaving out preprocessed columns. Deterministic, and the best hardware-independent measure of proving work. With several `-n` values it is fitted, which removes the fixed cost of extra shards |
+| Estimated real tree node | Each guest's own fitted area per hash, minus loading the child a real path already has in memory. It needs at least 2 values of `-n`. It does not use the baseline, so this is the trace area line to compare hashes on |
+| Main trace area | Rows times main columns, summed over all chips and shards of a core proof, leaving out preprocessed columns. Deterministic, but only a rough guide to time. With several `-n` values it is fitted, which removes the fixed cost of extra shards |
 | Shards | From core proofs. Keccak calls are deferred to separate precompile shards, so Keccak gets at least one extra shard at any count |
 | Prove time | Wall clock. With several `-n` values it is fitted as `fixed + ms/hash x count`, which separates per-hash cost from fixed overhead. With one count, net time per hash includes any extra shard's fixed cost |
-| Gas | SP1's pricing estimate. It leaves out global memory init and finalize for every touched word, and the memory rows deferred precompiles add around their calls, so it understates Keccak and can put it ahead of SHA-256 when trace area does not |
+| Gas | SP1's pricing estimate. It leaves out global memory init and finalize for every touched word, and the memory rows deferred precompiles add around their calls, so it understates Keccak somewhat. Even so, on swap-free proofs a variant's full gas per hash tracked marginal prove time about as well as trace area did. Per-call gas does not: it leaves out the cost of loading input |
 | Instructions | RISC-V instructions only. Rows inside precompile chips are not counted |
 
 Flags mark prove times to distrust. They are not measured around setup, verification or native timing.

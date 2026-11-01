@@ -538,8 +538,7 @@ impl Report {
                     }
                 } else if let Some(entries) = self.gas_ranking(tier, size) {
                     lines.push(ranked(
-                        "SP1 gas estimate per hash, net of baseline. No core proofs, so no trace \
-                         area, and gas can misorder SHA-256 and Keccak",
+                        "SP1 gas estimate per hash, net of baseline. No core proofs, so no trace area",
                         entries,
                         1,
                     ));

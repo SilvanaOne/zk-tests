@@ -1,6 +1,7 @@
 target/
 results/
 logs/
+plans/
 data/
 .claude
 .env
