@@ -1,4 +1,6 @@
 target/
 results/
+logs/
+data/
 .claude
 .env

@@ -14,18 +14,13 @@ This compares performance only. It says nothing about the security of each hash 
 ## Requirements
 
 - Rust stable (selected by `rust-toolchain.toml`)
-- Docker: guests build inside `ghcr.io/succinctlabs/sp1:v6.10.0`, so no local SP1 toolchain is needed and ELFs and verifying keys are reproducible
+- Docker, running: guests build inside `ghcr.io/succinctlabs/sp1:v6.10.0`, so no local SP1 toolchain is needed and ELFs and verifying keys are reproducible
 - `protoc`
 - At least 16 GiB of RAM for proving
 
-The image is public. If pulling it reports `denied`, Docker is sending a `ghcr.io` login the registry rejects. Pull it once without credentials:
+The first build compiles about 500 crates and pulls the image (about 1.5 GB), so it takes a while with no output from the guest step. The image is public and is pulled without credentials, so you need no login, and a stored `ghcr.io` login cannot block it. If the image is removed later, for example by `docker system prune -a`, the next guest build pulls it again.
 
-```sh
-env PATH=/usr/bin:/bin \
-  DOCKER_HOST="$(docker context inspect --format '{{.Endpoints.docker.Host}}')" \
-  DOCKER_CONFIG="$(mktemp -d)" \
-  "$(command -v docker)" pull --platform linux/amd64 ghcr.io/succinctlabs/sp1:v6.10.0
-```
+An editor running rust-analyzer starts the same guest build when it checks this crate. Concurrent builds take turns, so `cargo run` can wait silently while another one finishes.
 
 ## Usage
 
@@ -39,6 +34,8 @@ SP1_PROVER=mock cargo run --release -- -s 64 -n 100
 # Real proofs of the Merkle node variants
 cargo run --release -- -s 64 -n 1000 -v baseline,sha256_node,keccak256_node,poseidon2_node
 ```
+
+The last command makes 10 real proofs, 5 in each mode, because baseline runs twice. On a heavily loaded M2 Max that took about 11 minutes: 20 to 40 s per core proof and 50 to 95 s per compressed proof.
 
 | Option | Meaning | Default |
 |---|---|---|
