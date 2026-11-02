@@ -1,0 +1,13 @@
+[package]
+name = "merkle-map"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "Apache-2.0"
+publish = false
+description = "Indexed Merkle map and Jellyfish tree verifiers, generic over the hash, for use in SP1 guests"
+
+[dependencies]
+borsh = { version = "1.6", features = ["derive"] }
+jmt = { version = "=0.12.0", default-features = false }
+sha2 = "=0.10.9"

@@ -1,0 +1,27 @@
+[package]
+name = "merkle-guest"
+version = "0.1.0"
+edition = "2024"
+# The compiler SP1 6.10.0 ships for guests is succinct-1.96.0-64bit-v3, the newest available.
+rust-version = "1.96"
+publish = false
+
+# Its own workspace, so the [patch] table below applies to the zkVM build only. The shared crate is
+# a member because SP1's Docker build mounts this directory and nothing above it.
+[workspace]
+members = ["map"]
+
+[dependencies]
+merkle-map = { path = "map" }
+# jmt implements its hasher trait for digest 0.10, so this stays on the sha2 0.10 line. It is also
+# the line sp1-zkvm hashes public values with.
+sha2 = "=0.10.9"
+sp1-zkvm = "=6.10.0"
+
+[patch.crates-io]
+sha2-v0-10-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.10.0" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
